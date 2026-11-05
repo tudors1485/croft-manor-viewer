@@ -5,6 +5,7 @@ import { PointerLockControls } from 'three/addons/controls/PointerLockControls.j
 import { Sky } from 'three/addons/objects/Sky.js';
 import { Walker, buildCollider } from './walk.js';
 import { setupWater } from './water.js';
+import { placeIvy } from './ivy.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('view');
@@ -269,6 +270,7 @@ loader.load(
   '/manor.glb',
   (gltf) => {
     model = gltf.scene;
+    console.info(`ivy pieces placed: ${placeIvy(model)}`);
     const aniso = renderer.capabilities.getMaxAnisotropy();
     let tris = 0;
     model.traverse((o) => {
