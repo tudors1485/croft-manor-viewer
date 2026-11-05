@@ -75,7 +75,7 @@ function makeStars(count = 3200) {
 
 function makeNightDome() {
   const mat = new THREE.ShaderMaterial({
-    uniforms: { uFade: { value: 0 } },
+    uniforms: { uFade: { value: 0 }, uTwilight: { value: 0 } },
     vertexShader: /* glsl */ `
       varying vec3 vDir;
       void main() {
@@ -84,13 +84,17 @@ function makeNightDome() {
       }`,
     fragmentShader: /* glsl */ `
       uniform float uFade;
+      uniform float uTwilight;
       varying vec3 vDir;
       void main() {
         float h = clamp(vDir.y, 0.0, 1.0);
         vec3 horizon = vec3(0.045, 0.075, 0.15);
         vec3 zenith = vec3(0.008, 0.012, 0.035);
-        vec3 col = mix(horizon, zenith, pow(h, 0.45));
-        gl_FragColor = vec4(col * uFade, 1.0);
+        vec3 col = mix(horizon, zenith, pow(h, 0.45)) * uFade;
+        // the blue hour: a deeper, brighter blue for the first hour after sunset
+        vec3 blueHour = mix(vec3(0.16, 0.24, 0.42), vec3(0.04, 0.07, 0.17), pow(h, 0.6));
+        col += blueHour * uTwilight;
+        gl_FragColor = vec4(col, 1.0);
       }`,
     side: THREE.BackSide,
     depthWrite: false,
@@ -255,7 +259,9 @@ export class TimeOfDay {
 
     this.stars.material.uniforms.uFade.value = this.night;
     this.nightDome.material.uniforms.uFade.value = this.night;
-    this.nightDome.visible = this.night > 0.001;
+    const blueHour = THREE.MathUtils.smoothstep(-deg, 0.5, 3.5) * (1 - THREE.MathUtils.smoothstep(-deg, 7, 13));
+    this.nightDome.material.uniforms.uTwilight.value = blueHour;
+    this.nightDome.visible = this.night > 0.001 || blueHour > 0.001;
     this.moon.position.copy(this.moonDir).multiplyScalar(1250);
     this.moon.material.opacity = this.night;
     this.moon.visible = this.night > 0.01;
