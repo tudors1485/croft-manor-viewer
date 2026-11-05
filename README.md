@@ -37,5 +37,6 @@ The result is about 83 MB: 36 MB of textures and 47 MB of geometry, with 763k tr
 - **Orbit**: drag to turn, right-drag to pan, scroll to zoom. Double-click a surface to fly towards it.
 - **Walk**: click the view to capture the mouse. W A S D walk, Shift runs, Space jumps, and Esc frees the mouse. You're a capsule 1.8 m tall that collides with the whole estate, so stairs work and walls and furniture stop you. Every door in the model is a closed panel, so doors let you through. The collision tree (three-mesh-bvh) builds in a web worker in about 4 s after the model loads. If you switch to Walk from high up, you start on the drive.
 - **Fly**: the same controls with no collision. Space goes up and C goes down.
+- **Water**: the indoor pool, the fountain and the assault-course pond are mirrors with procedural ripples and a Fresnel blend (`src/water.js`). Only the nearest water surface in view, within 55 m, renders a reflection each frame, at half resolution. The fountain's jet flows.
 - **Place** jumps to a saved view. To add one, use "Copy this view" and paste the line into `public/viewpoints.json`.
 - Sliders set the sun's height and direction and the brightness. Checkboxes switch the ivy and the shadows on and off.

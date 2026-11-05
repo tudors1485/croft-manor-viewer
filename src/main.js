@@ -4,6 +4,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { Walker, buildCollider } from './walk.js';
+import { setupWater } from './water.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('view');
@@ -256,6 +257,13 @@ $('copy-view').onclick = async () => {
 
 // Load the model
 let model = null;
+let water = null;
+const drawSize = new THREE.Vector2();
+function resizeWater() {
+  if (!water) return;
+  renderer.getDrawingBufferSize(drawSize);
+  water.setSize(drawSize.x, drawSize.y);
+}
 const loader = new GLTFLoader();
 loader.load(
   '/manor.glb',
@@ -359,6 +367,8 @@ loader.load(
     orbit.maxDistance = modelRadius * 5;
     orbit.update();
 
+    water = setupWater(renderer, scene, model);
+    resizeWater();
     updateSun();
     prepareWalking(ground);
     $('stats-base').textContent = `${Math.round(tris).toLocaleString('en-GB')} triangles`;
@@ -423,6 +433,7 @@ window.addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
+  resizeWater();
 });
 
 // Loop
@@ -430,6 +441,7 @@ const timer = new THREE.Timer();
 timer.connect(document);
 let frames = 0;
 let fpsTime = 0;
+let elapsed = 0;
 renderer.setAnimationLoop((time) => {
   timer.update(time);
   const dt = Math.min(timer.getDelta(), 0.1);
@@ -441,6 +453,11 @@ renderer.setAnimationLoop((time) => {
     if (walker.update(dt, walkInput()) === 'fell') walker.placeAt(SPAWN.eye, SPAWN.look);
   } else {
     moveFly(dt);
+  }
+  elapsed += dt;
+  if (water) {
+    water.update(camera, elapsed);
+    if (water.jet) water.jet.material.map.offset.y -= dt * 1.4;
   }
   renderer.render(scene, camera);
   frames++;
@@ -466,5 +483,8 @@ window.manor = {
   },
   get walker() {
     return walker;
+  },
+  get water() {
+    return water;
   },
 };
