@@ -83,6 +83,7 @@ export class Walker {
     this.bobAmount = 0;
     this.lastStepPhase = 0;
     this.onFootstep = null; // callback(speed)
+    this.obstacles = []; // tree trunks: { x, z, r }
 
     this._seg = new THREE.Line3();
     this._box = new THREE.Box3();
@@ -222,6 +223,19 @@ export class Walker {
           if (into < 0) this.vel.addScaledVector(push, -into);
         } else {
           this.vel.y = 0;
+        }
+      }
+
+      // tree trunks
+      for (const o of this.obstacles) {
+        const dx = this.feet.x - o.x;
+        const dz = this.feet.z - o.z;
+        const min = o.r + this.radius;
+        const d2 = dx * dx + dz * dz;
+        if (d2 < min * min && this.feet.y < 8) {
+          const d = Math.sqrt(d2) || 1e-4;
+          this.feet.x = o.x + (dx / d) * min;
+          this.feet.z = o.z + (dz / d) * min;
         }
       }
 

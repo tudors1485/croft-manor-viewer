@@ -39,6 +39,22 @@ The result is about 83 MB: 36 MB of textures and 47 MB of geometry, with 763k tr
 - **Fly**: the same controls with no collision. Space goes up and C goes down.
 - **Water**: the indoor pool, the fountain and the assault-course pond are mirrors with procedural ripples and a Fresnel blend (`src/water.js`). Only the nearest water surface in view, within 55 m, renders a reflection each frame, at half resolution. The fountain's jet flows.
 - **Ivy**: the eight ivy OBJs come centred on the origin, meant for placing by hand (TRJTA placed them in Lumion). `src/ivy.js` puts each one on a plain stretch of brick, found by scanning the facades with rays.
+- **Landscape** (`src/landscape.js`): the OBJ stops at the estate walls, so the page adds the country around it.
+  - Oaks and ashes from ez-tree (MIT, procedural), instanced, on open lawn inside the walls and in a belt outside them. They sway in the wind, and in Walk mode their trunks stop you.
+  - Bushes at the foot of the house.
+  - About 1,400 far trees, drawn as billboards made from the same trees.
+  - Rolling hills from 420 m out, with fields and woods tinted in.
+  - The drive carries on past the gate.
+- **Look**:
+  - `src/look.js` is a custom tone-mapping curve: Neutral, slightly warmer and a touch more saturated.
+  - `src/materials.js` warms and saturates the lawn, brick, roof and gravel only, so interiors stay natural.
+  - Indoors, the sky light drops and the bounce light turns warm.
+- **Quality** (`src/quality.js`):
+  - *Balanced* (the default) adds ambient occlusion (N8AO) at half resolution, plus SMAA.
+  - *High* runs the occlusion at full resolution.
+  - *Fast* switches it off.
+  - Resolution steps down when the frame rate drops below 38 fps and back up above 57.
+  - N8AO 2.0.1 needs a small patch for three r187, which `patchN8AO` applies. If the post-processing ever throws an error, the page falls back to drawing directly rather than going blank.
 - **Place** jumps to a saved view. To add one, use "Copy this view" and paste the line into `public/viewpoints.json`.
 - **Time**: the sun follows its real path over Surrey in late May, with the front of the house facing south. The ▶ button runs a day in two minutes, and Compass turns the sun's path. From about 9° above the horizon the lamps come on (`src/lamps.js`):
   - every chandelier candle, wall sconce and kitchen tube gets a flame or glow, found by splitting the merged fitting meshes into pieces (one draw call for all the flames);

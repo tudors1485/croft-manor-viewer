@@ -1,0 +1,580 @@
+// The country around the manor, which the OBJ doesn't include: trees and bushes from
+// ez-tree (instanced, real geometry near the estate), a forest of billboard impostors
+// further out, rolling hills on the horizon and the drive running on past the gate.
+
+import * as THREE from 'three';
+import { Tree } from '@dgreenheck/ez-tree';
+
+function rng(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// cheap value noise for the hills
+function hash2(x, y) {
+  const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+  return s - Math.floor(s);
+}
+function noise2(x, y) {
+  const xi = Math.floor(x);
+  const yi = Math.floor(y);
+  const xf = x - xi;
+  const yf = y - yi;
+  const u = xf * xf * (3 - 2 * xf);
+  const v = yf * yf * (3 - 2 * yf);
+  const a = hash2(xi, yi);
+  const b = hash2(xi + 1, yi);
+  const c = hash2(xi, yi + 1);
+  const d = hash2(xi + 1, yi + 1);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+function fbm(x, y) {
+  let s = 0;
+  let amp = 0.5;
+  let f = 1;
+  for (let i = 0; i < 5; i++) {
+    s += amp * noise2(x * f, y * f);
+    f *= 2.03;
+    amp *= 0.5;
+  }
+  return s;
+}
+
+/** Hill height around the estate: flat within ~420 m of the centre, rolling beyond. */
+export function makeHillHeight(centre) {
+  return (x, z) => {
+    const r = Math.hypot(x - centre.x, z - centre.z);
+    const rise = THREE.MathUtils.smoothstep(r, 420, 1300);
+    if (rise === 0) return 0;
+    const n = fbm(x * 0.0021 + 3.1, z * 0.0021 - 7.7);
+    const ridge = Math.pow(fbm(x * 0.0009 - 2.0, z * 0.0009 + 5.0), 2.0);
+    return rise * (18 + 120 * n * n + 160 * ridge);
+  };
+}
+
+/** Woodland mask (0..1), shared by the terrain tint and where far trees grow. */
+export function woodAt(x, z) {
+  return fbm(x * 0.006 + 11, z * 0.006 - 3);
+}
+
+/**
+ * The fields and hills around the estate: one watertight grid out to `R` metres with a
+ * hole where the estate's lawn is, fine near the walls and coarse far away.
+ */
+export function makeTerrain({ lawn, centre, grassMap, hillHeight, R = 3200 }) {
+  const tuck = 0.8; // the lawn's edge wanders by up to 0.4 m, so the hole starts inside it
+  const axis = (c, lo, hi) => {
+    const out = [];
+    const N = 44;
+    for (let i = 0; i < N; i++) out.push(lo - (lo - (c - R)) * Math.pow(1 - i / N, 2.4));
+    const M = Math.max(2, Math.ceil((hi - lo) / 6));
+    for (let i = 0; i <= M; i++) out.push(lo + ((hi - lo) * i) / M);
+    for (let i = 1; i <= N; i++) out.push(hi + (c + R - hi) * Math.pow(i / N, 2.4));
+    return out;
+  };
+  const x0 = lawn.min.x + tuck;
+  const x1 = lawn.max.x - tuck;
+  const z0 = lawn.min.z + tuck;
+  const z1 = lawn.max.z - tuck;
+  const xs = axis(centre.x, x0, x1);
+  const zs = axis(centre.z, z0, z1);
+  const nx = xs.length;
+  const pos = new Float32Array(nx * zs.length * 3);
+  const uv = new Float32Array(nx * zs.length * 2);
+  const col = new Float32Array(nx * zs.length * 3);
+  const c = new THREE.Color();
+  const field = new THREE.Color(0xd8cf8a);
+  const woodC = new THREE.Color(0x6a7d56);
+  const lush = new THREE.Color(0xc9e0a2);
+  let k = 0;
+  for (const z of zs) {
+    for (const x of xs) {
+      const y = hillHeight(x, z) + lawn.min.y - 0.03;
+      pos.set([x, y, z], k * 3);
+      uv.set([x / 5.1, -z / 5.1], k * 2);
+      // plain lawn near the estate, fields and woods further out
+      const far = THREE.MathUtils.smoothstep(Math.hypot(x - centre.x, z - centre.z), 90, 400);
+      const n = fbm(x * 0.004, z * 0.004);
+      const w = woodAt(x, z);
+      c.setRGB(1, 1, 1);
+      c.lerp(lush, far * THREE.MathUtils.clamp((0.55 - n) * 2, 0, 1) * 0.6);
+      c.lerp(field, far * THREE.MathUtils.clamp((n - 0.6) * 3, 0, 1) * 0.7);
+      c.lerp(woodC, far * THREE.MathUtils.clamp((w - 0.45) * 6, 0, 1));
+      col.set([c.r, c.g, c.b], k * 3);
+      k++;
+    }
+  }
+  const idx = [];
+  for (let j = 0; j < zs.length - 1; j++) {
+    for (let i = 0; i < nx - 1; i++) {
+      const cx = (xs[i] + xs[i + 1]) / 2;
+      const cz = (zs[j] + zs[j + 1]) / 2;
+      if (cx > x0 && cx < x1 && cz > z0 && cz < z1) continue; // the estate
+      const a = j * nx + i;
+      idx.push(a, a + nx, a + 1, a + 1, a + nx, a + nx + 1);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  // pushed back in depth, so where it tucks under the lawn's ragged edge the lawn wins
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    vertexColors: true,
+    roughness: 1,
+    metalness: 0,
+    polygonOffset: true,
+    polygonOffsetFactor: 2,
+    polygonOffsetUnits: 2,
+  });
+  if (grassMap) {
+    mat.map = grassMap.clone();
+    mat.map.wrapS = mat.map.wrapT = THREE.RepeatWrapping;
+    mat.map.needsUpdate = true;
+  } else {
+    mat.color.set(0x4a5a32);
+  }
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.name = 'Terrain';
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+function texturesReady(textures, timeout = 15000) {
+  const t0 = performance.now();
+  return new Promise((resolve) => {
+    const check = () => {
+      const ok = textures.every((t) => !t || (t.image && (t.image.complete === undefined || t.image.complete)));
+      if (ok || performance.now() - t0 > timeout) resolve(ok);
+      else setTimeout(check, 50);
+    };
+    check();
+  });
+}
+
+const WIND_GLSL = /* glsl */ `
+  uniform float uWindTime;
+  uniform float uWindAmp;
+`;
+
+function addWind(material, uniforms, stiff = 1) {
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uWindTime = uniforms.time;
+    shader.uniforms.uWindAmp = uniforms.amp;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\n' + WIND_GLSL)
+      .replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+         {
+           // sway grows with height; each instance gets its own phase
+           float h = max(transformed.y, 0.0);
+           #ifdef USE_INSTANCING
+             float ph = instanceMatrix[3].x * 0.37 + instanceMatrix[3].z * 0.23;
+           #else
+             float ph = 0.0;
+           #endif
+           float w = sin(uWindTime * 1.3 + ph + transformed.x * 0.4) * 0.6 + sin(uWindTime * 2.9 + ph * 1.7 + transformed.z * 0.9) * 0.4;
+           float flutter = sin(uWindTime * 7.0 + transformed.x * 3.1 + transformed.y * 2.3 + ph) * 0.015;
+           transformed.x += (w * h * h * 0.0009 + flutter) * uWindAmp / ${stiff.toFixed(1)};
+           transformed.z += (w * h * h * 0.0006 + flutter) * uWindAmp / ${stiff.toFixed(1)};
+         }`,
+      );
+  };
+  material.customProgramCacheKey = () => `wind-${stiff}`;
+}
+
+/** One ez-tree, scaled to `height` metres with its base at y = 0, with PBR materials. */
+function makeVariant(preset, seed, height, wind, { tint, leafCount, leafSize } = {}) {
+  const tree = new Tree();
+  tree.loadPreset(preset);
+  tree.options.seed = seed;
+  if (tint !== undefined) tree.options.leaves.tint = tint;
+  if (leafCount) tree.options.leaves.count = leafCount;
+  if (leafSize) tree.options.leaves.size *= leafSize;
+  tree.generate();
+  tree.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(tree);
+  const s = height / (box.max.y - box.min.y);
+  const bGeo = tree.branchesMesh.geometry.clone().translate(0, -box.min.y, 0).scale(s, s, s);
+  const lGeo = tree.leavesMesh.geometry.clone().translate(0, -box.min.y, 0).scale(s, s, s);
+  const ob = tree.branchesMesh.material;
+  const ol = tree.leavesMesh.material;
+  const bark = new THREE.MeshStandardMaterial({
+    name: `${preset} bark`,
+    color: ob.color,
+    map: ob.map,
+    normalMap: ob.normalMap,
+    roughness: 0.92,
+    metalness: 0,
+  });
+  const leaves = new THREE.MeshStandardMaterial({
+    name: `${preset} leaves`,
+    color: ol.color,
+    map: ol.map,
+    alphaTest: ol.alphaTest,
+    side: THREE.DoubleSide,
+    roughness: 0.75,
+    metalness: 0,
+  });
+  addWind(leaves, wind, 1);
+  addWind(bark, wind, 3);
+  const size = new THREE.Box3().setFromBufferAttribute(lGeo.attributes.position).getSize(new THREE.Vector3());
+  return { preset, height, bGeo, lGeo, bark, leaves, width: Math.max(size.x, size.z), tree };
+}
+
+/** Renders a variant from the side into a texture, for distant billboards. */
+function makeImpostor(renderer, v) {
+  const W = 256;
+  const H = Math.round((W * v.height) / v.width);
+  const target = new THREE.WebGLRenderTarget(W, Math.min(512, H), { samples: 4 });
+  target.texture.colorSpace = THREE.SRGBColorSpace;
+  const scene = new THREE.Scene();
+  scene.add(new THREE.HemisphereLight(0xdfeaff, 0x4a5a30, 1.6));
+  const sun = new THREE.DirectionalLight(0xfff2dd, 2.4);
+  sun.position.set(3, 6, 5);
+  scene.add(sun);
+  const b = new THREE.Mesh(v.bGeo, v.bark);
+  const l = new THREE.Mesh(v.lGeo, v.leaves);
+  scene.add(b, l);
+  const half = v.width / 2;
+  const cam = new THREE.OrthographicCamera(-half, half, v.height, 0, -100, 100);
+  cam.position.set(0, 0, 10);
+  cam.lookAt(0, 0, 0);
+  const prevTarget = renderer.getRenderTarget();
+  const prevClear = renderer.getClearColor(new THREE.Color());
+  const prevAlpha = renderer.getClearAlpha();
+  const prevTone = renderer.toneMapping;
+  renderer.setRenderTarget(target);
+  renderer.setClearColor(0x000000, 0);
+  renderer.clear();
+  renderer.render(scene, cam);
+  renderer.setRenderTarget(prevTarget);
+  renderer.setClearColor(prevClear, prevAlpha);
+  renderer.toneMapping = prevTone;
+  return target.texture;
+}
+
+function billboardMaterial(map) {
+  return new THREE.ShaderMaterial({
+    uniforms: THREE.UniformsUtils.merge([
+      THREE.UniformsLib.fog,
+      { uMap: { value: null }, uLight: { value: new THREE.Color(1, 1, 1) } },
+    ]),
+    vertexShader: /* glsl */ `
+      #include <common>
+      #include <fog_pars_vertex>
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        vec3 base = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+        float sx = length(instanceMatrix[0].xyz);
+        float sy = length(instanceMatrix[1].xyz);
+        vec3 toCam = cameraPosition - base;
+        toCam.y = 0.0;
+        vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), normalize(toCam + vec3(1e-4))));
+        vec3 world = base + right * position.x * sx + vec3(0.0, position.y * sy, 0.0);
+        vec4 mvPosition = viewMatrix * vec4(world, 1.0);
+        gl_Position = projectionMatrix * mvPosition;
+        #include <fog_vertex>
+      }`,
+    fragmentShader: /* glsl */ `
+      #include <common>
+      #include <fog_pars_fragment>
+      uniform sampler2D uMap;
+      uniform vec3 uLight;
+      varying vec2 vUv;
+      void main() {
+        vec4 t = texture2D(uMap, vUv);
+        if (t.a < 0.5) discard;
+        gl_FragColor = vec4(t.rgb * uLight, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+        #include <fog_fragment>
+      }`,
+    fog: true,
+  });
+}
+
+export class Landscape {
+  /**
+   * @param {object} o
+   * @param {THREE.Scene} o.scene
+   * @param {THREE.WebGLRenderer} o.renderer
+   * @param {THREE.Object3D} o.model
+   * @param {THREE.Box3} o.lawn the estate's lawn bounds
+   * @param {import('three-mesh-bvh').MeshBVH} o.bvh collision tree, for finding open lawn
+   */
+  constructor({ scene, renderer, model, lawn, bvh, hillHeight }) {
+    this.scene = scene;
+    this.renderer = renderer;
+    this.model = model;
+    this.lawn = lawn.clone();
+    this.bvh = bvh;
+    this.centre = lawn.getCenter(new THREE.Vector3());
+    this.hillHeight = hillHeight;
+    this.group = new THREE.Group();
+    this.group.name = 'Landscape';
+    scene.add(this.group);
+    this.wind = { time: { value: 0 }, amp: { value: 1 } };
+    this.obstacles = []; // trunks, for walking
+    this.billboards = [];
+    this.stats = { trees: 0, bushes: 0, billboards: 0, triangles: 0 };
+  }
+
+  _ground(x, z) {
+    // open, ground-level spot on the estate? (nothing above it, close to y = 0)
+    const ray = new THREE.Ray(new THREE.Vector3(x, 40, z), new THREE.Vector3(0, -1, 0));
+    const hit = this.bvh.raycastFirst(ray, THREE.DoubleSide, 0, 60);
+    return hit ? hit.point.y : null;
+  }
+
+  _clearLawn(x, z, radius) {
+    if (!this._grassAt(x, z)) return false;
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      const y = this._ground(x + Math.cos(a) * radius, z + Math.sin(a) * radius);
+      if (y === null || y > 0.25 || y < -0.2) return false;
+    }
+    const y = this._ground(x, z);
+    return y !== null && y < 0.25 && y > -0.2;
+  }
+
+  _grassAt(x, z) {
+    this._ray = this._ray ?? new THREE.Raycaster();
+    this._ray.set(new THREE.Vector3(x, 20, z), new THREE.Vector3(0, -1, 0));
+    this._ray.far = 40;
+    const hits = this._ray.intersectObjects(this._surfaces, false);
+    return hits.length > 0 && hits[0].object.material.name === 'cm_grass';
+  }
+
+  async build() {
+    const t0 = performance.now();
+    this._surfaces = [];
+    this.model.traverse((o) => {
+      if (o.isMesh && /^(cm_grass|cm_gravel)$/.test(o.material.name)) this._surfaces.push(o);
+    });
+
+    // English parkland: oaks and ashes with full, dark crowns
+    const full = { leafCount: 16, leafSize: 1.2 };
+    const variants = [
+      makeVariant('Oak Large', 11, 17, this.wind, { ...full, tint: 0x9fb478 }),
+      makeVariant('Oak Medium', 23, 12, this.wind, { ...full, tint: 0x94ad6c }),
+      makeVariant('Ash Large', 37, 19, this.wind, { ...full, tint: 0xa6bc7c }),
+      makeVariant('Ash Medium', 41, 14, this.wind, { ...full, tint: 0x9db374 }),
+      makeVariant('Oak Large', 77, 15, this.wind, { ...full, tint: 0x8ea666 }),
+    ];
+    const bushes = [
+      makeVariant('Bush 1', 61, 1.7, this.wind, { tint: 0x8aa463 }),
+      makeVariant('Bush 2', 67, 1.3, this.wind, { tint: 0x93ab6a }),
+    ];
+    const R = rng(20261105);
+
+    // --- real trees: some on the lawns, a belt outside the walls ---
+    const spots = []; // [variant, x, z, scale, rot]
+    const taken = [];
+    const free = (x, z, d) => taken.every(([tx, tz, td]) => Math.hypot(tx - x, tz - z) > Math.max(d, td));
+    const L = this.lawn;
+    const inLawn = (x, z, m = 0) => x > L.min.x - m && x < L.max.x + m && z > L.min.z - m && z < L.max.z + m;
+
+    // inside the walls: open lawn, clear of paths and buildings by a few metres
+    let tries = 0;
+    let inside = 0;
+    while (inside < 16 && tries++ < 900) {
+      const x = THREE.MathUtils.lerp(L.min.x + 5, L.max.x - 5, R());
+      const z = THREE.MathUtils.lerp(L.min.z + 5, L.max.z - 5, R());
+      if (!free(x, z, 13)) continue;
+      if (!this._clearLawn(x, z, 4.5)) continue;
+      const v = Math.floor(R() * variants.length);
+      spots.push([v, x, z, 0.75 + R() * 0.3, R() * Math.PI * 2]);
+      taken.push([x, z, 13]);
+      inside++;
+    }
+
+    // the drive carries on south of the gate; keep trees off it
+    this.drive = this._findDrive();
+    const onDrive = (x, z) => this.drive && z > L.max.z - 2 && x > this.drive.x0 - 4 && x < this.drive.x1 + 4;
+
+    // outside: a belt hugging the walls, thicker in clumps
+    tries = 0;
+    let outside = 0;
+    while (outside < 30 && tries++ < 4000) {
+      const side = R();
+      let x;
+      let z;
+      const depth = 6 + Math.pow(R(), 1.6) * 48;
+      if (side < 0.3) {
+        x = L.min.x - depth;
+        z = THREE.MathUtils.lerp(L.min.z - 50, L.max.z + 50, R());
+      } else if (side < 0.6) {
+        x = L.max.x + depth;
+        z = THREE.MathUtils.lerp(L.min.z - 50, L.max.z + 50, R());
+      } else if (side < 0.8) {
+        z = L.min.z - depth;
+        x = THREE.MathUtils.lerp(L.min.x - 50, L.max.x + 50, R());
+      } else {
+        z = L.max.z + depth;
+        x = THREE.MathUtils.lerp(L.min.x - 50, L.max.x + 50, R());
+      }
+      if (inLawn(x, z, 4) || onDrive(x, z) || !free(x, z, 10)) continue;
+      const v = Math.floor(R() * variants.length);
+      spots.push([v, x, z, 0.85 + R() * 0.35, R() * Math.PI * 2]);
+      taken.push([x, z, 10]);
+      outside++;
+    }
+
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const up = new THREE.Vector3(0, 1, 0);
+    const addInstanced = (vList, list, cast = true) => {
+      vList.forEach((v, vi) => {
+        const mine = list.filter((s) => s[0] === vi);
+        if (!mine.length) return;
+        for (const [geo, mat] of [
+          [v.bGeo, v.bark],
+          [v.lGeo, v.leaves],
+        ]) {
+          const im = new THREE.InstancedMesh(geo, mat, mine.length);
+          mine.forEach(([, x, z, s, rot], i) => {
+            q.setFromAxisAngle(up, rot);
+            m.compose(new THREE.Vector3(x, 0, z), q, new THREE.Vector3(s, s, s));
+            im.setMatrixAt(i, m);
+          });
+          im.castShadow = cast;
+          im.receiveShadow = true;
+          im.computeBoundingSphere();
+          this.group.add(im);
+          this.stats.triangles += (geo.index.count / 3) * mine.length;
+        }
+      });
+    };
+    addInstanced(variants, spots);
+    this.stats.trees = spots.length;
+    for (const [v, x, z, s] of spots) this.obstacles.push({ x, z, r: 0.35 * s * (variants[v].height / 14) });
+
+    // --- bushes at the foot of the house and by the walls ---
+    const bushSpots = [];
+    const ray = new THREE.Ray();
+    for (const [x0, x1, faceZ] of [
+      [-13, 28, 5],
+      [-13, 28, -45],
+    ]) {
+      for (let x = x0; x <= x1; x += 2.2 + R() * 2.5) {
+        if (faceZ > 0 && x > -4.5 && x < 1.5) continue; // the porch
+        ray.origin.set(x, 0.6, faceZ);
+        ray.direction.set(0, 0, faceZ > 0 ? -1 : 1);
+        const hit = this.bvh.raycastFirst(ray, THREE.DoubleSide, 0, 30);
+        if (!hit) continue;
+        const z = hit.point.z + (faceZ > 0 ? 0.9 : -0.9);
+        if (this._ground(x, z) === null || this._ground(x, z) > 0.25) continue;
+        if (R() < 0.35) continue;
+        bushSpots.push([Math.floor(R() * bushes.length), x, z, 0.8 + R() * 0.6, R() * Math.PI * 2]);
+      }
+    }
+    addInstanced(bushes, bushSpots);
+    this.stats.bushes = bushSpots.length;
+
+    // --- distant forest: billboards of the same trees, once their textures have loaded ---
+    await texturesReady(variants.flatMap((v) => [v.leaves.map, v.bark.map]));
+    const impostors = variants.map((v) => makeImpostor(this.renderer, v));
+    const bbSpots = variants.map(() => []);
+    let bb = 0;
+    tries = 0;
+    while (bb < 1400 && tries++ < 20000) {
+      const a = R() * Math.PI * 2;
+      // more trees near, and in woods (noise) further out
+      const r = 120 + Math.pow(R(), 0.8) * 900;
+      const x = this.centre.x + Math.cos(a) * r;
+      const z = this.centre.z + Math.sin(a) * r;
+      if (inLawn(x, z, 60) || onDrive(x, z)) continue;
+      const wood = woodAt(x, z);
+      if (wood < 0.47 && R() > 0.12) continue;
+      const vi = Math.floor(R() * variants.length);
+      const s = 0.8 + R() * 0.5;
+      bbSpots[vi].push([x, this.hillHeight(x, z) - 0.3, z, s]);
+      bb++;
+    }
+    const quad = new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0);
+    variants.forEach((v, vi) => {
+      const list = bbSpots[vi];
+      if (!list.length) return;
+      const mat = billboardMaterial();
+      mat.uniforms.uMap.value = impostors[vi];
+      const im = new THREE.InstancedMesh(quad, mat, list.length);
+      list.forEach(([x, y, z, s], i) => {
+        m.compose(new THREE.Vector3(x, y, z), new THREE.Quaternion(), new THREE.Vector3(v.width * s, v.height * s, 1));
+        im.setMatrixAt(i, m);
+      });
+      im.frustumCulled = false;
+      this.group.add(im);
+      this.billboards.push(mat);
+    });
+    this.stats.billboards = bb;
+
+    if (this.drive) this.group.add(this._makeDriveOn());
+
+    this.stats.ms = Math.round(performance.now() - t0);
+    for (const v of [...variants, ...bushes]) v.tree.clear();
+    return this.stats;
+  }
+
+  _findDrive() {
+    // where the gravel meets the south edge of the estate
+    const z = this.lawn.max.z - 0.4;
+    let x0 = null;
+    let x1 = null;
+    const rc = new THREE.Raycaster();
+    const gravel = this._surfaces.filter((o) => o.material.name === 'cm_gravel');
+    for (let x = this.lawn.min.x; x <= this.lawn.max.x; x += 0.25) {
+      rc.set(new THREE.Vector3(x, 10, z), new THREE.Vector3(0, -1, 0));
+      if (rc.intersectObjects(gravel, false).length) {
+        if (x0 === null) x0 = x;
+        x1 = x;
+      }
+    }
+    return x0 === null ? null : { x0, x1, z, material: gravel[0]?.material };
+  }
+
+  _makeDriveOn() {
+    const d = this.drive;
+    const len = 1600;
+    const geo = new THREE.PlaneGeometry(d.x1 - d.x0 + 0.3, len, 1, 64).rotateX(-Math.PI / 2);
+    geo.translate((d.x0 + d.x1) / 2, 0, d.z + len / 2 - 0.2);
+    // follow the hills, and use metres for the texture
+    const p = geo.attributes.position;
+    const uv = geo.attributes.uv;
+    for (let i = 0; i < p.count; i++) {
+      p.setY(i, this.hillHeight(p.getX(i), p.getZ(i)) + 0.03);
+      uv.setXY(i, p.getX(i) / 4, -p.getZ(i) / 4);
+    }
+    geo.computeVertexNormals();
+    const mat = d.material.clone();
+    if (mat.map) {
+      mat.map = mat.map.clone();
+      mat.map.wrapS = mat.map.wrapT = THREE.RepeatWrapping;
+      mat.map.needsUpdate = true;
+    }
+    mat.normalMap = null;
+    mat.polygonOffset = true;
+    mat.polygonOffsetFactor = -1;
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.receiveShadow = true;
+    mesh.name = 'Drive';
+    return mesh;
+  }
+
+  update(dt, tod) {
+    this.wind.time.value += dt;
+    // billboards carry baked daylight: dim them with the sky
+    const k = THREE.MathUtils.clamp(tod.hemi.intensity * 1.1 + tod.light.intensity * 0.12, 0.03, 1.15);
+    for (const m of this.billboards) m.uniforms.uLight.value.setScalar(k);
+  }
+}

@@ -158,6 +158,7 @@ export class TimeOfDay {
     this.centre = new THREE.Vector3();
     this.radius = 100;
     this.night = 0; // 0 day .. 1 night
+    this.inside = 0; // 0 outdoors .. 1 inside the house (set by the caller each frame)
     this.lamps = 0; // 0 off .. 1 on (lamps come on before sunset)
     this.dusk = 0; // 1 around sunrise and sunset
 
@@ -199,7 +200,7 @@ export class TimeOfDay {
     this.moon = makeMoon();
     scene.add(this.moon);
 
-    this.fog = new THREE.Fog(0xc9d6e2, 250, 1500);
+    this.fog = new THREE.FogExp2(0xc9d6e2, 0.00085);
     scene.fog = this.fog;
 
     this.sunDir = new THREE.Vector3();
@@ -215,7 +216,6 @@ export class TimeOfDay {
     cam.near = 1;
     cam.far = radius * 3.2;
     cam.updateProjectionMatrix();
-    this.fog.near = radius * 2.5;
   }
 
   label() {
@@ -253,9 +253,8 @@ export class TimeOfDay {
 
     // twilight: the sky keeps lighting the ground for a while after sunset
     const twilight = THREE.MathUtils.smoothstep(deg, -10, 0);
-    this.hemi.intensity = THREE.MathUtils.lerp(0.14, 0.7, twilight) * (1 - 0.2 * this.dusk);
-    this.hemi.color.set(this.night > 0.5 ? 0x5a6a9a : 0xcfe0ff);
-    this.scene.environmentIntensity = THREE.MathUtils.lerp(0.35 + 0.5 * t, 0.04, this.night) + 0.2;
+    this._hemiBase = THREE.MathUtils.lerp(0.14, 0.7, twilight) * (1 - 0.2 * this.dusk);
+    this.applyAmbient(t);
 
     this.stars.material.uniforms.uFade.value = this.night;
     this.nightDome.material.uniforms.uFade.value = this.night;
@@ -279,6 +278,21 @@ export class TimeOfDay {
       this.envTarget = this.pmrem.fromScene(this.envScene, 0, 0.1, 1000);
       this.scene.environment = this.envTarget.texture;
     }
+  }
+
+  /** Sky light outdoors; indoors the light has bounced off warm walls, so it is warmer and dimmer. */
+  applyAmbient(t = this._t ?? 0.5) {
+    this._t = t;
+    this._hemiBase = this._hemiBase ?? 0.7;
+    const outdoor = this._hemiOut ?? (this._hemiOut = new THREE.Color());
+    outdoor.set(this.night > 0.5 ? 0x5a6a9a : 0xcfe0ff);
+    const indoor = this._hemiIn ?? (this._hemiIn = new THREE.Color(0xffe6c8));
+    this.hemi.color.copy(outdoor).lerp(indoor, this.inside * (1 - this.night));
+    this.hemi.groundColor.set(0x5a5040).lerp(this._groundIn ?? (this._groundIn = new THREE.Color(0x7a5a40)), this.inside);
+    const env = THREE.MathUtils.lerp(0.35 + 0.5 * t, 0.04, this.night) + 0.2;
+    // indoors the sky is mostly hidden: much less sky light, more warm bounce
+    this.scene.environmentIntensity = env * THREE.MathUtils.lerp(1, 0.22, this.inside);
+    this.hemi.intensity = this._hemiBase * THREE.MathUtils.lerp(1, 1.35, this.inside * (1 - this.night));
   }
 
   tick(dt) {

@@ -7,20 +7,24 @@ import { setupWater } from './water.js';
 import { placeIvy } from './ivy.js';
 import { TimeOfDay } from './sky.js';
 import { Lamps } from './lamps.js';
+import { Landscape, makeTerrain, makeHillHeight } from './landscape.js';
+import { installGrade } from './look.js';
+import { Quality } from './quality.js';
+import { tuneMaterials, GRASS_TINT } from './materials.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('view');
 
 // Renderer and scene
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
+installGrade(renderer);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.08, 4000);
+const quality = new Quality(renderer, scene, camera);
+quality.onResize = () => resizeWater();
 
 // Sky, sun, moon and the time of day
 const tod = new TimeOfDay(renderer, scene);
@@ -36,9 +40,10 @@ function updateSun() {
   $('time-label').textContent = tod.label();
 }
 
+const LOOK = { exposure: 0.66 };
 function updateExposure() {
   // the eye adapts a little at night
-  renderer.toneMappingExposure = 0.55 * (Number($('exposure').value) / 100) * THREE.MathUtils.lerp(1, 1.7, tod.night);
+  renderer.toneMappingExposure = LOOK.exposure * (Number($('exposure').value) / 100) * THREE.MathUtils.lerp(1, 1.7, tod.night);
 }
 
 // Controls
@@ -219,6 +224,10 @@ $('copy-view').onclick = async () => {
 // Load the model
 let model = null;
 let water = null;
+let lawn = null;
+let hillHeight = null;
+let landscape = null;
+let modelTris = 0;
 const drawSize = new THREE.Vector2();
 function resizeWater() {
   if (!water) return;
@@ -231,6 +240,7 @@ loader.load(
   (gltf) => {
     model = gltf.scene;
     console.info(`ivy pieces placed: ${placeIvy(model)}`);
+    tuneMaterials(model);
     const aniso = renderer.capabilities.getMaxAnisotropy();
     let tris = 0;
     model.traverse((o) => {
@@ -257,10 +267,9 @@ loader.load(
 
     tod.setBounds(modelCentre, modelRadius);
 
-    // Fields around the estate. The estate's lawn is a thin sheet at y = 0.04 with pits
-    // below it, so the ground is a sheet just under it with the lawn's footprint cut out.
+    // Fields and hills around the estate (the OBJ stops at its walls)
     let grassMap = null;
-    const lawn = new THREE.Box3();
+    lawn = new THREE.Box3();
     model.traverse((o) => {
       if (o.isMesh && o.material.name === 'cm_grass') {
         if (o.material.map) grassMap = o.material.map;
@@ -268,51 +277,9 @@ loader.load(
       }
     });
     if (lawn.isEmpty()) lawn.copy(box);
-    // pushed back in depth, so where it tucks under the lawn's ragged edge the lawn wins
-    const groundMat = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      roughness: 1,
-      polygonOffset: true,
-      polygonOffsetFactor: 2,
-      polygonOffsetUnits: 2,
-    });
-    if (grassMap) {
-      groundMat.map = grassMap.clone();
-      groundMat.map.wrapS = groundMat.map.wrapT = THREE.RepeatWrapping;
-      groundMat.map.repeat.set(1 / 5.1, 1 / 5.1); // the model's grass tiles every 5.1 m
-      groundMat.map.needsUpdate = true;
-    } else {
-      groundMat.color.set(0x4a5a32);
-    }
-    // a 3 x 3 grid of quads with the middle one left out: shared vertices, so no cracks
-    const R = 1500;
-    const tuck = 0.8; // the lawn's edge wanders by up to 0.4 m, so the hole starts well inside it
-    const xs = [modelCentre.x - R, lawn.min.x + tuck, lawn.max.x - tuck, modelCentre.x + R];
-    const zs = [modelCentre.z - R, lawn.min.z + tuck, lawn.max.z - tuck, modelCentre.z + R];
-    const verts = [];
-    const uvs = [];
-    for (const z of zs) {
-      for (const x of xs) {
-        verts.push(x, 0, z);
-        uvs.push(x, -z);
-      }
-    }
-    const indices = [];
-    for (let j = 0; j < 3; j++) {
-      for (let i = 0; i < 3; i++) {
-        if (i === 1 && j === 1) continue;
-        const a = j * 4 + i;
-        indices.push(a, a + 4, a + 1, a + 1, a + 4, a + 5);
-      }
-    }
-    const groundGeo = new THREE.BufferGeometry();
-    groundGeo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
-    groundGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-    groundGeo.setIndex(indices);
-    groundGeo.computeVertexNormals();
-    const ground = new THREE.Mesh(groundGeo, groundMat);
-    ground.position.y = lawn.min.y - 0.03;
-    ground.receiveShadow = true;
+    hillHeight = makeHillHeight(lawn.getCenter(new THREE.Vector3()));
+    const ground = makeTerrain({ lawn, centre: lawn.getCenter(new THREE.Vector3()), grassMap, hillHeight });
+    ground.material.color.copy(GRASS_TINT);
     scene.add(ground);
 
     const overviewPos = modelCentre.clone().add(new THREE.Vector3(size.x * 0.75, size.y * 3.5 + 25, size.z * 0.65));
@@ -329,6 +296,7 @@ loader.load(
     resizeWater();
     updateSun();
     prepareWalking(ground);
+    modelTris = tris;
     $('stats-base').textContent = `${Math.round(tris).toLocaleString('en-GB')} triangles`;
     $('loading').classList.add('done');
     $('panel').hidden = false;
@@ -364,6 +332,12 @@ async function prepareWalking(ground) {
   const geo = await buildCollider(solid);
   walker = new Walker(camera, geo);
   lamps?.addOutdoor(geo.boundsTree);
+  landscape = new Landscape({ scene, renderer, model, lawn, bvh: geo.boundsTree, hillHeight });
+  landscape.build().then((st) => {
+    walker.obstacles = landscape.obstacles;
+    console.info(`landscape: ${st.trees} trees, ${st.bushes} bushes, ${st.billboards} far trees, ${Math.round(st.triangles / 1000)}k triangles, ${st.ms} ms`);
+    $('stats-base').textContent = `${Math.round((modelTris + st.triangles) / 1000).toLocaleString('en-GB')}k triangles`;
+  });
   walker.onFootstep = (speed) => window.dispatchEvent(new CustomEvent('footstep', { detail: { speed } }));
   const secs = ((performance.now() - t0) / 1000).toFixed(1);
   console.info(`collision tree ready in ${secs} s`);
@@ -392,6 +366,10 @@ $('ivy').addEventListener('change', (e) => {
   const ivy = model?.getObjectByName('Ivy');
   if (ivy) ivy.visible = e.target.checked;
 });
+$('quality').addEventListener('change', (e) => {
+  quality.set(e.target.value);
+  e.target.blur();
+});
 $('shadows').addEventListener('change', (e) => {
   tod.light.castShadow = e.target.checked;
 });
@@ -401,8 +379,7 @@ loadViewpoints();
 window.addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
-  resizeWater();
+  quality.apply();
 });
 
 // Loop
@@ -424,7 +401,13 @@ renderer.setAnimationLoop((time) => {
     $('time-label').textContent = tod.label();
   }
   updateExposure();
-  if (lamps) lamps.update(camera, tod.lamps, dt, renderer);
+  if (lamps) {
+    lamps.update(camera, tod.lamps, dt, renderer);
+    const inside = lamps.houseBox.containsPoint(camera.position) ? 1 : 0;
+    tod.inside += (inside - tod.inside) * (1 - Math.exp(-dt * 3));
+    tod.applyAmbient();
+  }
+  if (landscape) landscape.update(dt, tod);
   if (mode === 'orbit') {
     stepFlight(dt);
     orbit.update();
@@ -438,11 +421,11 @@ renderer.setAnimationLoop((time) => {
     water.update(camera, elapsed);
     if (water.jet) water.jet.material.map.offset.y -= dt * 1.4;
   }
-  renderer.render(scene, camera);
+  quality.render(dt);
   frames++;
   fpsTime += dt;
   if (fpsTime > 0.5) {
-    $('stats-fps').textContent = `${Math.round(frames / fpsTime)} fps · ${renderer.info.render.calls} draw calls`;
+    $('stats-fps').textContent = `${Math.round(frames / fpsTime)} fps at ${quality.ratio.toFixed(2)}× resolution`;
     frames = 0;
     fpsTime = 0;
   }
@@ -469,5 +452,13 @@ window.manor = {
   get lamps() {
     return lamps;
   },
+  get landscape() {
+    return landscape;
+  },
   tod,
+  LOOK,
+  quality,
+  dev: {
+    measureTrees: () => import('./dev/measure-trees.js').then((m) => m.measure()),
+  },
 };
