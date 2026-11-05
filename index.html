@@ -9,6 +9,8 @@
   </head>
   <body>
     <canvas id="view"></canvas>
+    <button id="lock-hint" hidden>Click to look around</button>
+    <div id="crosshair" hidden></div>
 
     <div id="loading">
       <p id="loading-text">Loading the manor…</p>
@@ -22,7 +24,9 @@
       <div class="row modes">
         <button id="mode-orbit" class="on">Orbit</button>
         <button id="mode-walk">Walk</button>
+        <button id="mode-fly">Fly</button>
       </div>
+      <p class="help" id="walk-status"></p>
 
       <label class="row">Place
         <select id="viewpoint"></select>
@@ -37,7 +41,8 @@
 
       <p id="stats"></p>
       <p class="help" id="help-orbit">Drag to turn, right-drag to pan, scroll to zoom. Double-click a spot to look at it.</p>
-      <p class="help" id="help-walk" hidden>Click the view to look around. W A S D move, Space up, C down, Shift is faster. Esc frees the mouse.</p>
+      <p class="help" id="help-walk" hidden>W A S D walk, Shift runs, Space jumps. Stairs work, walls stop you, and you can walk through the closed doors. Esc frees the mouse.</p>
+      <p class="help" id="help-fly" hidden>Fly through anything. W A S D move, Space up, C down, Shift is faster. Esc frees the mouse.</p>
       <button id="copy-view" class="small">Copy this view</button>
     </aside>
   </body>

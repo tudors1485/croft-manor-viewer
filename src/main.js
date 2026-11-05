@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 import { Sky } from 'three/addons/objects/Sky.js';
+import { Walker, buildCollider } from './walk.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('view');
@@ -85,19 +86,32 @@ orbit.dampingFactor = 0.08;
 orbit.screenSpacePanning = true;
 orbit.maxPolarAngle = Math.PI * 0.96;
 
-const walk = new PointerLockControls(camera, canvas);
+const look = new PointerLockControls(camera, canvas);
+look.addEventListener('lock', () => updateLockHint());
+look.addEventListener('unlock', () => updateLockHint());
 const keys = new Set();
 let mode = 'orbit';
 
+let walker = null; // set once the collision tree is ready
+// where Walk mode starts if you switch to it from high up: the drive, facing the front door
+const SPAWN = { eye: new THREE.Vector3(-3, 1.7, 17), look: new THREE.Vector3(2.5, 1.8, -12) };
+
 function setMode(next) {
+  if (next === 'walk' && !walker) {
+    $('walk-status').textContent = 'Walking is still getting ready, one moment…';
+    pendingWalk = true;
+    return;
+  }
+  const prev = mode;
   mode = next;
-  $('mode-orbit').classList.toggle('on', mode === 'orbit');
-  $('mode-walk').classList.toggle('on', mode === 'walk');
+  for (const m of ['orbit', 'walk', 'fly']) $(`mode-${m}`).classList.toggle('on', mode === m);
   $('help-orbit').hidden = mode !== 'orbit';
   $('help-walk').hidden = mode !== 'walk';
+  $('help-fly').hidden = mode !== 'fly';
   orbit.enabled = mode === 'orbit';
+  flight = null;
   if (mode === 'orbit') {
-    walk.unlock();
+    look.unlock();
     // put the orbit target a few metres in front of the camera so it carries on from here
     const fwd = new THREE.Vector3();
     camera.getWorldDirection(fwd);
@@ -105,19 +119,31 @@ function setMode(next) {
     orbit.update();
   } else {
     camera.up.set(0, 1, 0);
+    velocity.set(0, 0, 0);
   }
+  if (mode === 'walk' && prev !== 'walk') {
+    const fwd = new THREE.Vector3();
+    camera.getWorldDirection(fwd);
+    if (walker.heightAboveFloor(camera.position) > 4) walker.placeAt(SPAWN.eye, SPAWN.look);
+    else walker.placeAt(camera.position, camera.position.clone().add(fwd.setY(0)));
+  }
+  updateLockHint();
 }
-$('mode-orbit').onclick = (e) => {
-  setMode('orbit');
-  e.currentTarget.blur(); // so Space in walk mode does not press the button again
-};
-$('mode-walk').onclick = (e) => {
-  setMode('walk');
-  e.currentTarget.blur();
-};
+let pendingWalk = false;
+for (const m of ['orbit', 'walk', 'fly']) {
+  $(`mode-${m}`).onclick = (e) => {
+    setMode(m);
+    e.currentTarget.blur(); // so Space does not press the button again
+  };
+}
+function updateLockHint() {
+  $('lock-hint').hidden = !(mode !== 'orbit' && !look.isLocked);
+  $('crosshair').hidden = !(mode !== 'orbit' && look.isLocked);
+}
 canvas.addEventListener('click', () => {
-  if (mode === 'walk' && !walk.isLocked) walk.lock();
+  if (mode !== 'orbit' && !look.isLocked) look.lock();
 });
+$('lock-hint').addEventListener('click', () => look.lock());
 window.addEventListener('keydown', (e) => {
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
   keys.add(e.code);
@@ -127,7 +153,16 @@ window.addEventListener('keyup', (e) => keys.delete(e.code));
 window.addEventListener('blur', () => keys.clear());
 
 const velocity = new THREE.Vector3();
-function moveWalk(dt) {
+const held = (...codes) => codes.some((c) => keys.has(c));
+function walkInput() {
+  return {
+    forward: (held('KeyW', 'ArrowUp') ? 1 : 0) - (held('KeyS', 'ArrowDown') ? 1 : 0),
+    right: (held('KeyD', 'ArrowRight') ? 1 : 0) - (held('KeyA', 'ArrowLeft') ? 1 : 0),
+    jump: held('Space'),
+    run: held('ShiftLeft', 'ShiftRight'),
+  };
+}
+function moveFly(dt) {
   const fwd = new THREE.Vector3();
   camera.getWorldDirection(fwd);
   fwd.y = 0;
@@ -159,6 +194,11 @@ canvas.addEventListener('dblclick', (e) => {
 let flight = null;
 function flyTo(pos, target, seconds = 1.2) {
   if (mode === 'walk') {
+    if (walker.heightAboveFloor(pos) > 4) walker.placeAt(SPAWN.eye, SPAWN.look);
+    else walker.placeAt(pos, target);
+    return;
+  }
+  if (mode === 'fly') {
     camera.position.copy(pos);
     camera.lookAt(target);
     velocity.set(0, 0, 0);
@@ -202,7 +242,7 @@ async function loadViewpoints() {
 $('copy-view').onclick = async () => {
   const fwd = new THREE.Vector3();
   camera.getWorldDirection(fwd);
-  const target = mode === 'orbit' ? orbit.target : camera.position.clone().addScaledVector(fwd, 6);
+  const target = mode === 'orbit' ? orbit.target.clone() : camera.position.clone().addScaledVector(fwd, 6);
   const r = (v) => v.toArray().map((n) => Math.round(n * 100) / 100);
   const text = JSON.stringify({ name: 'New place', pos: r(camera.position), target: r(target) });
   try {
@@ -320,6 +360,7 @@ loader.load(
     orbit.update();
 
     updateSun();
+    prepareWalking(ground);
     $('stats-base').textContent = `${Math.round(tris).toLocaleString('en-GB')} triangles`;
     $('loading').classList.add('done');
     $('panel').hidden = false;
@@ -335,6 +376,34 @@ loader.load(
     $('loading-text').textContent = 'The model did not load. Run npm run build:model first, then reload.';
   },
 );
+
+// Walking: everything solid in the estate plus the fields, but not the ivy, the water or the doors
+async function prepareWalking(ground) {
+  const t0 = performance.now();
+  $('walk-status').textContent = 'Getting walking ready…';
+  const ivy = model.getObjectByName('Ivy');
+  const solid = [ground];
+  model.traverse((o) => {
+    if (!o.isMesh) return;
+    for (let p = o; p; p = p.parent) if (p === ivy) return;
+    const name = o.material.name || '';
+    if (/water/i.test(name)) return;
+    // every door in the model is a closed panel, so doors let you through
+    if (/door/i.test(name)) return;
+    if (o.material.transparent && !/glass/i.test(name)) return;
+    solid.push(o);
+  });
+  const geo = await buildCollider(solid);
+  walker = new Walker(camera, geo);
+  walker.onFootstep = (speed) => window.dispatchEvent(new CustomEvent('footstep', { detail: { speed } }));
+  const secs = ((performance.now() - t0) / 1000).toFixed(1);
+  console.info(`collision tree ready in ${secs} s`);
+  $('walk-status').textContent = '';
+  if (pendingWalk) {
+    pendingWalk = false;
+    setMode('walk');
+  }
+}
 
 // Panel wiring
 $('stats').innerHTML = '<span id="stats-base"></span> · <span id="stats-fps"></span>';
@@ -368,8 +437,10 @@ renderer.setAnimationLoop((time) => {
   if (mode === 'orbit') {
     stepFlight(dt);
     orbit.update();
+  } else if (mode === 'walk') {
+    if (walker.update(dt, walkInput()) === 'fell') walker.placeAt(SPAWN.eye, SPAWN.look);
   } else {
-    moveWalk(dt);
+    moveFly(dt);
   }
   renderer.render(scene, camera);
   frames++;
@@ -382,4 +453,18 @@ renderer.setAnimationLoop((time) => {
 });
 
 // handy from the console: window.manor.camera.position
-window.manor = { THREE, scene, camera, renderer, orbit, get model() { return model; } };
+window.manor = {
+  THREE,
+  scene,
+  camera,
+  renderer,
+  orbit,
+  keys,
+  setMode,
+  get model() {
+    return model;
+  },
+  get walker() {
+    return walker;
+  },
+};
