@@ -1,0 +1,5 @@
+node_modules/
+source/
+build/
+public/manor.glb
+dist/

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Croft Manor viewer</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <canvas id="view"></canvas>
+
+    <div id="loading">
+      <p id="loading-text">Loading the manor…</p>
+      <div class="bar"><div id="loading-bar"></div></div>
+    </div>
+
+    <aside id="panel" hidden>
+      <h1>Croft Manor</h1>
+      <p class="credit">Classic Croft Manor HD v2.3 by TRJTA, an OBJ export from SketchUp</p>
+
+      <div class="row modes">
+        <button id="mode-orbit" class="on">Orbit</button>
+        <button id="mode-walk">Walk</button>
+      </div>
+
+      <label class="row">Place
+        <select id="viewpoint"></select>
+      </label>
+
+      <label class="row">Sun height <input id="sun-elev" type="range" min="2" max="85" value="38" /></label>
+      <label class="row">Sun direction <input id="sun-azim" type="range" min="0" max="360" value="145" /></label>
+      <label class="row">Brightness <input id="exposure" type="range" min="20" max="200" value="100" /></label>
+
+      <label class="check"><input id="ivy" type="checkbox" checked /> Ivy</label>
+      <label class="check"><input id="shadows" type="checkbox" checked /> Shadows</label>
+
+      <p id="stats"></p>
+      <p class="help" id="help-orbit">Drag to turn, right-drag to pan, scroll to zoom. Double-click a spot to look at it.</p>
+      <p class="help" id="help-walk" hidden>Click the view to look around. W A S D move, Space up, C down, Shift is faster. Esc frees the mouse.</p>
+      <button id="copy-view" class="small">Copy this view</button>
+    </aside>
+  </body>
+  <script type="module" src="/src/main.js"></script>
+</html>

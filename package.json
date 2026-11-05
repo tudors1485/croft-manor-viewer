@@ -1,0 +1,24 @@
+{
+  "name": "croft-manor-viewer",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build:model": "node scripts/build-model.mjs",
+    "dev": "vite --port 5190",
+    "build": "vite build",
+    "preview": "vite preview --port 5190"
+  },
+  "dependencies": {
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@gltf-transform/core": "^4.5.1",
+    "@gltf-transform/extensions": "^4.5.1",
+    "@gltf-transform/functions": "^4.5.1",
+    "meshoptimizer": "^1.3.0",
+    "obj2gltf": "^3.2.0",
+    "sharp": "^0.35.5",
+    "vite": "^8.3.6"
+  }
+}
