@@ -143,3 +143,18 @@ body {
 #stats {
   font-variant-numeric: tabular-nums;
 }
+
+#panel .time-controls {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 6px;
+}
+#panel .time b {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: #d9b45a;
+}
+#play {
+  min-width: 30px;
+}

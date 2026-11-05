@@ -2,10 +2,11 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
-import { Sky } from 'three/addons/objects/Sky.js';
 import { Walker, buildCollider } from './walk.js';
 import { setupWater } from './water.js';
 import { placeIvy } from './ivy.js';
+import { TimeOfDay } from './sky.js';
+import { Lamps } from './lamps.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('view');
@@ -21,64 +22,23 @@ renderer.shadowMap.type = THREE.PCFShadowMap;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.08, 4000);
 
-// Sky, sun and environment light
-const sky = new Sky();
-sky.scale.setScalar(3000);
-sky.material.uniforms.turbidity.value = 4;
-sky.material.uniforms.rayleigh.value = 1.2;
-sky.material.uniforms.mieCoefficient.value = 0.004;
-sky.material.uniforms.mieDirectionalG.value = 0.85;
-sky.material.uniforms.cloudCoverage.value = 0.35;
-scene.add(sky);
-
-const sun = new THREE.DirectionalLight(0xfff1dc, 3.2);
-sun.castShadow = true;
-sun.shadow.mapSize.set(4096, 4096);
-sun.shadow.bias = -0.0004;
-sun.shadow.normalBias = 0.03;
-sun.shadow.radius = 2;
-scene.add(sun, sun.target);
-
-const hemi = new THREE.HemisphereLight(0xcfe0ff, 0x5a5040, 0.7);
-scene.add(hemi);
-
-const pmrem = new THREE.PMREMGenerator(renderer);
-const envScene = new THREE.Scene();
-const envSky = new Sky();
-envSky.scale.setScalar(1000);
-envSky.material.uniforms.showSunDisc.value = 0;
-envSky.material.uniforms.cloudCoverage.value = 0;
-envScene.add(envSky);
-let envTarget = null;
-
-const sunDir = new THREE.Vector3();
+// Sky, sun, moon and the time of day
+const tod = new TimeOfDay(renderer, scene);
 let modelCentre = new THREE.Vector3();
 let modelRadius = 100;
+let lamps = null;
+let playing = false;
 
 function updateSun() {
-  const elev = THREE.MathUtils.degToRad(Number($('sun-elev').value));
-  const azim = THREE.MathUtils.degToRad(Number($('sun-azim').value));
-  sunDir.setFromSphericalCoords(1, Math.PI / 2 - elev, azim);
-  for (const s of [sky, envSky]) {
-    for (const k of ['turbidity', 'rayleigh', 'mieCoefficient', 'mieDirectionalG']) {
-      if (s !== sky) s.material.uniforms[k].value = sky.material.uniforms[k].value;
-    }
-    s.material.uniforms.sunPosition.value.copy(sunDir);
-  }
-  sun.position.copy(modelCentre).addScaledVector(sunDir, modelRadius * 1.5);
-  sun.target.position.copy(modelCentre);
-  // low sun: warmer and weaker
-  const t = Math.sin(elev);
-  sun.color.setHSL(0.09, 0.6 - 0.4 * t, 0.62 + 0.3 * t);
-  sun.intensity = 1.3 + 2.2 * Math.min(1, t * 1.6);
-  if (envTarget) envTarget.dispose();
-  envTarget = pmrem.fromScene(envScene, 0, 0.1, 1000);
-  scene.environment = envTarget.texture;
-  scene.environmentIntensity = 0.55 + 0.3 * t;
+  tod.hours = Number($('time').value);
+  tod.compass = THREE.MathUtils.degToRad(Number($('sun-azim').value));
+  tod.update(true);
+  $('time-label').textContent = tod.label();
 }
 
 function updateExposure() {
-  renderer.toneMappingExposure = 0.55 * (Number($('exposure').value) / 100);
+  // the eye adapts a little at night
+  renderer.toneMappingExposure = 0.55 * (Number($('exposure').value) / 100) * THREE.MathUtils.lerp(1, 1.7, tod.night);
 }
 
 // Controls
@@ -295,12 +255,7 @@ loader.load(
     box.getCenter(modelCentre);
     modelRadius = size.length() / 2;
 
-    const cam = sun.shadow.camera;
-    cam.left = cam.bottom = -modelRadius;
-    cam.right = cam.top = modelRadius;
-    cam.near = 1;
-    cam.far = modelRadius * 3.2;
-    cam.updateProjectionMatrix();
+    tod.setBounds(modelCentre, modelRadius);
 
     // Fields around the estate. The estate's lawn is a thin sheet at y = 0.04 with pits
     // below it, so the ground is a sheet just under it with the lawn's footprint cut out.
@@ -359,7 +314,6 @@ loader.load(
     ground.position.y = lawn.min.y - 0.03;
     ground.receiveShadow = true;
     scene.add(ground);
-    scene.fog = new THREE.Fog(0xc9d6e2, modelRadius * 2.5, 1500);
 
     const overviewPos = modelCentre.clone().add(new THREE.Vector3(size.x * 0.75, size.y * 3.5 + 25, size.z * 0.65));
     viewpoints[0][1] = overviewPos;
@@ -370,6 +324,8 @@ loader.load(
     orbit.update();
 
     water = setupWater(renderer, scene, model);
+    lamps = new Lamps(scene, model);
+    console.info(`light fittings: ${lamps.count}`);
     resizeWater();
     updateSun();
     prepareWalking(ground);
@@ -407,6 +363,7 @@ async function prepareWalking(ground) {
   });
   const geo = await buildCollider(solid);
   walker = new Walker(camera, geo);
+  lamps?.addOutdoor(geo.boundsTree);
   walker.onFootstep = (speed) => window.dispatchEvent(new CustomEvent('footstep', { detail: { speed } }));
   const secs = ((performance.now() - t0) / 1000).toFixed(1);
   console.info(`collision tree ready in ${secs} s`);
@@ -419,14 +376,24 @@ async function prepareWalking(ground) {
 
 // Panel wiring
 $('stats').innerHTML = '<span id="stats-base"></span> · <span id="stats-fps"></span>';
-for (const id of ['sun-elev', 'sun-azim']) $(id).addEventListener('input', updateSun);
+for (const id of ['time', 'sun-azim']) $(id).addEventListener('input', updateSun);
+$('time').addEventListener('input', () => setPlaying(false));
+function setPlaying(on) {
+  playing = on;
+  $('play').textContent = on ? '❚❚' : '▶';
+  $('play').title = on ? 'Stop the clock' : 'Run the clock: a day in two minutes';
+}
+$('play').onclick = (e) => {
+  setPlaying(!playing);
+  e.currentTarget.blur();
+};
 $('exposure').addEventListener('input', updateExposure);
 $('ivy').addEventListener('change', (e) => {
   const ivy = model?.getObjectByName('Ivy');
   if (ivy) ivy.visible = e.target.checked;
 });
 $('shadows').addEventListener('change', (e) => {
-  sun.castShadow = e.target.checked;
+  tod.light.castShadow = e.target.checked;
 });
 updateExposure();
 loadViewpoints();
@@ -447,7 +414,17 @@ let elapsed = 0;
 renderer.setAnimationLoop((time) => {
   timer.update(time);
   const dt = Math.min(timer.getDelta(), 0.1);
-  sky.material.uniforms.time.value += dt;
+  tod.tick(dt);
+  if (playing) {
+    let h = Number($('time').value) + dt * (24 / 120);
+    if (h >= 24) h -= 24;
+    $('time').value = String(h);
+    tod.hours = h;
+    tod.update();
+    $('time-label').textContent = tod.label();
+  }
+  updateExposure();
+  if (lamps) lamps.update(camera, tod.lamps, dt, renderer);
   if (mode === 'orbit') {
     stepFlight(dt);
     orbit.update();
@@ -489,4 +466,8 @@ window.manor = {
   get water() {
     return water;
   },
+  get lamps() {
+    return lamps;
+  },
+  tod,
 };

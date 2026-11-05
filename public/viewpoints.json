@@ -3,7 +3,7 @@
   {"name": "Fountain", "pos": [12, 3, 17], "target": [5, 3, 8]},
   {"name": "Great hall", "pos": [2, 1.7, -14], "target": [-5, 2.5, -25]},
   {"name": "Hall from the landing", "pos": [-8, 5.1, -15], "target": [3, 1, -25]},
-  {"name": "Kitchen", "pos": [-8.8, 1.8, -19], "target": [-12.5, 1, -24.5]},
+  {"name": "Kitchen", "pos": [-9.4, 1.7, -25.2], "target": [-12.6, 1.0, -19.2]},
   {"name": "Pool", "pos": [17.8, 6.7, -22.4], "target": [25, 4.7, -26.5]},
   {"name": "Assault course", "pos": [25, 14, -48], "target": [5, 0, -75]}
 ]

@@ -40,4 +40,10 @@ The result is about 83 MB: 36 MB of textures and 47 MB of geometry, with 763k tr
 - **Water**: the indoor pool, the fountain and the assault-course pond are mirrors with procedural ripples and a Fresnel blend (`src/water.js`). Only the nearest water surface in view, within 55 m, renders a reflection each frame, at half resolution. The fountain's jet flows.
 - **Ivy**: the eight ivy OBJs come centred on the origin, meant for placing by hand (TRJTA placed them in Lumion). `src/ivy.js` puts each one on a plain stretch of brick, found by scanning the facades with rays.
 - **Place** jumps to a saved view. To add one, use "Copy this view" and paste the line into `public/viewpoints.json`.
-- Sliders set the sun's height and direction and the brightness. Checkboxes switch the ivy and the shadows on and off.
+- **Time**: the sun follows its real path over Surrey in late May, with the front of the house facing south. The ▶ button runs a day in two minutes, and Compass turns the sun's path. From about 9° above the horizon the lamps come on (`src/lamps.js`):
+  - every chandelier candle, wall sconce and kitchen tube gets a flame or glow, found by splitting the merged fitting meshes into pieces (one draw call for all the flames);
+  - eight point lights follow you to the nearest fittings, outdoor ones first when you're outside;
+  - outside there's a porch lantern, and floodlights at the foot of the front facade;
+  - windows glow warm when you're outside;
+  - at night the moon lights the estate, and there are stars and a navy sky (`src/sky.js`).
+- Sliders set the brightness. Checkboxes switch the ivy and the shadows on and off.
