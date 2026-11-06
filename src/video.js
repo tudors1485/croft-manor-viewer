@@ -46,7 +46,7 @@ async function pickAudioCodec(sampleRate) {
 }
 
 /** Text in the film bars, the title at the start, the end card at the end. */
-function drawOverlay(g, W, H, f, frame, flyFrames, label) {
+function drawOverlay(g, W, H, f, frame, flyFrames, label, clock = '') {
   const bar = Math.round(H * f.bar);
   const portrait = H > W;
   const t = frame / FPS;
@@ -67,6 +67,19 @@ function drawOverlay(g, W, H, f, frame, flyFrames, label) {
     g.font = `500 ${Math.round(34 * u)}px ${serif}`;
     g.fillText(`${CREDITS.title.toUpperCase()}  ·  ${label}`, W / 2, bar / 2);
     g.globalAlpha = 1;
+  }
+
+  // a time-lapse flyby: the time or the date, in the top bar
+  if (clock && frame < flyFrames) {
+    g.fillStyle = '#f3e7c9';
+    g.font = `500 ${Math.round(30 * u)}px ${serif}`;
+    if (portrait) {
+      g.textAlign = 'center';
+      g.fillText(clock, W / 2, t < TITLE ? bar * 0.82 : bar / 2);
+    } else {
+      g.textAlign = 'right';
+      g.fillText(clock, W - bar * 0.6, bar / 2);
+    }
   }
 
   // the links and the credit, in the bottom bar, all the way through
@@ -170,6 +183,7 @@ export async function makeVideo(app, formatId, { onProgress, preview, signal } =
   const total = flyFrames + END_CARD * FPS;
   const frames = []; // what the sound needs, frame by frame
   let last = null;
+  let clock = '';
   try {
     // 1. the picture
     for (let i = 0; i < total; i++) {
@@ -179,12 +193,13 @@ export async function makeVideo(app, formatId, { onProgress, preview, signal } =
         // draw the frame and copy it in the same moment (the WebGL canvas is cleared after)
         app.step(1 / FPS);
         g.drawImage(app.canvas, 0, 0, W, H);
-        frames.push({ pos: app.camera.position.clone(), quat: app.camera.quaternion.clone(), inside: app.inside(), speed: app.speed(), doors: app.takeDoorEvents() });
+        frames.push({ pos: app.camera.position.clone(), quat: app.camera.quaternion.clone(), inside: app.inside(), speed: app.speed(), doors: app.takeDoorEvents(), env: app.soundEnv() });
+        clock = app.clock?.() ?? '';
         if (i === flyFrames - 1) last = g.getImageData(0, 0, W, H); // the end card fades from this
       } else {
         g.putImageData(last, 0, 0);
       }
-      drawOverlay(g, W, H, f, i, flyFrames, label);
+      drawOverlay(g, W, H, f, i, flyFrames, label, clock);
       const frame = new VideoFrame(out, { timestamp: Math.round((i * 1e6) / FPS), duration: Math.round(1e6 / FPS) });
       venc.encode(frame, { keyFrame: i % (FPS * 2) === 0 });
       frame.close();
@@ -213,7 +228,7 @@ export async function makeVideo(app, formatId, { onProgress, preview, signal } =
     cam.position.copy(fr.pos);
     cam.quaternion.copy(fr.quat);
     cam.updateMatrixWorld();
-    sound.update(1 / FPS, cam, { ...env, inside: fr.inside, speed: fr.speed, flyby: true });
+    sound.update(1 / FPS, cam, { ...(fr.env ?? env), inside: fr.inside, speed: fr.speed, flyby: true });
     for (const d of fr.doors) sound.door(d.opening, d.at);
   };
   apply(0);

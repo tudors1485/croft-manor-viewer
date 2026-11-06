@@ -13,6 +13,9 @@ uniform float uRipple;
 uniform float uDepthTint;
 uniform float uIce;
 uniform float uSnowOnIce;
+uniform float uGlow;
+uniform float uMinAlpha;
+uniform float uMinReflect;
 varying vec4 vMirrorCoord;
 varying vec3 vWaterWorld;
 
@@ -60,6 +63,12 @@ export class WaterSurface {
       // outdoor water freezes in deep winter (the indoor pool never does)
       uIce: opts.outdoor ? seasonUniforms.uIce : { value: 0 },
       uSnowOnIce: opts.outdoor ? seasonUniforms.uSnow : { value: 0 },
+      uGlow: { value: 0 }, // the indoor pool, lit from below at night
+      // how clear the water is looking straight down: the indoor pool's basin is tinted and
+      // has its caustics, so it can be clear; the others need more body to read as water
+      uMinAlpha: { value: opts.outdoor ? 0.74 : 0.4 },
+      // and how much it reflects looking straight down (clear water: very little)
+      uMinReflect: { value: opts.outdoor ? 0.3 : 0.07 },
     };
     this.outdoor = !!opts.outdoor;
     const uniforms = this.uniforms;
@@ -98,6 +107,15 @@ export class WaterSurface {
            }`,
         )
         .replace(
+          '#include <normal_fragment_maps>',
+          `#include <normal_fragment_maps>
+           {
+             // light the surface with the ripples' own normal, so the sun glints on them
+             vec2 sl = waterSlope(vWaterWorld.xz, uTime) * uRipple * (1.0 - uIce);
+             normal = normalize((viewMatrix * vec4(normalize(vec3(-sl.x, 1.0, -sl.y)), 0.0)).xyz);
+           }`,
+        )
+        .replace(
           '#include <roughnessmap_fragment>',
           `#include <roughnessmap_fragment>
            roughnessFactor = mix(roughnessFactor, mix(0.35, 0.8, iceN), uIce);`,
@@ -122,11 +140,13 @@ export class WaterSurface {
              vec3 below = mix(gl_FragColor.rgb, body, 0.7) * (1.0 - uDepthTint * (1.0 - cosT));
              vec3 sky = gl_FragColor.rgb;
              vec3 refl = mix(sky, mirror, uMirrorOn);
-             float k = mix(0.3, 1.0, fresnel) * mix(0.5, 1.0, uMirrorOn);
+             float k = mix(uMinReflect, 1.0, fresnel) * mix(0.5, 1.0, uMirrorOn);
              gl_FragColor.rgb = mix(below, refl, k);
              // never fully clear: even straight down you can tell there is water
              // (blended in linear light behind the post effects, so it needs to be fairly opaque to read)
-             gl_FragColor.a = clamp(mix(max(gl_FragColor.a, 0.74), 1.0, fresnel * 0.9), 0.0, 1.0);
+             gl_FragColor.a = clamp(mix(max(gl_FragColor.a, uMinAlpha), 1.0, fresnel * 0.9), 0.0, 1.0);
+             // the pool light below, glowing up through the water at night
+             gl_FragColor.rgb += uGlow * vec3(0.1, 0.38, 0.46) * (0.55 + 0.45 * cosT);
              // frozen: the lit ice itself, with only a faint sheen of the sky
              if (uIce > 0.001) {
                gl_FragColor.rgb = mix(gl_FragColor.rgb, ice_lit, uIce);

@@ -85,7 +85,33 @@ export const TOUR = [
   },
 ];
 
+/** A slow circuit round the house, rising and falling, for the time-lapse flybys. */
+function circuit(start, radius, height, turns = 1) {
+  const keys = [];
+  const n = Math.round(14 * turns);
+  const c = [5, 0, -22];
+  for (let i = 0; i <= n; i++) {
+    const a = start + (i / n) * Math.PI * 2 * turns;
+    const r = radius * (1 + 0.12 * Math.sin(a * 2 + 0.7));
+    const y = height + 6 * Math.sin(a * 1.5);
+    keys.push(k([c[0] + Math.sin(a) * r, y, c[2] + Math.cos(a) * r], [c[0], 6, c[2] + 1], { speed: 6 }));
+  }
+  return keys;
+}
+
 export const FLYBYS = {
+  day: {
+    label: 'A day at the manor',
+    // the clock runs from before dawn to night while it flies
+    lapse: { what: 'hours', from: 4.2, to: 23.2 },
+    keys: circuit(0.35, 62, 26, 1.25),
+  },
+  year: {
+    label: 'A year at the manor',
+    // the year turns, spring round to spring, at midday
+    lapse: { what: 'day', from: 75, to: 75 + 365, hours: 13 },
+    keys: circuit(2.2, 66, 28, 1.25),
+  },
   estate: {
     label: 'Over the estate',
     keys: [
@@ -281,6 +307,7 @@ export class Tour {
   /** Starts the tour, or the flyby with this id. */
   start(flybyId = null) {
     this.flyby = !!flybyId;
+    this.flybyId = flybyId;
     this.moves = flybyId ? [this.flybyMoves[flybyId]] : this.tourMoves;
     this.shot = 0;
     this.t = 0;
@@ -309,6 +336,15 @@ export class Tour {
       this.camera.fov = this._fovBase;
       this.camera.updateProjectionMatrix();
     }
+  }
+
+  /** The running flyby's time-lapse ({ what, from, to }) and how far through it is (0..1), or null. */
+  get lapse() {
+    if (!this.running || !this.flyby) return null;
+    const f = FLYBYS[this.flybyId];
+    if (!f?.lapse) return null;
+    const move = this.moves[0];
+    return { ...f.lapse, progress: THREE.MathUtils.clamp(this.t / move.duration, 0, 1) };
   }
 
   /** Returns false when it has ended. */

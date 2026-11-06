@@ -11,4 +11,8 @@ export const CREDITS = {
   model: 'Model: Classic Croft Manor HD v2.3 by TRJTA',
   viewer: 'Viewer: Tudor Sfatosu',
   rights: 'A fan-made, non-commercial tribute. Tomb Raider and Croft Manor belong to their owners.',
+  // Report a bug: where reports go. The GitHub page works once the repository exists; the
+  // email button only shows once an address is set here.
+  issues: 'https://github.com/tudors1485/croft-manor-viewer/issues/new',
+  reportEmail: '',
 };

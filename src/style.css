@@ -310,3 +310,254 @@ body.flyby .film-bar {
   max-height: 62vh;
   border: 1px solid #333;
 }
+
+#bar-clock {
+  position: absolute;
+  right: 4vw;
+  top: 50%;
+  transform: translateY(-50%);
+  font: 500 clamp(16px, 2.2vw, 28px) / 1 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+  letter-spacing: 0.06em;
+  color: #f3e7c9;
+  font-variant-numeric: tabular-nums;
+}
+
+/* the dock: how to move, bottom right */
+#dock {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 4;
+  width: 286px;
+  padding: 10px 12px 12px;
+  border-radius: 12px;
+  background: rgba(20, 22, 27, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(8px);
+  color: #e9e5dc;
+  font: 13px/1.35 system-ui, -apple-system, sans-serif;
+  transition: opacity 0.5s;
+}
+body.touring #dock {
+  opacity: 0;
+  pointer-events: none;
+}
+.dock-modes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  margin-bottom: 10px;
+}
+#dock button {
+  font: inherit;
+  color: inherit;
+  background: #2c2f36;
+  border: 1px solid #454952;
+  border-radius: 6px;
+  padding: 6px 4px;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+}
+#dock .dock-modes button.on {
+  background: #d9b45a;
+  border-color: #d9b45a;
+  color: #1b1d22;
+  font-weight: 600;
+}
+.keys {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  align-items: start;
+}
+.keys[hidden] {
+  display: none;
+}
+.keys .pad {
+  display: grid;
+  grid-template-columns: repeat(3, 30px);
+  grid-auto-rows: 30px;
+  gap: 3px;
+}
+#dock .pad button,
+#dock .legend button {
+  padding: 0;
+  font-weight: 600;
+  min-width: 30px;
+  height: 26px;
+}
+#dock .legend button {
+  padding: 0 7px;
+  height: 22px;
+  font-size: 11px;
+}
+#dock .legend button.wide {
+  min-width: 56px;
+}
+#dock button.down {
+  background: #d9b45a;
+  color: #1b1d22;
+}
+.legend p {
+  margin: 0 0 3px;
+}
+.legend kbd {
+  display: inline-block;
+  font: 600 11px/20px system-ui, -apple-system, sans-serif;
+  padding: 0 6px;
+  border-radius: 5px;
+  background: #2c2f36;
+  border: 1px solid #454952;
+}
+.keys .note {
+  grid-column: 1 / -1;
+  margin: 6px 0 0;
+  color: #a8a398;
+  font-size: 12px;
+}
+#keys-orbit {
+  grid-template-columns: 1fr;
+}
+#walk-status:empty {
+  display: none;
+}
+
+/* the panel's video section */
+#panel details.section {
+  border-top: 1px solid #3a3d45;
+  border-bottom: 1px solid #3a3d45;
+  padding: 6px 0;
+}
+#panel details.section summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #f2d48a;
+  padding: 2px 0;
+}
+#panel details.section[open] {
+  display: grid;
+  gap: 6px;
+}
+#panel details.section[open] summary {
+  margin-bottom: 2px;
+}
+#panel .pills {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border: 1px solid #454952;
+  border-radius: 6px;
+  overflow: hidden;
+}
+#panel .pills button {
+  border: 0;
+  border-radius: 0;
+  background: #2c2f36;
+  padding: 6px 4px;
+}
+#panel .pills button span {
+  color: #a8a398;
+  font-size: 11px;
+}
+#panel .pills button.on {
+  background: #d9b45a;
+  color: #1b1d22;
+  font-weight: 600;
+}
+#panel .pills button.on span {
+  color: #4a3d1a;
+}
+#panel button.record {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 600;
+}
+#panel button.record i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #e0473c;
+  box-shadow: 0 0 6px rgba(224, 71, 60, 0.8);
+}
+#panel .buttons {
+  grid-template-columns: 1fr 1fr;
+}
+#panel .buttons #report-bug {
+  grid-column: 1 / -1;
+}
+
+/* report a bug */
+#report-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 21;
+  display: grid;
+  place-items: center;
+  background: rgba(10, 11, 14, 0.7);
+}
+#report-panel[hidden] {
+  display: none;
+}
+.report-box {
+  width: min(92vw, 460px);
+  display: grid;
+  gap: 10px;
+  padding: 18px 20px;
+  border-radius: 12px;
+  background: #1b1d22;
+  border: 1px solid #3a3d45;
+  color: #f2efe8;
+  font: 14px/1.4 system-ui, -apple-system, sans-serif;
+}
+.report-box h2 {
+  margin: 0;
+  font-size: 17px;
+}
+.report-box label {
+  display: grid;
+  gap: 4px;
+  color: #c9c4b8;
+}
+.report-box textarea,
+.report-box input {
+  font: inherit;
+  color: inherit;
+  background: #2c2f36;
+  border: 1px solid #454952;
+  border-radius: 6px;
+  padding: 8px;
+  resize: vertical;
+}
+.report-box .small-print {
+  margin: 0;
+  font-size: 12px;
+  color: #a8a398;
+}
+.report-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.report-actions button {
+  font: inherit;
+  color: inherit;
+  background: #2c2f36;
+  border: 1px solid #454952;
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+#report-github {
+  background: #d9b45a;
+  border-color: #d9b45a;
+  color: #1b1d22;
+  font-weight: 600;
+}
+#report-sent {
+  margin: 0;
+  min-height: 1em;
+  color: #d9b45a;
+  font-size: 13px;
+}

@@ -8,6 +8,24 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.15.0, 6 November 2026
+
+- Two time-lapse flybys, which you can also record as videos:
+  - A day at the manor: a slow circuit while the clock runs from just before sunrise to after sunset on the chosen date, with the time in the top bar.
+  - A year at the manor: the same kind of circuit while the year turns, spring round to spring at midday, with the date in the bar: blossom-green spring, summer, a wet October, snow in January.
+- Leaving a flyby or the tour puts you back where you were: on your feet in the same spot if you were walking, and the clock and the date as they were.
+- You start walking, on the drive facing the house. The modes are now Walk, Fly and Orbit, in that order, in a dock at the bottom right. Each mode shows its keys, and the on-screen keys work when you hold them (W A S D, Shift, Space, C), as well as the real ones.
+- The pool:
+  - Moving caustics, the bright web of light a rippling surface throws, on the floor and walls under the water, deepening to blue-green with depth.
+  - The sun glints on the ripples, and the light the water throws back plays on the walls above it.
+  - At night an underwater light lights the pool turquoise from below.
+  - The water is clearer looking straight down, and the pool hall (under its glass roof) is no longer overexposed.
+- Winter: the fountain and the assault-course pond also freeze, and the fountain stops, whenever snow lies, including when you pick Snow from the Weather menu on another date.
+- The video controls are tidier: a Make a video section, with the flyby, a YouTube 16:9 / Reel 9:16 switch and a Record button.
+- Report a bug:
+  - A short form. The version, the browser and graphics card, where you are, the time, date and weather, the quality and frame rate, and any recent errors are added for you.
+  - It opens a GitHub issue with it all filled in, or copies the report. An email button appears once an address is set in `src/credits.js`.
+
 ## 0.14.0, 6 November 2026
 
 - Make a video of a flyby: an MP4 with sound, for YouTube (1920 x 1080) or as an Instagram reel (1080 x 1920, with a taller lens so it sees as much).

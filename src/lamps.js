@@ -225,7 +225,7 @@ export class Lamps {
       } else groups.push({ pos: f.pos.clone(), power: f.power, kind: f.kind, outdoor: f.outdoor });
     }
     this.lights = groups.map((g) => {
-      const colour = g.kind === 'tube' ? 0xe8f0ff : g.kind === 'flood' || g.kind === 'lantern' ? 0xffc890 : 0xffb870;
+      const colour = g.kind === 'tube' ? 0xe8f0ff : g.kind === 'flood' || g.kind === 'lantern' ? 0xffc890 : g.kind === 'pool' ? 0x7fe6ff : 0xffb870;
       // a shared light is stronger, but less than the sum (the fittings were close together)
       const power = g.power * 0.85;
       const light = new THREE.PointLight(colour, 0, g.outdoor ? 26 : 9 + Math.sqrt(power) * 1.6, 2);

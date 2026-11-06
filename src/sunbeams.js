@@ -104,7 +104,7 @@ const compositeShader = {
       vec4 c = texture2D(tDiffuse, vUv);
       // a soft ceiling, so a room full of sunlit air (the pool under its glass roof) doesn't fog over
       float s = texture2D(tBeams, vUv).r;
-      gl_FragColor = vec4(c.rgb + uLight * s / (1.0 + s * 2.5), c.a);
+      gl_FragColor = vec4(c.rgb + uLight * s / (1.0 + s * 4.0), c.a);
     }`,
 };
 

@@ -14,7 +14,7 @@
     <div id="fade"></div>
     <div id="caption"></div>
     <button id="tour-stop" hidden>Stop the tour (Esc)</button>
-    <div id="bar-top" class="film-bar"></div>
+    <div id="bar-top" class="film-bar"><span id="bar-clock" hidden></span></div>
     <div id="bar-bottom" class="film-bar"></div>
     <div id="leave-hint"></div>
 
@@ -37,21 +37,19 @@
       <p class="credit">Classic Croft Manor HD v2.3 by TRJTA, an OBJ export from SketchUp</p>
       <p class="credit">Viewer <b id="version">…</b></p>
 
-      <div class="row modes">
-        <button id="mode-orbit" class="on">Orbit</button>
-        <button id="mode-walk">Walk</button>
-        <button id="mode-fly">Fly</button>
-      </div>
       <div class="row tours">
         <button id="tour" class="tour">Take the tour</button>
         <select id="flyby" title="Flybys in the old Tomb Raider style"><option value="">Flybys…</option></select>
       </div>
-      <div class="row tours">
+      <details class="section" id="video-section">
+        <summary>Make a video</summary>
         <select id="video-flyby" title="The flyby to make a video of"></select>
-        <select id="video-format" title="Landscape for YouTube, portrait for an Instagram reel"></select>
-      </div>
-      <button id="make-video" class="small wide" title="An MP4 with sound, the credits and the links">Make a video of the flyby</button>
-      <p class="help" id="walk-status"></p>
+        <div class="pills" id="video-format" role="radiogroup" aria-label="Format">
+          <button data-format="youtube" class="on" role="radio" aria-checked="true" title="1920 x 1080 landscape">YouTube <span>16:9</span></button>
+          <button data-format="portrait" role="radio" aria-checked="false" title="1080 x 1920 portrait">Reel <span>9:16</span></button>
+        </div>
+        <button id="make-video" class="record" title="An MP4 with sound, the credits and the links"><i></i>Record</button>
+      </details>
 
       <label class="row">Place
         <select id="viewpoint"></select>
@@ -85,14 +83,68 @@
       <label class="check"><input id="sound" type="checkbox" /> Sound</label>
 
       <p id="stats"></p>
-      <p class="help" id="help-orbit">Drag to turn, right-drag to pan, scroll to zoom. Double-click a spot to look at it.</p>
-      <p class="help" id="help-walk" hidden>W A S D walk, Shift runs, Space jumps. Stairs work and walls stop you. The front door and the kitchen door open as you reach them; the others are painted on and stay shut. Esc frees the mouse.</p>
-      <p class="help" id="help-fly" hidden>W A S D move, Space up, C down, Shift is faster, and you fly faster the higher you are. Walls stop you unless Go through walls is on. Esc frees the mouse.</p>
       <div class="row buttons">
         <button id="picture" class="small">Save a picture</button>
         <button id="copy-view" class="small">Copy this view</button>
+        <button id="report-bug" class="small">Report a bug</button>
       </div>
     </aside>
+
+    <!-- how to move: the three modes and their keys (the keys can be pressed here too) -->
+    <div id="dock">
+      <div class="dock-modes">
+        <button id="mode-walk" class="on">Walk</button>
+        <button id="mode-fly">Fly</button>
+        <button id="mode-orbit">Orbit</button>
+      </div>
+      <div class="keys" id="keys-walk">
+        <div class="pad"><span></span><button data-key="KeyW">W</button><span></span><button data-key="KeyA">A</button><button data-key="KeyS">S</button><button data-key="KeyD">D</button></div>
+        <div class="legend">
+          <p><kbd>W A S D</kbd> walk</p>
+          <p><button data-key="ShiftLeft">Shift</button> run</p>
+          <p><button data-key="Space" class="wide">Space</button> jump</p>
+          <p><kbd>Mouse</kbd> look</p>
+          <p><kbd>Esc</kbd> frees the mouse</p>
+        </div>
+        <p class="note">Click the picture to look around with the mouse. Stairs work and walls stop you; the front and kitchen doors open as you reach them.</p>
+      </div>
+      <div class="keys" id="keys-fly" hidden>
+        <div class="pad"><span></span><button data-key="KeyW">W</button><span></span><button data-key="KeyA">A</button><button data-key="KeyS">S</button><button data-key="KeyD">D</button></div>
+        <div class="legend">
+          <p><kbd>W A S D</kbd> fly</p>
+          <p><button data-key="Space" class="wide">Space</button> up</p>
+          <p><button data-key="KeyC">C</button> down</p>
+          <p><button data-key="ShiftLeft">Shift</button> faster</p>
+          <p><kbd>Mouse</kbd> look</p>
+        </div>
+        <p class="note">You fly faster the higher you are. Walls stop you unless Go through walls is on.</p>
+      </div>
+      <div class="keys" id="keys-orbit" hidden>
+        <div class="legend">
+          <p><kbd>Drag</kbd> turn</p>
+          <p><kbd>Right-drag</kbd> pan</p>
+          <p><kbd>Scroll</kbd> zoom</p>
+          <p><kbd>Double-click</kbd> look at a spot</p>
+        </div>
+      </div>
+      <p class="help" id="walk-status"></p>
+    </div>
+
+    <div id="report-panel" hidden>
+      <div class="report-box">
+        <h2>Report a bug</h2>
+        <label>What happened?<textarea id="report-text" rows="5" placeholder="What you did, what you saw, what you expected"></textarea></label>
+        <label>Your name or email, if you'd like a reply (optional)<input id="report-from" type="text" /></label>
+        <p class="small-print">The version, your browser and graphics card, where you are in the house, the time, date and weather here, and any recent errors are added for you.</p>
+        <div class="report-actions">
+          <button id="report-github" class="small">Open a GitHub issue</button>
+          <button id="report-email" class="small" hidden>Send by email</button>
+          <button id="report-copy" class="small">Copy the report</button>
+          <button id="report-close" class="small">Close</button>
+        </div>
+        <p id="report-sent"></p>
+      </div>
+    </div>
   </body>
   <script type="module" src="/src/main.js"></script>
 </html>

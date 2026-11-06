@@ -2,11 +2,11 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
-import { Walker, buildCollider, moveSphere } from './walk.js';
+import { Walker, buildCollider, moveSphere, firstHit, meshAtFace } from './walk.js';
 import { Doors } from './doors.js';
 import { setupWater } from './water.js';
 import { placeIvy } from './ivy.js';
-import { TimeOfDay } from './sky.js';
+import { TimeOfDay, sunAt } from './sky.js';
 import { Lamps } from './lamps.js';
 import { Landscape, makeTerrain, makeHillHeight } from './landscape.js';
 import { installGrade } from './look.js';
@@ -18,6 +18,10 @@ import { seasonAt, seasonUniforms, dateLabel, Snowfall } from './season.js';
 import { weatherAt, WEATHERS, Rainfall } from './weather.js';
 import { Snowman } from './snowman.js';
 import { makeVideo, FORMATS, videoSupported } from './video.js';
+import { setupPool, poolUniforms } from './pool.js';
+import { installErrorLog, setupReport } from './report.js';
+
+installErrorLog();
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('view');
@@ -83,15 +87,29 @@ function refreshWeather() {
   const snowLies = choice === 'snow' ? 1 : season.snow;
   weather = weatherAt(seasonDay, tod.hours, snowLies, choice);
   seasonUniforms.uSnow.value = snowLies;
+  // with snow lying, the fountain and the pond are frozen and the jet is off
+  seasonUniforms.uIce.value = Math.max(season.ice, THREE.MathUtils.smoothstep(snowLies, 0.5, 0.85));
   tod.weather = weather;
   tod.windy = season.windy;
   $('weather-label').textContent = weather.label;
 }
 
 const LOOK = { exposure: 0.66 };
-const BEAMS = { strength: 0.55 }; // dust in the air indoors: how strongly it scatters sunlight
+const BEAMS = { strength: 0.42 }; // dust in the air indoors: how strongly it scatters sunlight
 const ADAPT = { indoors: 1.75 }; // how far the eye opens up when you go in by day
-function updateExposure() {
+let roofed = 1; // 1 under a solid roof, 0 under glass (the pool hall), eased
+let roofCheck = 0;
+const UP = new THREE.Vector3(0, 1, 0);
+function updateExposure(dt = 0) {
+  // under glass the light is nearly outdoor light, so the eye opens up much less there
+  roofCheck -= dt;
+  if (walker && roofCheck <= 0) {
+    roofCheck = 0.25;
+    const hit = firstHit(walker.bvh, camera.position, UP, 30, passDoor);
+    const glass = hit ? /glass/i.test(meshAtFace(walker.bvh.geometry, hit.faceIndex)?.material.name || '') : true;
+    roofTarget = glass ? 0 : 1;
+  }
+  roofed += (roofTarget - roofed) * (1 - Math.exp(-dt * 2));
   // the eye adapts: a little at night, and indoors by day, where the light is far dimmer
   // than outside (so the sunlit patches and the windows are bright, as they look)
   const day = 1 - tod.night;
@@ -99,8 +117,9 @@ function updateExposure() {
     LOOK.exposure *
     (Number($('exposure').value) / 100) *
     THREE.MathUtils.lerp(1, 1.7, tod.night) *
-    THREE.MathUtils.lerp(1, ADAPT.indoors, tod.inside * day);
+    THREE.MathUtils.lerp(1, THREE.MathUtils.lerp(1.12, ADAPT.indoors, roofed), tod.inside * day);
 }
+let roofTarget = 1;
 
 // Controls
 const orbit = new OrbitControls(camera, canvas);
@@ -153,9 +172,7 @@ function setMode(next) {
   $('tour-stop').hidden = mode !== 'tour';
   $('tour-stop').textContent = flybyId ? 'Leave the flyby (Esc)' : 'Stop the tour (Esc)';
   if (mode === 'tour') showLeaveHint(flybyId ? 'Esc, a click or W A S D leaves the flyby' : 'Esc, a click or W A S D stops the tour');
-  $('help-orbit').hidden = mode !== 'orbit';
-  $('help-walk').hidden = mode !== 'walk';
-  $('help-fly').hidden = mode !== 'fly';
+  for (const m of ['orbit', 'walk', 'fly']) $(`keys-${m}`).hidden = mode !== m;
   orbit.enabled = mode === 'orbit';
   flight = null;
   if (mode === 'tour') {
@@ -193,16 +210,127 @@ for (const m of ['orbit', 'walk', 'fly']) {
     e.currentTarget.blur(); // so Space does not press the button again
   };
 }
+// the keys in the dock work like the real ones while you hold them
+for (const b of document.querySelectorAll('#dock [data-key]')) {
+  const code = b.dataset.key;
+  const up = () => {
+    keys.delete(code);
+    b.classList.remove('down');
+  };
+  b.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    b.setPointerCapture(e.pointerId);
+    keys.add(code);
+    b.classList.add('down');
+  });
+  b.addEventListener('pointerup', up);
+  b.addEventListener('pointercancel', up);
+  b.addEventListener('lostpointercapture', up);
+}
+// and a held real key lights its button
+const lightKey = (code, on) => document.querySelectorAll(`#dock [data-key="${code}"]`).forEach((b) => b.classList.toggle('down', on));
+window.addEventListener('keydown', (e) => lightKey(e.code === 'ShiftRight' ? 'ShiftLeft' : e.code, true));
+window.addEventListener('keyup', (e) => lightKey(e.code === 'ShiftRight' ? 'ShiftLeft' : e.code, false));
 function updateLockHint() {
   const free = mode === 'walk' || mode === 'fly';
   $('lock-hint').hidden = !(free && !look.isLocked);
   $('crosshair').hidden = !(free && look.isLocked);
 }
+// The tour and the flybys: they remember where you were (and the clock), and put you back
+let tourReturn = null;
+function startTour(id = null) {
+  if (mode !== 'tour') {
+    const fwd = camera.getWorldDirection(new THREE.Vector3());
+    tourReturn = {
+      mode,
+      pos: camera.position.clone(),
+      look: camera.position.clone().add(fwd),
+      clock: { live: liveClock, playing, playingYear, hours: Number($('time').value), day: seasonDay },
+    };
+  } else setMode('orbit'); // (from one flyby straight to another)
+  flybyId = id;
+  const lapse = id && FLYBYS[id].lapse;
+  // a day flyby runs from just before sunrise to after sunset, on whatever the date is
+  lapseRange = lapse?.what === 'hours' ? daylightOn(seasonDay) : null;
+  if (lapse) {
+    // the flyby runs the clock or the calendar itself
+    liveClock = false;
+    setPlaying(false);
+    setPlayingYear(false);
+  }
+  setMode('tour');
+  $('bar-clock').hidden = !lapse;
+}
+function leaveTour() {
+  if (mode !== 'tour') return;
+  const r = tourReturn;
+  tourReturn = null;
+  $('bar-clock').hidden = true;
+  if (r) {
+    // the time and the date as they were before a time-lapse flyby
+    const lapsed = flybyId && FLYBYS[flybyId].lapse;
+    if (lapsed) {
+      $('time').value = String(r.clock.hours);
+      seasonDay = r.clock.day;
+      $('season').value = String(Math.floor(seasonDay));
+      updateSeason();
+      updateSun();
+      liveClock = r.clock.live;
+      setPlaying(r.clock.playing);
+      setPlayingYear(r.clock.playingYear);
+      if (liveClock) goToNow();
+    }
+    if (r.mode === 'walk' && walker) {
+      // back on your feet where you left off
+      setMode('orbit');
+      camera.position.copy(r.pos);
+      camera.lookAt(r.look);
+      setMode('walk');
+      walker.placeAt(r.pos, r.look);
+      return;
+    }
+    setMode(r.mode === 'tour' ? 'orbit' : r.mode);
+  } else setMode('orbit');
+}
+let lapseRange = null;
+/** Sunrise to sunset on a day, widened to take in the dawn and the evening lights. */
+function daylightOn(day) {
+  let rise = 6;
+  let set = 18;
+  let prev = null;
+  for (let h = 0; h <= 24; h += 1 / 30) {
+    const e = sunAt(h, day).elevation;
+    if (prev !== null && prev < 0 && e >= 0) rise = h;
+    if (prev !== null && prev >= 0 && e < 0) set = h;
+    prev = e;
+  }
+  return { from: rise - 1.0, to: Math.min(23.9, set + 1.6) };
+}
+/** A time-lapse flyby moves the clock or the calendar with its progress. */
+function applyLapse(l) {
+  if (l.what === 'hours') {
+    const r = lapseRange ?? l;
+    const h = r.from + (r.to - r.from) * l.progress;
+    $('time').value = String(h);
+    tod.hours = h;
+    tod.update();
+    $('time-label').textContent = tod.label();
+    $('bar-clock').textContent = tod.label();
+  } else {
+    seasonDay = (l.from + (l.to - l.from) * l.progress) % 365;
+    $('season').value = String(Math.floor(seasonDay));
+    if (l.hours != null && tod.hours !== l.hours) {
+      $('time').value = String(l.hours);
+      tod.hours = l.hours;
+    }
+    updateSeason(false);
+    $('bar-clock').textContent = dateLabel(seasonDay);
+  }
+}
 $('tour').onclick = (e) => {
   const touring = mode === 'tour' && !flybyId;
-  if (mode === 'tour') setMode('orbit');
-  flybyId = null;
-  if (!touring) setMode('tour');
+  if (mode === 'tour') leaveTour();
+  if (!touring) startTour(null);
   e.currentTarget.blur();
 };
 for (const [id, f] of Object.entries(FLYBYS)) $('flyby').add(new Option(f.label, id));
@@ -210,15 +338,12 @@ $('flyby').onchange = (e) => {
   const id = e.target.value;
   e.target.value = '';
   e.target.blur();
-  if (!id) return;
-  if (mode === 'tour') setMode('orbit');
-  flybyId = id;
-  setMode('tour');
+  if (id) startTour(id);
 };
 // leaving a tour or a flyby: Esc, a click on the picture, or a move key (you take over)
 const LEAVE_KEYS = new Set(['Escape', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 window.addEventListener('keydown', (e) => {
-  if (mode === 'tour' && LEAVE_KEYS.has(e.code)) setMode('orbit');
+  if (mode === 'tour' && !exporting && LEAVE_KEYS.has(e.code)) leaveTour();
 });
 let hintTimer = 0;
 function showLeaveHint(text) {
@@ -228,14 +353,14 @@ function showLeaveHint(text) {
   clearTimeout(hintTimer);
   hintTimer = setTimeout(() => el.classList.remove('show'), 5000);
 }
-$('tour-stop').onclick = () => setMode('orbit');
+$('tour-stop').onclick = () => leaveTour();
 $('sound').addEventListener('change', async (e) => {
   if (e.target.checked) await sound.enable();
   else sound.disable();
   e.target.blur();
 });
 canvas.addEventListener('click', () => {
-  if (mode === 'tour') return setMode('orbit');
+  if (mode === 'tour') return exporting ? null : leaveTour();
   if ((mode === 'walk' || mode === 'fly') && !look.isLocked) look.lock();
 });
 $('lock-hint').addEventListener('click', () => look.lock());
@@ -457,6 +582,12 @@ loader.load(
     water = setupWater(renderer, scene, model);
     lamps = new Lamps(scene, model);
     quality.beams.box = lamps.houseBox;
+    // the pool: caustics, the light off the water, and a light under it for the evening
+    const pool = setupPool(model, water);
+    if (pool) {
+      lamps.fixtures.push({ pos: pool.light.position.clone(), kind: 'pool', power: 7 });
+      console.info(`pool light on ${pool.materials} materials`);
+    }
     console.info(`light fittings: ${lamps.count}`);
     resizeWater();
     updateSun();
@@ -465,6 +596,8 @@ loader.load(
     $('stats-base').textContent = `${Math.round(tris).toLocaleString('en-GB')} triangles`;
     $('loading').classList.add('done');
     $('panel').hidden = false;
+    // you start on your feet on the drive, facing the house (walking is ready a moment later)
+    setMode('walk');
   },
   (e) => {
     const total = e.total || 83_000_000;
@@ -562,6 +695,24 @@ fetch('/version.json')
     $('version').title = v.exact ? `Release v${v.version}, ${v.date}` : `Changes since release v${v.version} (${v.describe})`;
   })
   .catch(() => {});
+
+// Report a bug: what to say about this moment
+const report = setupReport(() => {
+  const fwd = camera.getWorldDirection(new THREE.Vector3());
+  const target = mode === 'orbit' ? orbit.target : camera.position.clone().addScaledVector(fwd, 6);
+  const r = (v) => `(${v.toArray().map((n) => n.toFixed(2)).join(', ')})`;
+  return {
+    version: appVersion,
+    mode: mode === 'tour' ? (flybyId ? `flyby ${flybyId}` : 'tour') : mode,
+    camera: r(camera.position),
+    target: r(target),
+    date: dateLabel(seasonDay),
+    time: tod.label(),
+    weather: `${$('weather').value || 'auto'} (${weather.label})`,
+    quality: `${quality.preset} at ${quality.ratio.toFixed(2)}x`,
+    fps: $('stats-fps').textContent,
+  };
+}, renderer);
 
 // Panel wiring
 $('stats').innerHTML = '<span id="stats-base"></span> · <span id="stats-fps"></span>';
@@ -713,7 +864,7 @@ function step(dt, exporting = false) {
   seasonUniforms.uWet.value = wet;
   snowfall.update(dt, camera, weather.snowing * (1 - tod.inside), renderer.getPixelRatio());
   rainfall.update(dt, camera, weather.rain * (1 - tod.inside));
-  updateExposure();
+  updateExposure(dt);
   if (lamps) {
     lamps.update(camera, tod.lamps, dt, renderer);
     const inside = lamps.houseBox.containsPoint(camera.position) ? 1 : 0;
@@ -727,7 +878,8 @@ function step(dt, exporting = false) {
   lastCam.copy(camera.position);
   if (!exporting) sound.update(dt, camera, soundEnv());
   if (mode === 'tour') {
-    if (!tour.update(dt) && !exporting) setMode('orbit');
+    if (!tour.update(dt) && !exporting) leaveTour();
+    else if (tour.lapse) applyLapse(tour.lapse);
   } else if (mode === 'orbit') {
     const before = camera.position.clone();
     const jumping = stepFlight(dt);
@@ -744,7 +896,13 @@ function step(dt, exporting = false) {
     moveFly(dt);
   }
   elapsed += dt;
+  // the pool: caustics move, brighter by day (the sun through the glass roof), the pool light by night
+  poolUniforms.uPoolTime.value += dt;
+  const daylight = THREE.MathUtils.smoothstep(tod.sunDir.y, -0.05, 0.3) * (1 - 0.5 * weather.overcast);
+  poolUniforms.uPoolLight.value = Math.max(0.35 + 0.9 * daylight, tod.lamps * 0.75) * (1 - tod.night * (1 - tod.lamps));
   if (water) {
+    const indoor = water.surfaces.find((s) => !s.outdoor);
+    if (indoor) indoor.uniforms.uGlow.value = tod.lamps * tod.night * 0.8;
     water.update(camera, elapsed);
     if (water.jet) {
       water.jet.material.map.offset.y -= dt * 1.4;
@@ -795,9 +953,7 @@ const videoApp = {
     if (sound.on) sound.disable(); // (the video's sound is made separately)
     quality.setFixedSize(f.w, f.h);
     camera.aspect = f.w / f.h;
-    if (mode === 'tour') setMode('orbit');
-    flybyId = this.flyby;
-    setMode('tour');
+    startTour(this.flyby);
     camera.fov = f.fov; // a portrait frame needs a taller lens to see as much
     camera.updateProjectionMatrix();
     videoDoorEvents = [];
@@ -816,18 +972,33 @@ const videoApp = {
     videoDoorEvents = [];
     return e;
   },
+  /** What the top bar says on this frame: the time or the date in a time-lapse flyby. */
+  clock() {
+    const l = tour.lapse;
+    return !l ? '' : l.what === 'hours' ? tod.label() : dateLabel(seasonDay);
+  },
   end() {
-    setMode('orbit');
+    leaveTour();
     quality.setFixedSize(null);
     camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
-    liveClock = this._saved.live;
+    if (!FLYBYS[this.flyby].lapse) liveClock = this._saved.live;
     if (this._saved.sound) sound.enable();
     exporting = false;
   },
 };
 for (const [id, f] of Object.entries(FLYBYS)) $('video-flyby').add(new Option(f.label, id));
-for (const [id, f] of Object.entries(FORMATS)) $('video-format').add(new Option(f.label, id));
+let videoFormat = 'youtube';
+for (const b of document.querySelectorAll('#video-format [data-format]')) {
+  b.onclick = (e) => {
+    videoFormat = b.dataset.format;
+    for (const o of document.querySelectorAll('#video-format [data-format]')) {
+      o.classList.toggle('on', o === b);
+      o.setAttribute('aria-checked', String(o === b));
+    }
+    e.currentTarget.blur();
+  };
+}
 let videoAbort = null;
 $('make-video').onclick = async (e) => {
   e.currentTarget.blur();
@@ -836,7 +1007,7 @@ $('make-video').onclick = async (e) => {
     return;
   }
   videoApp.flyby = $('video-flyby').value;
-  const formatId = $('video-format').value;
+  const formatId = videoFormat;
   videoAbort = new AbortController();
   $('video-panel').hidden = false;
   $('video-status').textContent = 'Getting ready…';
@@ -938,6 +1109,11 @@ window.manor = {
   },
   get weather() {
     return weather;
+  },
+  pool: poolUniforms,
+  reportPreview: () => {
+    const { title, body } = report.compose();
+    return `${title}\n${body}`;
   },
   get snowman() {
     return snowman;
