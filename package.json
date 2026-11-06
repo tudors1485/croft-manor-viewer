@@ -1,7 +1,7 @@
 {
   "name": "croft-manor-viewer",
   "private": true,
-  "version": "0.13.0",
+  "version": "0.14.0",
   "type": "module",
   "scripts": {
     "build:model": "node scripts/build-model.mjs",
@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@dgreenheck/ez-tree": "^1.1.0",
+    "mp4-muxer": "^5.2.2",
     "n8ao": "^2.0.1",
     "postprocessing": "^6.39.6",
     "three": "^0.187.0",

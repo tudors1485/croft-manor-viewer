@@ -17,6 +17,7 @@ import { Soundscape } from './sound.js';
 import { seasonAt, seasonUniforms, dateLabel, Snowfall } from './season.js';
 import { weatherAt, WEATHERS, Rainfall } from './weather.js';
 import { Snowman } from './snowman.js';
+import { makeVideo, FORMATS, videoSupported } from './video.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('view');
@@ -497,7 +498,10 @@ async function prepareWalking(ground) {
   doors = new Doors(scene, model, geo);
   walker.skipTriangle = passDoor;
   walker.ghost = throughWalls;
-  doors.onSound = (opening, d) => sound.door(opening, d.centre);
+  doors.onSound = (opening, d) => {
+    if (exporting) videoDoorEvents.push({ opening, at: d.centre.clone() });
+    else sound.door(opening, d.centre);
+  };
   console.info(`doors: ${doors.summary}`);
 
   lamps?.addOutdoor(geo.boundsTree);
@@ -656,11 +660,16 @@ $('picture').onclick = (e) => {
   wantPicture = true;
   e.currentTarget.blur();
 };
-renderer.setAnimationLoop((time) => {
-  timer.update(time);
-  const dt = Math.min(timer.getDelta(), 0.1);
+/**
+ * One frame: the sky, the weather, the lamps, the camera (whatever mode it is in), the
+ * water, then the picture. `exporting` is a video being made: the clock stands still, the
+ * live sound is left alone (the video's is rendered separately) and the flyby isn't ended here.
+ */
+function step(dt, exporting = false) {
   tod.tick(dt);
-  if (playing) {
+  if (exporting) {
+    // (nothing moves the clock or the year while a video is being made)
+  } else if (playing) {
     let h = Number($('time').value) + dt * (24 / 120);
     if (h >= 24) h -= 24;
     $('time').value = String(h);
@@ -668,7 +677,7 @@ renderer.setAnimationLoop((time) => {
     tod.update();
     $('time-label').textContent = tod.label();
   }
-  if (liveClock && !playing && !playingYear) {
+  if (liveClock && !playing && !playingYear && !exporting) {
     // the real clock: refresh the sun every few seconds (the date rolls over at midnight)
     liveTicker += dt;
     if (liveTicker > 5) {
@@ -685,7 +694,7 @@ renderer.setAnimationLoop((time) => {
       $('time-label').textContent = tod.label();
     }
   }
-  if (playingYear) {
+  if (playingYear && !exporting) {
     seasonDay += dt * (365 / 60);
     if (seasonDay >= 365) seasonDay -= 365;
     $('season').value = String(Math.floor(seasonDay));
@@ -716,21 +725,9 @@ renderer.setAnimationLoop((time) => {
   camSpeed += ((dt > 0 ? camera.position.distanceTo(lastCam) / dt : 0) - camSpeed) * (1 - Math.exp(-dt * 6));
   if (camSpeed > 60) camSpeed = 0; // a jump to a place, not flight
   lastCam.copy(camera.position);
-  sound.update(dt, camera, {
-    night: tod.night,
-    inside: tod.inside,
-    dusk: tod.lamps,
-    birds: season.birds,
-    crickets: season.crickets,
-    snow: season.snow,
-    windy: season.windy,
-    rain: weather.rain,
-    frozen: seasonUniforms.uIce.value,
-    speed: camSpeed,
-    flyby: mode === 'tour' && !!flybyId,
-  });
+  if (!exporting) sound.update(dt, camera, soundEnv());
   if (mode === 'tour') {
-    if (!tour.update(dt)) setMode('orbit');
+    if (!tour.update(dt) && !exporting) setMode('orbit');
   } else if (mode === 'orbit') {
     const before = camera.position.clone();
     const jumping = stepFlight(dt);
@@ -759,6 +756,127 @@ renderer.setAnimationLoop((time) => {
   const sunUp = THREE.MathUtils.smoothstep(tod.sunDir.y, 0.02, 0.2) * (1 - tod.night);
   quality.beams.strength = BEAMS.strength * tod.inside * sunUp * Number($('sunbeams').checked);
   quality.render(dt);
+}
+
+/** What the sound needs to know about this moment. */
+function soundEnv() {
+  return {
+    night: tod.night,
+    inside: tod.inside,
+    dusk: tod.lamps,
+    birds: season.birds,
+    crickets: season.crickets,
+    snow: season.snow,
+    windy: season.windy,
+    rain: weather.rain,
+    frozen: seasonUniforms.uIce.value,
+    speed: camSpeed,
+    flyby: mode === 'tour' && !!flybyId,
+  };
+}
+
+let exporting = false;
+let videoDoorEvents = []; // doors that open during a video frame, for its sound
+
+// Making a video of a flyby (video.js): the viewer, as the video maker sees it
+const videoApp = {
+  flyby: 'estate',
+  camera,
+  get canvas() {
+    return canvas;
+  },
+  get duration() {
+    return tour.flybyMoves[this.flyby].duration;
+  },
+  begin(f) {
+    this._saved = { live: liveClock, sound: sound.on };
+    exporting = true; // the live loop stands aside
+    liveClock = false;
+    if (sound.on) sound.disable(); // (the video's sound is made separately)
+    quality.setFixedSize(f.w, f.h);
+    camera.aspect = f.w / f.h;
+    if (mode === 'tour') setMode('orbit');
+    flybyId = this.flyby;
+    setMode('tour');
+    camera.fov = f.fov; // a portrait frame needs a taller lens to see as much
+    camera.updateProjectionMatrix();
+    videoDoorEvents = [];
+    lastCam.copy(camera.position);
+    camSpeed = 0;
+    return FLYBYS[this.flyby].label;
+  },
+  step(dt) {
+    step(dt, true);
+  },
+  inside: () => tod.inside,
+  speed: () => camSpeed,
+  soundEnv,
+  takeDoorEvents() {
+    const e = videoDoorEvents;
+    videoDoorEvents = [];
+    return e;
+  },
+  end() {
+    setMode('orbit');
+    quality.setFixedSize(null);
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+    liveClock = this._saved.live;
+    if (this._saved.sound) sound.enable();
+    exporting = false;
+  },
+};
+for (const [id, f] of Object.entries(FLYBYS)) $('video-flyby').add(new Option(f.label, id));
+for (const [id, f] of Object.entries(FORMATS)) $('video-format').add(new Option(f.label, id));
+let videoAbort = null;
+$('make-video').onclick = async (e) => {
+  e.currentTarget.blur();
+  if (!videoSupported()) {
+    $('make-video').textContent = 'This browser cannot make videos (try Chrome)';
+    return;
+  }
+  videoApp.flyby = $('video-flyby').value;
+  const formatId = $('video-format').value;
+  videoAbort = new AbortController();
+  $('video-panel').hidden = false;
+  $('video-status').textContent = 'Getting ready…';
+  $('video-bar').style.width = '0%';
+  const t0 = performance.now();
+  try {
+    const blob = await makeVideo(videoApp, formatId, {
+      preview: $('video-preview'),
+      signal: videoAbort.signal,
+      onProgress: (p, text) => {
+        $('video-bar').style.width = `${(p * 100).toFixed(1)}%`;
+        $('video-status').textContent = text;
+      },
+    });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `croft-manor-${videoApp.flyby}-${formatId}-${appVersion}.mp4`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
+    $('video-status').textContent = `Saved ${a.download} (${(blob.size / 1e6).toFixed(1)} MB, made in ${Math.round((performance.now() - t0) / 1000)} s)`;
+    window.manor.lastVideo = { name: a.download, size: blob.size, blob };
+  } catch (err) {
+    $('video-status').textContent = err.name === 'AbortError' ? 'Stopped.' : `The video failed: ${err.message}`;
+    console.error(err);
+  }
+  $('video-cancel').textContent = 'Close';
+  videoAbort = null;
+};
+$('video-cancel').onclick = () => {
+  if (videoAbort) videoAbort.abort();
+  else {
+    $('video-panel').hidden = true;
+    $('video-cancel').textContent = 'Stop';
+  }
+};
+renderer.setAnimationLoop((time) => {
+  timer.update(time);
+  const dt = Math.min(timer.getDelta(), 0.1);
+  if (exporting) return; // the video maker draws the frames itself
+  step(dt);
   if (wantPicture) {
     // read the canvas in the same task as the render, before the browser clears it
     wantPicture = false;

@@ -97,11 +97,30 @@ export class Quality {
   apply() {
     const p = PRESETS[this.preset];
     this.ao.configuration.halfRes = p.halfRes;
-    this.renderer.setPixelRatio(this.ratio);
-    this.renderer.setSize(innerWidth, innerHeight);
-    this.composer.setPixelRatio(this.ratio);
-    this.composer.setSize(innerWidth, innerHeight);
+    if (this.fixed) {
+      // a video: exactly this many pixels, whatever the window
+      this.renderer.setPixelRatio(1);
+      this.renderer.setSize(this.fixed.w, this.fixed.h, false);
+      this.composer.setPixelRatio(1);
+      this.composer.setSize(this.fixed.w, this.fixed.h);
+    } else {
+      this.renderer.setPixelRatio(this.ratio);
+      this.renderer.setSize(innerWidth, innerHeight);
+      this.composer.setPixelRatio(this.ratio);
+      this.composer.setSize(innerWidth, innerHeight);
+    }
     this.onResize?.();
+  }
+
+  /** Render at a fixed size (for a video), or back to the window with null. */
+  setFixedSize(w, h) {
+    this.fixed = w ? { w, h } : null;
+    this.adaptive = !this.fixed;
+    this.apply();
+  }
+
+  get aspect() {
+    return this.fixed ? this.fixed.w / this.fixed.h : innerWidth / innerHeight;
   }
 
   render(dt) {
@@ -114,7 +133,7 @@ export class Quality {
       this.beams.enabled = ao && this.beams.active;
       this.fisheyePass.enabled = bend;
       this.fisheyePass.uniforms.uStrength.value = this.fisheye;
-      this.fisheyePass.uniforms.uAspect.value = innerWidth / innerHeight;
+      this.fisheyePass.uniforms.uAspect.value = this.aspect;
       try {
         this.composer.render(dt);
       } catch (err) {

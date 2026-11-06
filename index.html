@@ -18,6 +18,15 @@
     <div id="bar-bottom" class="film-bar"></div>
     <div id="leave-hint"></div>
 
+    <div id="video-panel" hidden>
+      <div class="video-box">
+        <p id="video-status">Getting ready…</p>
+        <div class="bar"><div id="video-bar"></div></div>
+        <canvas id="video-preview"></canvas>
+        <button id="video-cancel" class="small">Stop</button>
+      </div>
+    </div>
+
     <div id="loading">
       <p id="loading-text">Loading the manor…</p>
       <div class="bar"><div id="loading-bar"></div></div>
@@ -37,6 +46,11 @@
         <button id="tour" class="tour">Take the tour</button>
         <select id="flyby" title="Flybys in the old Tomb Raider style"><option value="">Flybys…</option></select>
       </div>
+      <div class="row tours">
+        <select id="video-flyby" title="The flyby to make a video of"></select>
+        <select id="video-format" title="Landscape for YouTube, portrait for an Instagram reel"></select>
+      </div>
+      <button id="make-video" class="small wide" title="An MP4 with sound, the credits and the links">Make a video of the flyby</button>
       <p class="help" id="walk-status"></p>
 
       <label class="row">Place

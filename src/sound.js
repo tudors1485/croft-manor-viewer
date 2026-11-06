@@ -33,7 +33,7 @@ export class Soundscape {
 
   async enable() {
     if (!this.ctx) this._build();
-    if (this.ctx.resume) await this.ctx.resume();
+    if (!this._context) await this.ctx.resume(); // (an offline context starts when it renders)
     this.on = true;
     this.master.gain.setTargetAtTime(0.9, this.ctx.currentTime, 0.4);
   }

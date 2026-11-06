@@ -8,6 +8,13 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.14.0, 6 November 2026
+
+- Make a video of a flyby: an MP4 with sound, for YouTube (1920 x 1080) or as an Instagram reel (1080 x 1920, with a taller lens so it sees as much).
+  - It has the flyby's black film bars, with the title in the top bar for the first few seconds. The bottom bar carries croftmanor.sfatosu.com, "Fork it on GitHub" and the credit all the way through. A five-second end card has the links, the credits and the rights line.
+  - It renders frame by frame at a steady 30 frames a second (however long each frame takes to draw), through the browser's own H.264 encoder. The sound is rendered afterwards from the same camera path, frame by frame and including the doors, so picture and sound match. A 17-second flyby took about 25 seconds to make here.
+  - The words are in `src/credits.js`. The site and the GitHub address there are the intended ones: neither is live yet.
+
 ## 0.13.0, 6 November 2026
 
 - Weather, worked out for each day and hour (so a date always has the same weather), or chosen in the new Weather menu:

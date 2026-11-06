@@ -270,3 +270,43 @@ body.flyby .film-bar {
   color: #d9b45a;
   margin-left: 6px;
 }
+
+#panel button.wide {
+  width: 100%;
+  margin-top: 4px;
+}
+#video-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  background: rgba(10, 11, 14, 0.94);
+}
+#video-panel[hidden] {
+  display: none;
+}
+.video-box {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  font: 500 14px/1.4 system-ui, -apple-system, sans-serif;
+  color: #f2efe8;
+}
+.video-box .bar {
+  width: min(60vw, 520px);
+  height: 6px;
+  border-radius: 3px;
+  background: #2c2f36;
+  overflow: hidden;
+}
+#video-bar {
+  height: 100%;
+  width: 0;
+  background: #d9b45a;
+}
+#video-preview {
+  max-width: 70vw;
+  max-height: 62vh;
+  border: 1px solid #333;
+}
