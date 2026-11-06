@@ -8,6 +8,26 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.16.0, 6 November 2026
+
+- You start on the drive just inside the gate, between the two oaks, with the fountain before you and the front door beyond it. The loading screen stays up until walking is ready and the trees are planted, so nothing jumps: before, the page showed the view from high above for a few seconds while walking got ready, then dropped you on the drive.
+- Orbit, Walk and Fly are back at the top of the panel, in that order. The keys for the mode you are in sit under the panel when the window has room for them, otherwise at the bottom right. The panel scrolls if the window is short (and on sfatosu.com both leave room for the site's Credits button in the bottom left corner).
+- Quality is High by default.
+- A classic loading bar: green running to cyan inside a white frame, with "Loading" above it.
+- The weather is the real weather in Surrey now (from Open-Meteo), while the viewer keeps the real time: the sky, rain or snow, fog, the wind, snow on the ground and hard frost, with the temperature. Moving the clock or the date gives the season's weather, as before. The old behaviour is still in the menu ("As the season has it").
+- Wind is part of the weather now: many days are calm (most in summer), some breezy, a few blustery, mostly in winter. The wind sound follows it and has quiet lulls between the gusts, so it is no longer always on; the rush of air on a flyby only comes on its fast stretches. The trees and the clouds follow it too.
+- Fog comes on still mornings in more seasons: most often from late September into December, often in winter (some days it never lifts), sometimes in spring, and as a thin dawn mist on a few summer mornings.
+- Trees: trunks and branches stand still; only the leaves move. In autumn the leaves fall and gather on the grass under each tree as its crown thins, thickest near the trunk; they go brown through the winter, snow covers them, and they are gone by April.
+- The ice on the fountain and the pond is smooth cloudy ice with fine cracks and drifts of snow, instead of a pattern of squares that looked pixelated.
+- The snowman is smooth (its balls were shaded in flat facets), with a soft sheen of packed snow, and it only goes up when there is snow lying.
+- Flybys:
+  - New: *Through the gate*, the classic one, low down the drive outside and straight through the gateway, over the fountain and down to the front door.
+  - New: *Rising over the gate*, a vertical lift from the drive outside, the house framed in the gateway.
+  - New: *All weathers*, round the house while the weather cuts from one kind to the next (sun, rain, snow lying in an instant, fog, cloud, overcast), named in the top bar.
+  - *A day at the manor* runs the day about twice as fast (under a minute), at the same speed round.
+  - *A year at the manor* starts in front of the house and spins round twice, the year passing in under a minute.
+- Place starts as "Go to a place…" rather than claiming you are at the Overview.
+
 ## 0.15.0, 6 November 2026
 
 - Two time-lapse flybys, which you can also record as videos:

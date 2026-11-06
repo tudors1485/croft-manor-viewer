@@ -215,11 +215,12 @@ const SEASON_COLOUR = /* glsl */ `
 `;
 
 /**
- * Sway in the wind (more with height, each instance in its own phase), and for deciduous
- * leaves the year (above). Works on the shadow-depth material too, so bare trees cast
- * bare shadows and the shadows sway with the leaves.
+ * The leaves move in the wind (a gentle sway of the crown, more with height, each tree in its
+ * own phase, and each leaf fluttering); trunks and branches stand still (`still`). For
+ * deciduous leaves, the year (above). Works on the shadow-depth material too, so bare trees
+ * cast bare shadows and the shadows move with the leaves.
  */
-function addTreeShader(material, uniforms, { stiff = 1, season = false, snow = null, height = 1 } = {}) {
+function addTreeShader(material, uniforms, { stiff = 1, season = false, snow = null, height = 1, still = false } = {}) {
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uWindTime = uniforms.time;
     shader.uniforms.uWindAmp = uniforms.amp;
@@ -239,9 +240,11 @@ function addTreeShader(material, uniforms, { stiff = 1, season = false, snow = n
              float ph = 0.0;
            #endif
            float w = sin(uWindTime * 1.3 + ph + transformed.x * 0.4) * 0.6 + sin(uWindTime * 2.9 + ph * 1.7 + transformed.z * 0.9) * 0.4;
-           float flutter = sin(uWindTime * 7.0 + transformed.x * 3.1 + transformed.y * 2.3 + ph) * 0.015;
-           transformed.x += (w * h * h * 0.0009 + flutter) * uWindAmp / ${stiff.toFixed(1)};
-           transformed.z += (w * h * h * 0.0006 + flutter) * uWindAmp / ${stiff.toFixed(1)};
+           float flutter = sin(uWindTime * (5.0 + uWindAmp * 2.0) + transformed.x * 3.1 + transformed.y * 2.3 + ph) * 0.012;
+           // (the crown sways only a little, so the leaves stay on their still branches)
+           float move = ${still ? '0.0' : '1.0'} * uWindAmp / ${stiff.toFixed(1)};
+           transformed.x += (w * h * h * 0.00022 + flutter) * move;
+           transformed.z += (w * h * h * 0.00015 + flutter) * move;
          }
          ${season ? SEASON_BEGIN : ''}
          ${snow === 'cap' ? `vSnowH = transformed.y / ${height.toFixed(2)}; vSnowSeed = aLeaf;` : ''}`,
@@ -268,7 +271,7 @@ function addTreeShader(material, uniforms, { stiff = 1, season = false, snow = n
         .replace('#include <map_fragment>', '#include <map_fragment>\n' + SEASON_COLOUR);
     }
   };
-  material.customProgramCacheKey = () => `tree-${stiff}-${season}-${snow}-${height.toFixed(1)}-${material.type}`;
+  material.customProgramCacheKey = () => `tree-${stiff}-${season}-${snow}-${height.toFixed(1)}-${still}-${material.type}`;
 }
 
 /** A random number per leaf (each leaf is two crossed quads of four vertices, in order). */
@@ -319,7 +322,7 @@ export function makeVariant(preset, seed, height, wind, { tint, leafCount, leafS
   const season = !evergreen;
   addLeafSeeds(lGeo, tree.options.leaves.billboard === 'double' ? 8 : 4);
   addTreeShader(leaves, wind, { stiff: 1, season, snow: evergreen ? 'cap' : null, height });
-  addTreeShader(bark, wind, { stiff: 3, snow: 'bark' });
+  addTreeShader(bark, wind, { stiff: 3, snow: 'bark', still: true });
   // the shadow of the leaves: same sway, same leaves (none in winter)
   const leavesDepth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: ol.map, alphaTest: ol.alphaTest, side: THREE.DoubleSide });
   addTreeShader(leavesDepth, wind, { stiff: 1, season });
@@ -444,6 +447,7 @@ export class Landscape {
     this.wind = { time: { value: 0 }, amp: { value: 1 } };
     this.obstacles = []; // trunks, for walking
     this.crowns = []; // tree crowns: { x, z, r, y0, y1 }
+    this.treeSpots = []; // the real trees (not the far billboards): { x, z, r, inside }, for the fallen leaves
     this.billboards = [];
     this.stats = { trees: 0, bushes: 0, billboards: 0, triangles: 0 };
   }
@@ -603,6 +607,7 @@ export class Landscape {
         this.obstacles.push({ x, z, r: 0.35 * s * (vs[v].height / 14) });
         // the crown, roughly, for keeping camera paths out of the leaves
         this.crowns.push({ x, z, r: (vs[v].width * s) / 2, y0: vs[v].height * s * 0.22, y1: vs[v].height * s });
+        this.treeSpots.push({ x, z, r: (vs[v].width * s) / 2, inside: inLawn(x, z) });
       }
     }
 
@@ -697,6 +702,15 @@ export class Landscape {
     this.stats.ms = Math.round(performance.now() - t0);
     for (const v of [...variants, ...bushes, ...entrance]) v.tree.clear();
     return this.stats;
+  }
+
+  /** The height of the ground (or whatever lies on it) at x, z, or null if there is none. */
+  groundHeight(x, z) {
+    const top = this.hillHeight(x, z) + 6;
+    this._gRay = this._gRay ?? new THREE.Ray(new THREE.Vector3(), new THREE.Vector3(0, -1, 0));
+    this._gRay.origin.set(x, top, z);
+    const hit = this.bvh.raycastFirst(this._gRay, THREE.DoubleSide, 0, 14);
+    return hit ? hit.point.y : null;
   }
 
   /** The front gate: where the drive meets the front wall. */

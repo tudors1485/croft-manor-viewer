@@ -28,14 +28,23 @@
     </div>
 
     <div id="loading">
-      <p id="loading-text">Loading the manor…</p>
-      <div class="bar"><div id="loading-bar"></div></div>
+      <div class="loader">
+        <p class="loader-word">Loading</p>
+        <div class="bar"><div id="loading-bar"></div></div>
+        <p id="loading-text">The manor…</p>
+      </div>
     </div>
 
     <aside id="panel" hidden>
       <h1>Croft Manor</h1>
       <p class="credit">Classic Croft Manor HD v2.3 by TRJTA, an OBJ export from SketchUp</p>
       <p class="credit">Viewer <b id="version">…</b></p>
+
+      <div class="row modes">
+        <button id="mode-orbit">Orbit</button>
+        <button id="mode-walk" class="on">Walk</button>
+        <button id="mode-fly">Fly</button>
+      </div>
 
       <div class="row tours">
         <button id="tour" class="tour">Take the tour</button>
@@ -66,13 +75,14 @@
       <label class="row"><span>Weather <b id="weather-label" class="weather-now"></b></span>
         <select id="weather"></select>
       </label>
+      <p class="help" id="weather-source"></p>
       <label class="row">Compass <input id="sun-azim" type="range" min="-180" max="180" value="0" /></label>
       <label class="row">Brightness <input id="exposure" type="range" min="20" max="200" value="100" /></label>
 
       <label class="row">Quality
         <select id="quality">
-          <option value="high">High</option>
-          <option value="balanced" selected>Balanced</option>
+          <option value="high" selected>High</option>
+          <option value="balanced">Balanced</option>
           <option value="fast">Fast</option>
         </select>
       </label>
@@ -90,13 +100,9 @@
       </div>
     </aside>
 
-    <!-- how to move: the three modes and their keys (the keys can be pressed here too) -->
+    <!-- how to move in each mode, with keys that can be pressed here too: under the panel when
+         there is room, otherwise bottom right -->
     <div id="dock">
-      <div class="dock-modes">
-        <button id="mode-walk" class="on">Walk</button>
-        <button id="mode-fly">Fly</button>
-        <button id="mode-orbit">Orbit</button>
-      </div>
       <div class="keys" id="keys-walk">
         <div class="pad"><span></span><button data-key="KeyW">W</button><span></span><button data-key="KeyA">A</button><button data-key="KeyS">S</button><button data-key="KeyD">D</button></div>
         <div class="legend">

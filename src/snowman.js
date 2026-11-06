@@ -4,21 +4,28 @@
 // and sticks lie on the grass for a few days after.
 
 import * as THREE from 'three';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const BUILT_FROM = 355; // 21 December
 const MELT_FROM = 34; // 3 February
 const MELT_TO = 46; // 15 February
 const GONE = 53; // the leftovers cleared by 22 February
 
-/** A ball of packed snow, a little lumpy, as made by hand. */
+/** A ball of packed snow, rounded off by hand: smooth, with a few soft dents. */
 function snowball(r, seed) {
-  const g = new THREE.IcosahedronGeometry(r, 4);
+  // (an icosphere comes with each face separate: weld the corners so the shading is smooth)
+  const ico = new THREE.IcosahedronGeometry(r, 7);
+  ico.deleteAttribute('normal');
+  ico.deleteAttribute('uv');
+  const g = mergeVertices(ico, 1e-5);
   const p = g.attributes.position;
   const v = new THREE.Vector3();
   for (let i = 0; i < p.count; i++) {
     v.fromBufferAttribute(p, i);
-    const n = Math.sin(v.x * 9.1 + seed) * Math.sin(v.y * 7.3 - seed) * Math.sin(v.z * 8.7 + seed * 2.1);
-    v.multiplyScalar(1 + 0.045 * n);
+    const u = v.clone().divideScalar(r);
+    // broad, gentle unevenness rather than lumps
+    const n = Math.sin(u.x * 2.3 + seed) * Math.sin(u.y * 1.9 - seed) * Math.sin(u.z * 2.1 + seed * 2.1) + 0.35 * Math.sin(u.x * 4.1 - u.z * 3.3 + seed * 1.7);
+    v.multiplyScalar(1 + 0.022 * n);
     p.setXYZ(i, v.x, v.y, v.z);
   }
   g.computeVertexNormals();
@@ -39,7 +46,8 @@ export class Snowman {
     scene.add(this.group);
     this.obstacle = { x: at.x, z: at.z, r: 0 }; // for walking; sized when it stands
 
-    const snow = new THREE.MeshStandardMaterial({ color: 0xdfe4ea, roughness: 0.88, metalness: 0 });
+    // packed snow: soft and matt, a touch of blue in the shade (the sheen gives it a soft edge)
+    const snow = new THREE.MeshPhysicalMaterial({ color: 0xe3e8ee, roughness: 0.82, metalness: 0, sheen: 0.6, sheenRoughness: 0.7, sheenColor: new THREE.Color(0xdde8ff) });
     const coal = new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.6 });
     const carrot = new THREE.MeshStandardMaterial({ color: 0xe06a1b, roughness: 0.7 });
     const wood = new THREE.MeshStandardMaterial({ color: 0x4b3420, roughness: 0.9 });
@@ -59,25 +67,25 @@ export class Snowman {
     this.group.add(this.base, this.body, this.headPivot);
 
     // the face and the buttons
-    this.nose = mesh(new THREE.ConeGeometry(0.045, 0.26, 10).rotateX(Math.PI / 2).translate(0, 0, 0.13), carrot);
+    this.nose = mesh(new THREE.ConeGeometry(0.045, 0.26, 20).rotateX(Math.PI / 2).translate(0, 0, 0.13), carrot);
     this.nose.position.set(0, 0, 0.25);
     this.head.add(this.nose);
     this.eyes = [-0.09, 0.09].map((x) => {
-      const e = mesh(new THREE.SphereGeometry(0.03, 10, 8), coal);
+      const e = mesh(new THREE.SphereGeometry(0.03, 16, 12), coal);
       e.position.set(x, 0.07, 0.24);
       this.head.add(e);
       return e;
     });
     this.buttons = [0.16, 0, -0.16].map((y) => {
-      const b = mesh(new THREE.SphereGeometry(0.035, 10, 8), coal);
+      const b = mesh(new THREE.SphereGeometry(0.035, 16, 12), coal);
       b.position.set(0, y, 0.385);
       this.body.add(b);
       return b;
     });
     // stick arms with twig fingers
     const armGeo = () => {
-      const g = new THREE.CylinderGeometry(0.018, 0.026, 0.75, 6).translate(0, 0.375, 0);
-      const twig = new THREE.CylinderGeometry(0.008, 0.012, 0.16, 5).translate(0, 0.08, 0).rotateZ(0.6).translate(0, 0.62, 0);
+      const g = new THREE.CylinderGeometry(0.018, 0.026, 0.75, 10).translate(0, 0.375, 0);
+      const twig = new THREE.CylinderGeometry(0.008, 0.012, 0.16, 8).translate(0, 0.08, 0).rotateZ(0.6).translate(0, 0.62, 0);
       const merged = new THREE.BufferGeometry();
       // (two pieces in one mesh: keep it simple, add the twig as a child instead)
       merged.copy(g);
@@ -93,13 +101,13 @@ export class Snowman {
       return { arm, side };
     });
     // a red scarf round the neck
-    this.scarf = mesh(new THREE.TorusGeometry(0.23, 0.05, 8, 20).rotateX(Math.PI / 2), wool);
+    this.scarf = mesh(new THREE.TorusGeometry(0.23, 0.05, 16, 48).rotateX(Math.PI / 2), wool);
     this.group.add(this.scarf);
 
     // what is left on the grass once it has melted
     this.leftovers = new THREE.Group();
     this.group.add(this.leftovers);
-    const lc = mesh(new THREE.ConeGeometry(0.045, 0.26, 10).rotateZ(Math.PI / 2), carrot);
+    const lc = mesh(new THREE.ConeGeometry(0.045, 0.26, 20).rotateZ(Math.PI / 2), carrot);
     lc.position.set(0.25, 0.045, 0.3);
     lc.rotation.y = 0.6;
     this.leftovers.add(lc);
@@ -110,7 +118,7 @@ export class Snowman {
       [0.32, -0.05],
       [-0.3, 0.05],
     ]) {
-      const c = mesh(new THREE.SphereGeometry(0.035, 8, 6), coal);
+      const c = mesh(new THREE.SphereGeometry(0.035, 14, 10), coal);
       c.position.set(x, 0.03, z);
       this.leftovers.add(c);
     }
@@ -118,12 +126,12 @@ export class Snowman {
       [-0.55, 0.1, 0.4],
       [0.5, -0.25, 2.1],
     ]) {
-      const s = mesh(new THREE.CylinderGeometry(0.018, 0.026, 0.75, 6).rotateZ(Math.PI / 2), wood);
+      const s = mesh(new THREE.CylinderGeometry(0.018, 0.026, 0.75, 10).rotateZ(Math.PI / 2), wood);
       s.position.set(x, 0.03, z);
       s.rotation.y = r;
       this.leftovers.add(s);
     }
-    const sc = mesh(new THREE.TorusGeometry(0.2, 0.05, 8, 20).rotateX(Math.PI / 2).scale(1.3, 0.4, 0.8), wool);
+    const sc = mesh(new THREE.TorusGeometry(0.2, 0.05, 12, 40).rotateX(Math.PI / 2).scale(1.3, 0.4, 0.8), wool);
     sc.position.set(-0.1, 0.03, -0.2);
     this.leftovers.add(sc);
     this.update(145);
@@ -137,8 +145,19 @@ export class Snowman {
     return null;
   }
 
+  /**
+   * How much snow lies (0..1): with the real weather, a mild winter may have none, and then
+   * no snowman goes up (its leftovers, once it has melted, stay on the grass a few days).
+   */
+  setSnow(lying) {
+    this._lying = lying;
+    this.update(this._day ?? 145);
+  }
+
   update(day) {
-    const m = Snowman.meltOn(day);
+    this._day = day;
+    let m = Snowman.meltOn(day);
+    if (m !== null && m < 0.6 && (this._lying ?? 1) < 0.3) m = null;
     this.group.visible = m !== null;
     if (m === null) {
       this.obstacle.r = 0;

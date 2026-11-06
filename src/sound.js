@@ -402,9 +402,12 @@ export class Soundscape {
     const day = 1 - night;
     const outdoors = 1 - inside;
 
-    // wind: a breeze, with gusts; much more of it on windy (autumn and winter) days
-    const gust = 0.65 + 0.35 * Math.sin(t * 0.21) * Math.sin(t * 0.53 + 1.3) + 0.25 * Math.max(0, Math.sin(t * 0.09 + 0.7));
-    const wind = (0.05 + 0.11 * windy) * gust * (0.25 + 0.75 * outdoors) * (0.6 + 0.4 * day);
+    // wind: it comes and goes with the weather. On a still day there is next to none; on a
+    // breezy one, gusts with quiet lulls between them; a strong wind never quite drops
+    const lull = THREE.MathUtils.smoothstep(0.5 + 0.5 * Math.sin(t * 0.071 + 0.4) * Math.sin(t * 0.113 + 2.1) + 0.15 * Math.sin(t * 0.29), 0.3, 0.75);
+    const steady = THREE.MathUtils.smoothstep(windy, 0.55, 0.9);
+    const gust = (steady + (1 - steady) * lull) * (0.7 + 0.3 * Math.sin(t * 0.21) * Math.sin(t * 0.53 + 1.3));
+    const wind = 0.17 * Math.pow(windy, 1.3) * gust * (0.25 + 0.75 * outdoors) * (0.6 + 0.4 * day);
     this.windGain.gain.setTargetAtTime(wind, t, 0.5);
     this.windFilter.frequency.setTargetAtTime(380 + 260 * Math.sin(t * 0.13) + 140 * Math.sin(t * 0.37) + 300 * windy * gust, t, 0.8);
     this.howlGain.gain.setTargetAtTime(0.012 * windy * windy * gust * gust * (0.4 + 0.6 * outdoors), t, 0.6);
@@ -412,8 +415,8 @@ export class Soundscape {
 
     this.rainGain.gain.setTargetAtTime(0.11 * rain * (0.3 + 0.7 * outdoors), t, 0.8);
 
-    // the rush of air: with your speed (most in a flyby)
-    const rush = THREE.MathUtils.smoothstep(speed, 3, 14) * (flyby ? 0.07 : 0.035);
+    // the rush of air: only when you go fast (a flyby's quick stretches), not all the time
+    const rush = THREE.MathUtils.smoothstep(speed, 5, 17) * (flyby ? 0.055 : 0.03);
     this.rushGain.gain.setTargetAtTime(rush, t, 0.25);
     this.rushFilter.frequency.setTargetAtTime(380 + speed * 45, t, 0.25);
 

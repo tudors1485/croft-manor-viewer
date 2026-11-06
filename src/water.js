@@ -12,6 +12,39 @@ uniform float uTime;
 uniform float uRipple;
 uniform float uDepthTint;
 uniform float uIce;
+float iceHash(vec2 p) {
+  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+float iceNoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(iceHash(i), iceHash(i + vec2(1.0, 0.0)), u.x), mix(iceHash(i + vec2(0.0, 1.0)), iceHash(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+float iceFbm(vec2 p) {
+  return 0.5 * iceNoise(p) + 0.25 * iceNoise(p * 2.03 + 1.7) + 0.125 * iceNoise(p * 4.01 + 3.1) + 0.0625 * iceNoise(p * 8.1 + 5.3);
+}
+// cracks: the edges between irregular cells, drawn thin and softened by their screen size
+float iceCracks(vec2 p) {
+  vec2 g = floor(p);
+  vec2 f = fract(p);
+  float d1 = 8.0;
+  float d2 = 8.0;
+  for (int y = -1; y <= 1; y++) {
+    for (int x = -1; x <= 1; x++) {
+      vec2 o = vec2(float(x), float(y));
+      vec2 pt = o + 0.15 + 0.7 * vec2(iceHash(g + o), iceHash(g + o + 17.3));
+      float d = length(pt - f);
+      if (d < d1) {
+        d2 = d1;
+        d1 = d;
+      } else if (d < d2) d2 = d;
+    }
+  }
+  float e = d2 - d1;
+  float w = fwidth(e) * 1.2 + 0.008;
+  return 1.0 - smoothstep(0.0, w + 0.015, e);
+}
 uniform float uSnowOnIce;
 uniform float uGlow;
 uniform float uMinAlpha;
@@ -91,16 +124,16 @@ export class WaterSurface {
         .replace(
           '#include <map_fragment>',
           `#include <map_fragment>
-           // ice: a cloudy blue-white sheet, frosted and snowed on in patches, with faint cracks
+           // ice: a cloudy blue-white sheet with fine cracks, and drifts of snow on it in patches
+           // (smooth noise and thin lines, so it reads as ice from near and far, not as tiles)
            float iceN = 0.0;
            if (uIce > 0.001) {
              vec2 ip = vWaterWorld.xz;
-             float cell = fract(sin(dot(floor(ip * 1.7), vec2(12.9898, 78.233))) * 43758.5453);
-             vec2 f = fract(ip * 1.7) - 0.5;
-             float crack = smoothstep(0.47, 0.5, max(abs(f.x), abs(f.y)));
-             float frost = fract(sin(dot(floor(ip * 6.3), vec2(39.3, 11.1))) * 7351.7);
-             vec3 ice = vec3(0.5, 0.62, 0.7) * (0.85 + 0.25 * cell) + vec3(0.12) * crack;
-             float snowed = uSnowOnIce * smoothstep(0.35, 0.75, cell * 0.6 + frost * 0.4);
+             float cloud = iceFbm(ip * 0.8);
+             float streak = iceFbm(vec2(ip.x * 2.6 + ip.y * 0.7, ip.y * 0.5) + 7.0);
+             float crack = iceCracks(ip * 1.1) * (0.4 + 0.6 * iceNoise(ip * 2.3 + 3.0)) + 0.5 * iceCracks(ip * 2.7 + 9.0) * iceNoise(ip * 1.7);
+             vec3 ice = vec3(0.47, 0.6, 0.69) * (0.8 + 0.35 * cloud) + vec3(0.1) * smoothstep(0.55, 0.8, streak) + vec3(0.16) * crack;
+             float snowed = uSnowOnIce * smoothstep(0.42, 0.68, iceFbm(ip * 0.55 + 4.0) * 0.8 + 0.2 * cloud);
              ice = mix(ice, vec3(0.8, 0.83, 0.88), snowed);
              diffuseColor.rgb = mix(diffuseColor.rgb, ice, uIce);
              iceN = snowed;

@@ -16,7 +16,9 @@ import { Tour, FLYBYS, checkPath } from './tour.js';
 import { Soundscape } from './sound.js';
 import { seasonAt, seasonUniforms, dateLabel, Snowfall } from './season.js';
 import { weatherAt, WEATHERS, Rainfall } from './weather.js';
+import { LiveWeather } from './liveweather.js';
 import { Snowman } from './snowman.js';
+import { FallenLeaves } from './leaves.js';
 import { makeVideo, FORMATS, videoSupported } from './video.js';
 import { setupPool, poolUniforms } from './pool.js';
 import { installErrorLog, setupReport } from './report.js';
@@ -77,21 +79,41 @@ function updateSeason(force = true) {
   $('time-label').textContent = tod.label();
 }
 
-// The weather: worked out for the date and hour (or chosen in the panel)
+// The weather: the real weather now (while the clock is live), or worked out for the date
+// and hour, or chosen in the panel; a flyby can also switch it (forcedWeather)
 let weather = weatherAt(145, 15, 0);
 let wet = 0; // the ground stays wet for a while after the rain stops
+let wind = 0.2; // eased towards the weather's wind, for the trees and the sound
 const rainfall = new Rainfall(scene);
 let snowman = null;
+let leaves = null; // fallen leaves under the trees in autumn (leaves.js)
+let forcedWeather = null;
+const live = new LiveWeather(() => {
+  refreshWeather();
+  tod.update(true);
+});
 function refreshWeather() {
-  const choice = $('weather').value || 'auto';
-  const snowLies = choice === 'snow' ? 1 : season.snow;
-  weather = weatherAt(seasonDay, tod.hours, snowLies, choice);
+  const choice = forcedWeather ?? ($('weather').value || 'live');
+  // the real weather only makes sense for now: once you move the clock or the date, it's the season's
+  const real = choice === 'live' && liveClock && live.now;
+  const snowLies = choice === 'snow' ? 1 : real ? live.snowLies : season.snow;
+  weather = weatherAt(seasonDay, tod.hours, snowLies, choice, real ? live.now : null);
   seasonUniforms.uSnow.value = snowLies;
-  // with snow lying, the fountain and the pond are frozen and the jet is off
-  seasonUniforms.uIce.value = Math.max(season.ice, THREE.MathUtils.smoothstep(snowLies, 0.5, 0.85));
+  // with snow lying, the fountain and the pond are frozen and the jet is off (and with the
+  // real weather, after a hard frost)
+  const frost = real ? live.ice : season.ice;
+  seasonUniforms.uIce.value = Math.max(frost, THREE.MathUtils.smoothstep(snowLies, 0.5, 0.85));
+  snowman?.setSnow(snowLies);
+  leaves?.update();
   tod.weather = weather;
-  tod.windy = season.windy;
-  $('weather-label').textContent = weather.label;
+  tod.windy = weather.wind;
+  $('weather-label').textContent = real && live.temperature ? `${weather.label}, ${live.temperature}` : weather.label;
+  const src = $('weather-source');
+  if (forcedWeather) src.textContent = '';
+  else if (choice !== 'live') src.textContent = '';
+  else if (real) src.innerHTML = 'Live in Surrey, from <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a>';
+  else if (!liveClock) src.textContent = 'The season\'s: the clock is off now (Now)';
+  else src.textContent = live.failed ? 'The season\'s (the live weather did not load)' : 'Asking for the live weather…';
 }
 
 const LOOK = { exposure: 0.66 };
@@ -153,8 +175,10 @@ const tour = new Tour(
   },
 );
 let flybyId = null; // which flyby the 'tour' mode is playing, or null for the tour
-// where Walk mode starts if you switch to it from high up: the drive, facing the front door
-const SPAWN = { eye: new THREE.Vector3(-3, 1.7, 17), look: new THREE.Vector3(2.5, 1.8, -12) };
+// where you start, and where Walk mode starts if you switch to it from high up: on the drive
+// just inside the gate, between the two oaks, the fountain before you and the front door
+// beyond it (the view Tudor picked, 6 November 2026)
+const SPAWN = { eye: new THREE.Vector3(4.1, 1.7, 17.2), look: new THREE.Vector3(1.7, 3.8, -2.7) };
 
 function setMode(next) {
   if (next === 'walk' && !walker) {
@@ -173,6 +197,7 @@ function setMode(next) {
   $('tour-stop').textContent = flybyId ? 'Leave the flyby (Esc)' : 'Stop the tour (Esc)';
   if (mode === 'tour') showLeaveHint(flybyId ? 'Esc, a click or W A S D leaves the flyby' : 'Esc, a click or W A S D stops the tour');
   for (const m of ['orbit', 'walk', 'fly']) $(`keys-${m}`).hidden = mode !== m;
+  placeDock();
   orbit.enabled = mode === 'orbit';
   flight = null;
   if (mode === 'tour') {
@@ -210,6 +235,21 @@ for (const m of ['orbit', 'walk', 'fly']) {
     e.currentTarget.blur(); // so Space does not press the button again
   };
 }
+// The keys for the mode: under the panel if there is room for them there, else bottom right.
+// (On sfatosu.com the site puts a small Credits button in the bottom left corner: both the
+// panel and the keys leave room for it.)
+function placeDock() {
+  const dock = $('dock');
+  const panel = $('panel');
+  if (panel.hidden) return;
+  const credits = document.querySelector('.sfx-game-credits-btn');
+  document.body.classList.toggle('has-credits', !!credits);
+  dock.classList.add('under-panel');
+  const room = innerHeight - panel.getBoundingClientRect().bottom - 12 - 10 - (credits ? 34 : 0);
+  dock.classList.toggle('under-panel', dock.offsetHeight <= room);
+}
+window.addEventListener('resize', placeDock);
+$('video-section').addEventListener('toggle', placeDock);
 // the keys in the dock work like the real ones while you hold them
 for (const b of document.querySelectorAll('#dock [data-key]')) {
   const code = b.dataset.key;
@@ -252,7 +292,14 @@ function startTour(id = null) {
   const lapse = id && FLYBYS[id].lapse;
   // a day flyby runs from just before sunrise to after sunset, on whatever the date is
   lapseRange = lapse?.what === 'hours' ? daylightOn(seasonDay) : null;
-  if (lapse) {
+  if (lapse?.what === 'weather') {
+    // (the weather flyby keeps the clock; it sets the time of day it wants, then puts it back)
+    $('time').value = String(lapse.hours);
+    tod.hours = lapse.hours;
+    liveClock = false;
+    setPlaying(false);
+    setPlayingYear(false);
+  } else if (lapse) {
     // the flyby runs the clock or the calendar itself
     liveClock = false;
     setPlaying(false);
@@ -266,6 +313,11 @@ function leaveTour() {
   const r = tourReturn;
   tourReturn = null;
   $('bar-clock').hidden = true;
+  if (forcedWeather) {
+    forcedWeather = null;
+    refreshWeather();
+    tod.update(true);
+  }
   if (r) {
     // the time and the date as they were before a time-lapse flyby
     const lapsed = flybyId && FLYBYS[flybyId].lapse;
@@ -306,8 +358,21 @@ function daylightOn(day) {
   }
   return { from: rise - 1.0, to: Math.min(23.9, set + 1.6) };
 }
-/** A time-lapse flyby moves the clock or the calendar with its progress. */
+/** A time-lapse flyby moves the clock or the calendar (or the weather) with its progress. */
 function applyLapse(l) {
+  if (l.what === 'weather') {
+    // the weather cuts from one kind to the next, all at once: the ground is soaked or under
+    // snow in an instant, as in a cut
+    const now = [...l.steps].reverse().find((st) => l.progress >= st.at) ?? l.steps[0];
+    if (forcedWeather !== now.weather) {
+      forcedWeather = now.weather;
+      refreshWeather();
+      wet = Math.min(1, weather.rain * 3);
+      tod.update(true);
+      $('bar-clock').textContent = WEATHERS[now.weather];
+    }
+    return;
+  }
   if (l.what === 'hours') {
     const r = lapseRange ?? l;
     const h = r.from + (r.to - r.from) * l.progress;
@@ -359,11 +424,18 @@ $('sound').addEventListener('change', async (e) => {
   else sound.disable();
   e.target.blur();
 });
+// (the browser refuses the mouse for a second after Esc has freed it: then just try again)
+function lockMouse() {
+  try {
+    const p = canvas.requestPointerLock?.();
+    if (p?.catch) p.catch(() => {});
+  } catch {}
+}
 canvas.addEventListener('click', () => {
   if (mode === 'tour') return exporting ? null : leaveTour();
-  if ((mode === 'walk' || mode === 'fly') && !look.isLocked) look.lock();
+  if ((mode === 'walk' || mode === 'fly') && !look.isLocked) lockMouse();
 });
-$('lock-hint').addEventListener('click', () => look.lock());
+$('lock-hint').addEventListener('click', lockMouse);
 window.addEventListener('keydown', (e) => {
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
   keys.add(e.code);
@@ -482,9 +554,12 @@ async function loadViewpoints() {
   } catch {}
   const sel = $('viewpoint');
   sel.innerHTML = '';
+  sel.add(new Option('Go to a place…', ''));
   for (const [i, [name]] of viewpoints.entries()) sel.add(new Option(name, String(i)));
   sel.onchange = () => {
+    if (sel.value === '') return;
     const [, pos, target] = viewpoints[Number(sel.value)];
+    sel.value = '';
     flyTo(pos, target);
     sel.blur();
   };
@@ -574,10 +649,11 @@ loader.load(
     const overviewPos = modelCentre.clone().add(new THREE.Vector3(size.x * 0.75, size.y * 3.5 + 25, size.z * 0.65));
     viewpoints[0][1] = overviewPos;
     viewpoints[0][2] = modelCentre.clone();
-    camera.position.copy(overviewPos);
-    orbit.target.copy(modelCentre);
+    // you start on the drive, looking past the fountain at the house (on foot once walking is ready)
+    camera.position.copy(SPAWN.eye);
+    camera.lookAt(SPAWN.look);
+    orbit.target.copy(SPAWN.look);
     orbit.maxDistance = modelRadius * 5;
-    orbit.update();
 
     water = setupWater(renderer, scene, model);
     lamps = new Lamps(scene, model);
@@ -591,25 +667,42 @@ loader.load(
     console.info(`light fittings: ${lamps.count}`);
     resizeWater();
     updateSun();
-    prepareWalking(ground);
+    prepareWalking(ground).catch((err) => {
+      // (orbit and fly still work without the collision tree)
+      console.error(err);
+      $('walk-status').textContent = 'Walking could not be set up here: Orbit and Fly still work.';
+      pendingWalk = false;
+      doneLoading();
+      setMode('orbit');
+    });
     modelTris = tris;
     $('stats-base').textContent = `${Math.round(tris).toLocaleString('en-GB')} triangles`;
-    $('loading').classList.add('done');
-    $('panel').hidden = false;
-    // you start on your feet on the drive, facing the house (walking is ready a moment later)
+    setLoading(0.88, 'Getting ready to walk…');
+    // you start on your feet on the drive, facing the house: the loading screen stays up
+    // until walking is ready, so nothing moves under you
     setMode('walk');
   },
   (e) => {
     const total = e.total || 83_000_000;
-    const pct = Math.min(100, (e.loaded / total) * 100);
-    $('loading-bar').style.width = `${pct}%`;
-    $('loading-text').textContent = `Loading the manor… ${(e.loaded / 1e6).toFixed(0)} of ${(total / 1e6).toFixed(0)} MB`;
+    setLoading(0.85 * Math.min(1, e.loaded / total), `The manor: ${(e.loaded / 1e6).toFixed(0)} of ${(total / 1e6).toFixed(0)} MB`);
   },
   (err) => {
     console.error(err);
     $('loading-text').textContent = 'The model did not load. Run npm run build:model first, then reload.';
   },
 );
+
+/** The loading bar (0..1) and the line under it. */
+function setLoading(f, text) {
+  $('loading-bar').style.clipPath = `inset(0 ${(100 - f * 100).toFixed(1)}% 0 0)`;
+  $('loading-text').textContent = text;
+}
+function doneLoading() {
+  setLoading(1, 'Ready');
+  $('loading').classList.add('done');
+  $('panel').hidden = false;
+  placeDock();
+}
 
 // Walking: everything solid in the estate plus the fields, but not the ivy or the water.
 // Doors are in it too: the usable ones let you through once they have swung open.
@@ -626,6 +719,7 @@ async function prepareWalking(ground) {
     if (o.material.transparent && !/glass/i.test(name)) return;
     solid.push(o);
   });
+  setLoading(0.92, 'Getting ready to walk…');
   const geo = await buildCollider(solid);
   walker = new Walker(camera, geo);
   doors = new Doors(scene, model, geo);
@@ -640,6 +734,7 @@ async function prepareWalking(ground) {
   lamps?.addOutdoor(geo.boundsTree);
   console.info(`lights: ${lamps?.lightCount} point lights for ${lamps?.count} fittings`);
   landscape = new Landscape({ scene, renderer, model, lawn, bvh: geo.boundsTree, hillHeight });
+  setLoading(0.95, 'Planting the trees…');
   landscape.build().then(async (st) => {
     walker.obstacles = landscape.obstacles;
     // the snowman: on the front lawn, west of the fountain, looking towards the gate
@@ -653,7 +748,11 @@ async function prepareWalking(ground) {
       snowman = new Snowman(scene, new THREE.Vector3(spot[0], lawn.min.y, spot[1]), 0.5);
       landscape.obstacles.push(snowman.obstacle);
       snowman.update(seasonDay);
+      snowman.setSnow(seasonUniforms.uSnow.value);
     }
+    leaves = new FallenLeaves(scene, landscape.treeSpots, (x, z) => landscape.groundHeight(x, z));
+    // everything is in place: off with the loading screen
+    doneLoading();
     // the tour and the flybys must not pass through walls or trees (doors that open are fine)
     const opens = (t) => doors.triDoor[t] > 0;
     const moves = [...tour.tourMoves, ...Object.values(tour.flybyMoves)];
@@ -662,6 +761,9 @@ async function prepareWalking(ground) {
     else console.info('camera paths: clear of walls and trees');
     console.info(`landscape: ${st.trees} trees, ${st.bushes} bushes, ${st.billboards} far trees, ${Math.round(st.triangles / 1000)}k triangles, ${st.ms} ms`);
     $('stats-base').textContent = `${Math.round((modelTris + st.triangles) / 1000).toLocaleString('en-GB')}k triangles`;
+  }).catch((err) => {
+    console.error(err);
+    doneLoading(); // (the house without its trees, rather than no house)
   });
   const surfaceRay = new THREE.Raycaster();
   const surfaces = [];
@@ -719,7 +821,7 @@ $('stats').innerHTML = '<span id="stats-base"></span> · <span id="stats-fps"></
 for (const id of ['time', 'sun-azim']) $(id).addEventListener('input', updateSun);
 $('time').addEventListener('input', () => {
   setPlaying(false);
-  liveClock = false;
+  clockMoved();
 });
 // It opens on today's date and the time now, and keeps time with the real clock until you
 // move the time or the season; "Now" goes back to it.
@@ -739,6 +841,11 @@ function goToNow() {
   updateSeason();
   updateSun();
 }
+// (moving the time or the date off "now" turns the real weather into the season's)
+function clockMoved() {
+  liveClock = false;
+  refreshWeather();
+}
 $('now').onclick = (e) => {
   goToNow();
   e.currentTarget.blur();
@@ -753,6 +860,7 @@ $('play').onclick = (e) => {
   e.currentTarget.blur();
 };
 for (const [id, label] of Object.entries(WEATHERS)) $('weather').add(new Option(label, id));
+$('weather').value = 'live';
 $('weather').addEventListener('change', (e) => {
   refreshWeather();
   tod.update(true);
@@ -760,7 +868,7 @@ $('weather').addEventListener('change', (e) => {
 });
 $('season').addEventListener('input', () => {
   setPlayingYear(false);
-  liveClock = false;
+  clockMoved();
   seasonDay = Number($('season').value);
   updateSeason();
 });
@@ -792,7 +900,9 @@ $('shadows').addEventListener('change', (e) => {
 });
 updateExposure();
 loadViewpoints();
+quality.set($('quality').value);
 goToNow();
+live.start();
 
 window.addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
@@ -858,6 +968,9 @@ function step(dt, exporting = false) {
     refreshWeather();
     if (weather.label !== before) tod.update();
   }
+  // the wind: the trees and the sound follow the weather's, easing between days and hours
+  wind += (weather.wind - wind) * (1 - Math.exp(-dt * 0.5));
+  if (landscape) landscape.wind.amp.value = 0.15 + 1.5 * wind;
   // wet ground: soaked quickly in the rain, drying slowly after
   const wantWet = Math.min(1, weather.rain * 3);
   wet += (wantWet - wet) * (1 - Math.exp(-dt * (wantWet > wet ? 0.8 : 0.05)));
@@ -925,7 +1038,7 @@ function soundEnv() {
     birds: season.birds,
     crickets: season.crickets,
     snow: season.snow,
-    windy: season.windy,
+    windy: wind,
     rain: weather.rain,
     frozen: seasonUniforms.uIce.value,
     speed: camSpeed,
@@ -975,7 +1088,7 @@ const videoApp = {
   /** What the top bar says on this frame: the time or the date in a time-lapse flyby. */
   clock() {
     const l = tour.lapse;
-    return !l ? '' : l.what === 'hours' ? tod.label() : dateLabel(seasonDay);
+    return !l ? '' : l.what === 'hours' ? tod.label() : l.what === 'weather' ? $('bar-clock').textContent : dateLabel(seasonDay);
   },
   end() {
     leaveTour();
@@ -1118,6 +1231,10 @@ window.manor = {
   get snowman() {
     return snowman;
   },
+  get leaves() {
+    return leaves;
+  },
+  live,
   /** Jump to a day of the year (0 = 1 January). */
   setDay(day) {
     seasonDay = day;

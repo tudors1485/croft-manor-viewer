@@ -85,8 +85,8 @@ export const TOUR = [
   },
 ];
 
-/** A slow circuit round the house, rising and falling, for the time-lapse flybys. */
-function circuit(start, radius, height, turns = 1) {
+/** A circuit round the house, rising and falling, for the time-lapse flybys (a = 0 is in front). */
+function circuit(start, radius, height, turns = 1, speed = 6) {
   const keys = [];
   const n = Math.round(14 * turns);
   const c = [5, 0, -22];
@@ -94,23 +94,82 @@ function circuit(start, radius, height, turns = 1) {
     const a = start + (i / n) * Math.PI * 2 * turns;
     const r = radius * (1 + 0.12 * Math.sin(a * 2 + 0.7));
     const y = height + 6 * Math.sin(a * 1.5);
-    keys.push(k([c[0] + Math.sin(a) * r, y, c[2] + Math.cos(a) * r], [c[0], 6, c[2] + 1], { speed: 6 }));
+    keys.push(k([c[0] + Math.sin(a) * r, y, c[2] + Math.cos(a) * r], [c[0], 6, c[2] + 1], { speed }));
   }
   return keys;
 }
 
 export const FLYBYS = {
+  gate: {
+    label: 'Through the gate',
+    // the classic: low down the drive outside, straight through the gateway, up over the
+    // fountain and down to the front door
+    keys: [
+      k([4.6, 1.6, 66], [4.6, 2.3, 20], { speed: 2.5 }),
+      k([4.6, 1.9, 44], [4.6, 2.2, 12], { speed: 5.5 }),
+      k([4.6, 2.1, 28], [4.6, 2.3, 8.4], { speed: 5 }),
+      k([4.6, 2.2, 20.7], [4.6, 2.8, 6], { speed: 4.5 }),
+      k([4.6, 3.8, 14], [4, 4, 2], { speed: 4.5 }),
+      k([4.3, 6.4, 8.4], [-1.85, 3, -6], { speed: 4 }),
+      k([0.2, 4.2, 4], [-1.85, 2.4, -8], { speed: 2.8 }),
+      k([-1.85, 2.1, 2.2], [-1.85, 2.0, -10], { speed: 0.8 }),
+    ],
+  },
+  lift: {
+    label: 'Rising over the gate',
+    // from the drive outside, the house framed by the gateway, straight up into the air
+    keys: [
+      k([4.6, 1.5, 27], [4.6, 3.2, 0], { speed: 0.7 }),
+      k([4.6, 4, 27.1], [4.6, 3.4, 0], { speed: 2.4 }),
+      k([4.6, 12, 27.5], [4.5, 3, -5], { speed: 3.4 }),
+      k([4.6, 24, 28.2], [4.3, 2, -11], { speed: 3 }),
+      k([4.6, 35, 29], [4.1, 1, -16], { speed: 0.8 }),
+    ],
+  },
   day: {
     label: 'A day at the manor',
-    // the clock runs from before dawn to night while it flies
+    // the clock runs from before dawn to night while it flies (quickly: a day in under a minute)
     lapse: { what: 'hours', from: 4.2, to: 23.2 },
-    keys: circuit(0.35, 62, 26, 1.25),
+    keys: circuit(0.35, 62, 26, 0.7),
   },
   year: {
     label: 'A year at the manor',
-    // the year turns, spring round to spring, at midday
+    // from the front of the house, the year turns, spring round to spring, at midday, while
+    // the camera spins round twice
     lapse: { what: 'day', from: 75, to: 75 + 365, hours: 13 },
-    keys: circuit(2.2, 66, 28, 1.25),
+    keys: circuit(0, 66, 28, 2, 17),
+  },
+  weather: {
+    label: 'All weathers',
+    // round the house while the weather cuts from one kind to the next
+    lapse: {
+      what: 'weather',
+      hours: 13,
+      steps: [
+        { at: 0, weather: 'clear' },
+        { at: 0.12, weather: 'rain' },
+        { at: 0.25, weather: 'snow' },
+        { at: 0.38, weather: 'fog' },
+        { at: 0.5, weather: 'clouds' },
+        { at: 0.62, weather: 'overcast' },
+        { at: 0.74, weather: 'snow' },
+        { at: 0.86, weather: 'clear' },
+      ],
+    },
+    keys: [
+      k([-24, 12, 30], [5, 5, -10], { speed: 4 }),
+      k([-6, 14, 34], [5, 5, -14], { speed: 8 }),
+      k([18, 15, 32], [6, 5, -18], { speed: 8 }),
+      k([30, 16, 22], [8, 5, -20], { speed: 8 }),
+      k([52, 19, -8], [8, 6, -21], { speed: 8 }),
+      k([44, 19, -38], [8, 6, -21], { speed: 8 }),
+      k([24, 20, -58], [8, 6, -21], { speed: 8 }),
+      k([-6, 20, -60], [6, 6, -21], { speed: 8 }),
+      k([-31, 19, -44], [6, 6, -21], { speed: 8 }),
+      k([-35, 18, -12], [6, 6, -21], { speed: 8 }),
+      k([-24, 16, 14], [5, 5, -16], { speed: 6 }),
+      k([-4, 14, 26], [3, 4, -10], { speed: 3 }),
+    ],
   },
   estate: {
     label: 'Over the estate',
