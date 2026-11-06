@@ -8,6 +8,10 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.16.1, 6 November 2026
+
+- The loading screen's "Loading" keeps its big condensed type in a published build (the build had turned its style into one browsers reject, so it showed in small plain text).
+
 ## 0.16.0, 6 November 2026
 
 - You start on the drive just inside the gate, between the two oaks, with the fountain before you and the front door beyond it. The loading screen stays up until walking is ready and the trees are planted, so nothing jumps: before, the page showed the view from high above for a few seconds while walking got ready, then dropped you on the drive.
