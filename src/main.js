@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
-import { Walker, buildCollider } from './walk.js';
+import { Walker, buildCollider, moveSphere } from './walk.js';
+import { Doors } from './doors.js';
 import { setupWater } from './water.js';
 import { placeIvy } from './ivy.js';
 import { TimeOfDay } from './sky.js';
@@ -11,7 +12,7 @@ import { Landscape, makeTerrain, makeHillHeight } from './landscape.js';
 import { installGrade } from './look.js';
 import { Quality } from './quality.js';
 import { tuneMaterials, GRASS_TINT } from './materials.js';
-import { Tour } from './tour.js';
+import { Tour, FLYBYS, checkPath } from './tour.js';
 import { Soundscape } from './sound.js';
 
 const $ = (id) => document.getElementById(id);
@@ -62,14 +63,24 @@ const keys = new Set();
 let mode = 'orbit';
 
 let walker = null; // set once the collision tree is ready
+let doors = null;
+let throughWalls = false; // the panel's "Go through walls"
+const passDoor = (t) => doors?.passable(t) ?? false;
 const sound = new Soundscape();
-const tour = new Tour(camera, (text) => {
-  const el = $('caption');
-  el.classList.remove('show');
-  if (!text) return;
-  el.textContent = text;
-  requestAnimationFrame(() => el.classList.add('show'));
-});
+const tour = new Tour(
+  camera,
+  (text) => {
+    const el = $('caption');
+    el.classList.remove('show');
+    if (!text) return;
+    el.textContent = text;
+    requestAnimationFrame(() => el.classList.add('show'));
+  },
+  (alpha) => {
+    $('fade').style.opacity = String(alpha);
+  },
+);
+let flybyId = null; // which flyby the 'tour' mode is playing, or null for the tour
 // where Walk mode starts if you switch to it from high up: the drive, facing the front door
 const SPAWN = { eye: new THREE.Vector3(-3, 1.7, 17), look: new THREE.Vector3(2.5, 1.8, -12) };
 
@@ -82,8 +93,8 @@ function setMode(next) {
   const prev = mode;
   mode = next;
   for (const m of ['orbit', 'walk', 'fly']) $(`mode-${m}`).classList.toggle('on', mode === m);
-  $('tour').classList.toggle('on', mode === 'tour');
-  $('tour').textContent = mode === 'tour' ? 'Stop the tour' : 'Take the tour';
+  $('tour').classList.toggle('on', mode === 'tour' && !flybyId);
+  $('tour').textContent = mode === 'tour' && !flybyId ? 'Stop the tour' : 'Take the tour';
   document.body.classList.toggle('touring', mode === 'tour');
   $('tour-stop').hidden = mode !== 'tour';
   $('help-orbit').hidden = mode !== 'orbit';
@@ -93,9 +104,10 @@ function setMode(next) {
   flight = null;
   if (mode === 'tour') {
     look.unlock();
-    tour.start();
+    tour.start(flybyId);
   } else if (prev === 'tour') {
     tour.stop();
+    flybyId = null;
   }
   if (mode === 'orbit') {
     look.unlock();
@@ -109,6 +121,7 @@ function setMode(next) {
     camera.up.set(0, 1, 0);
     velocity.set(0, 0, 0);
   }
+  if (mode === 'fly' && prev !== 'fly' && camera.position.y < ABOVE.pos.y - 2) flyTo(ABOVE.pos, ABOVE.target, 2.2);
   if (mode === 'walk' && prev !== 'walk') {
     const fwd = new THREE.Vector3();
     camera.getWorldDirection(fwd);
@@ -130,8 +143,21 @@ function updateLockHint() {
   $('crosshair').hidden = !(free && look.isLocked);
 }
 $('tour').onclick = (e) => {
-  setMode(mode === 'tour' ? 'orbit' : 'tour');
+  const touring = mode === 'tour' && !flybyId;
+  if (mode === 'tour') setMode('orbit');
+  flybyId = null;
+  if (!touring) setMode('tour');
   e.currentTarget.blur();
+};
+for (const [id, f] of Object.entries(FLYBYS)) $('flyby').add(new Option(f.label, id));
+$('flyby').onchange = (e) => {
+  const id = e.target.value;
+  e.target.value = '';
+  e.target.blur();
+  if (!id) return;
+  if (mode === 'tour') setMode('orbit');
+  flybyId = id;
+  setMode('tour');
 };
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Escape' && mode === 'tour') setMode('orbit');
@@ -178,9 +204,20 @@ function moveFly(dt) {
   if (keys.has('Space') || keys.has('KeyE')) want.y += 1;
   if (keys.has('KeyC') || keys.has('KeyQ') || keys.has('ControlLeft')) want.y -= 1;
   const speed = keys.has('ShiftLeft') || keys.has('ShiftRight') ? 12 : 3.5;
-  if (want.lengthSq() > 0) want.normalize().multiplyScalar(speed);
+  if (want.lengthSq() > 0) want.normalize().multiplyScalar(speed * flySpeedScale());
   velocity.lerp(want, 1 - Math.exp(-dt * 10));
-  camera.position.addScaledVector(velocity, dt);
+  const next = camera.position.clone().addScaledVector(velocity, dt);
+  if (!throughWalls && walker) {
+    moveSphere(walker.bvh, camera.position, next, 0.3, passDoor);
+    // what is left of the velocity is what you actually moved (sliding along a wall)
+    if (dt > 0) velocity.subVectors(next, camera.position).divideScalar(dt);
+  }
+  camera.position.copy(next);
+}
+// higher up, fly faster: walking pace near the ground, a bird's pace over the roofs
+function flySpeedScale() {
+  const h = walker ? walker.heightAboveFloor(camera.position) : camera.position.y;
+  return THREE.MathUtils.clamp(1 + (Math.min(h, 200) - 3) / 10, 1, 8);
 }
 
 // Double-click in orbit mode: look at the clicked surface
@@ -200,29 +237,33 @@ function flyTo(pos, target, seconds = 1.2) {
     else walker.placeAt(pos, target);
     return;
   }
-  if (mode === 'fly') {
-    camera.position.copy(pos);
-    camera.lookAt(target);
-    velocity.set(0, 0, 0);
-    return;
-  }
+  const fwd = new THREE.Vector3();
+  camera.getWorldDirection(fwd);
   flight = {
     t: 0,
     seconds,
     fromPos: camera.position.clone(),
-    fromTarget: orbit.target.clone(),
+    fromTarget: mode === 'orbit' ? orbit.target.clone() : camera.position.clone().addScaledVector(fwd, 10),
     toPos: pos.clone(),
     toTarget: target.clone(),
+    look: new THREE.Vector3(),
   };
+  velocity.set(0, 0, 0);
 }
+/** A viewpoint jump (it may pass through walls on purpose). Returns true while flying. */
 function stepFlight(dt) {
-  if (!flight) return;
+  if (!flight) return false;
   flight.t = Math.min(1, flight.t + dt / flight.seconds);
   const k = flight.t * flight.t * (3 - 2 * flight.t);
   camera.position.lerpVectors(flight.fromPos, flight.toPos, k);
-  orbit.target.lerpVectors(flight.fromTarget, flight.toTarget, k);
+  flight.look.lerpVectors(flight.fromTarget, flight.toTarget, k);
+  if (mode === 'orbit') orbit.target.copy(flight.look);
+  else camera.lookAt(flight.look);
   if (flight.t >= 1) flight = null;
+  return true;
 }
+// Fly starts with the view from above: over the gate, looking up the drive at the house
+const ABOVE = { pos: new THREE.Vector3(4.5, 26, 70), target: new THREE.Vector3(4, 3, -10) };
 
 // Viewpoints: [label, camera position, look-at point]. The first is filled in from the model's bounds.
 const viewpoints = [['Overview', null, null]];
@@ -348,7 +389,8 @@ loader.load(
   },
 );
 
-// Walking: everything solid in the estate plus the fields, but not the ivy, the water or the doors
+// Walking: everything solid in the estate plus the fields, but not the ivy or the water.
+// Doors are in it too: the usable ones let you through once they have swung open.
 async function prepareWalking(ground) {
   const t0 = performance.now();
   $('walk-status').textContent = 'Getting walking ready…';
@@ -359,17 +401,27 @@ async function prepareWalking(ground) {
     for (let p = o; p; p = p.parent) if (p === ivy) return;
     const name = o.material.name || '';
     if (/water/i.test(name)) return;
-    // every door in the model is a closed panel, so doors let you through
-    if (/door/i.test(name)) return;
     if (o.material.transparent && !/glass/i.test(name)) return;
     solid.push(o);
   });
   const geo = await buildCollider(solid);
   walker = new Walker(camera, geo);
+  doors = new Doors(scene, model, geo);
+  walker.skipTriangle = passDoor;
+  walker.ghost = throughWalls;
+  doors.onSound = (opening, d, dist) => sound.door(opening, dist);
+  console.info(`doors: ${doors.summary}`);
+
   lamps?.addOutdoor(geo.boundsTree);
   landscape = new Landscape({ scene, renderer, model, lawn, bvh: geo.boundsTree, hillHeight });
-  landscape.build().then((st) => {
+  landscape.build().then(async (st) => {
     walker.obstacles = landscape.obstacles;
+    // the tour and the flybys must not pass through walls or trees (doors that open are fine)
+    const opens = (t) => doors.triDoor[t] > 0;
+    const moves = [...tour.tourMoves, ...Object.values(tour.flybyMoves)];
+    const problems = await checkPath(moves, geo.boundsTree, opens, { crowns: landscape.crowns });
+    if (problems.length) console.warn(`camera paths touch walls or trees at ${problems.length} points`, problems.slice(0, 30));
+    else console.info('camera paths: clear of walls and trees');
     console.info(`landscape: ${st.trees} trees, ${st.bushes} bushes, ${st.billboards} far trees, ${Math.round(st.triangles / 1000)}k triangles, ${st.ms} ms`);
     $('stats-base').textContent = `${Math.round((modelTris + st.triangles) / 1000).toLocaleString('en-GB')}k triangles`;
   });
@@ -416,6 +468,11 @@ $('quality').addEventListener('change', (e) => {
   quality.set(e.target.value);
   e.target.blur();
 });
+$('walls').addEventListener('change', (e) => {
+  throughWalls = e.target.checked;
+  if (walker) walker.ghost = throughWalls;
+  e.target.blur();
+});
 $('shadows').addEventListener('change', (e) => {
   tod.light.castShadow = e.target.checked;
 });
@@ -459,15 +516,21 @@ renderer.setAnimationLoop((time) => {
     tod.applyAmbient();
   }
   if (landscape) landscape.update(dt, tod);
+  if (doors) doors.update(camera, dt);
   sound.update(dt, camera, { night: tod.night, inside: tod.inside });
   if (mode === 'tour') {
     if (!tour.update(dt)) setMode('orbit');
   } else if (mode === 'orbit') {
-    stepFlight(dt);
+    const before = camera.position.clone();
+    const jumping = stepFlight(dt);
     orbit.update();
+    // turning and zooming stop at walls (a jump to a place is allowed through)
+    if (!jumping && !throughWalls && walker && before.distanceToSquared(camera.position) > 1e-10) {
+      moveSphere(walker.bvh, before, camera.position, 0.25, passDoor);
+    }
   } else if (mode === 'walk') {
     if (walker.update(dt, walkInput()) === 'fell') walker.placeAt(SPAWN.eye, SPAWN.look);
-  } else {
+  } else if (!stepFlight(dt)) {
     moveFly(dt);
   }
   elapsed += dt;
@@ -475,6 +538,7 @@ renderer.setAnimationLoop((time) => {
     water.update(camera, elapsed);
     if (water.jet) water.jet.material.map.offset.y -= dt * 1.4;
   }
+  quality.fisheye = mode === 'tour' ? tour.fisheye : 0;
   quality.render(dt);
   if (wantPicture) {
     // read the canvas in the same task as the render, before the browser clears it
@@ -520,6 +584,12 @@ window.manor = {
   },
   get landscape() {
     return landscape;
+  },
+  get doors() {
+    return doors;
+  },
+  get throughWalls() {
+    return throughWalls;
   },
   tod,
   LOOK,

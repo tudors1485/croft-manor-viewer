@@ -326,6 +326,7 @@ export class Landscape {
     scene.add(this.group);
     this.wind = { time: { value: 0 }, amp: { value: 1 } };
     this.obstacles = []; // trunks, for walking
+    this.crowns = []; // tree crowns: { x, z, r, y0, y1 }
     this.billboards = [];
     this.stats = { trees: 0, bushes: 0, billboards: 0, triangles: 0 };
   }
@@ -458,7 +459,11 @@ export class Landscape {
     };
     addInstanced(variants, spots);
     this.stats.trees = spots.length;
-    for (const [v, x, z, s] of spots) this.obstacles.push({ x, z, r: 0.35 * s * (variants[v].height / 14) });
+    for (const [v, x, z, s] of spots) {
+      this.obstacles.push({ x, z, r: 0.35 * s * (variants[v].height / 14) });
+      // the crown, roughly, for keeping camera paths out of the leaves
+      this.crowns.push({ x, z, r: (variants[v].width * s) / 2, y0: variants[v].height * s * 0.22, y1: variants[v].height * s });
+    }
 
     // --- bushes at the foot of the house and by the walls ---
     const bushSpots = [];

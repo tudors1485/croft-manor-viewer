@@ -85,13 +85,17 @@ export class WaterSurface {
              vec3 mirror = texture2D(uMirror, muv).rgb;
              // looking straight down you see into the water, at a glance you see the room
              // the water itself: a clear teal that deepens away from straight down
-             vec3 tint = vec3(0.62, 0.86, 0.9);
-             vec3 below = gl_FragColor.rgb * mix(vec3(1.0), tint, 0.6) * (1.0 - uDepthTint * (1.0 - cosT));
+             // the water body: tiles seen through it turn teal, more so the more water you look through
+             float lum = dot(gl_FragColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+             vec3 body = vec3(0.2, 0.58, 0.66) * (0.3 + lum * 0.9);
+             vec3 below = mix(gl_FragColor.rgb, body, 0.7) * (1.0 - uDepthTint * (1.0 - cosT));
              vec3 sky = gl_FragColor.rgb;
              vec3 refl = mix(sky, mirror, uMirrorOn);
-             float k = mix(0.38, 1.0, fresnel) * mix(0.5, 1.0, uMirrorOn);
+             float k = mix(0.3, 1.0, fresnel) * mix(0.5, 1.0, uMirrorOn);
              gl_FragColor.rgb = mix(below, refl, k);
-             gl_FragColor.a = clamp(mix(gl_FragColor.a, 1.0, fresnel * 0.9), 0.0, 1.0);
+             // never fully clear: even straight down you can tell there is water
+             // (blended in linear light behind the post effects, so it needs to be fairly opaque to read)
+             gl_FragColor.a = clamp(mix(max(gl_FragColor.a, 0.74), 1.0, fresnel * 0.9), 0.0, 1.0);
            }`,
         );
     };

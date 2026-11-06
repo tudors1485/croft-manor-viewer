@@ -6,7 +6,32 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { N8AOPass } from 'n8ao';
+
+// A slight fisheye for the flybys: barrel distortion that keeps the corners in the corners
+// (so the middle is magnified a little; the flyby widens its lens to make up for it).
+const Fisheye = {
+  uniforms: { tDiffuse: { value: null }, uStrength: { value: 0 }, uAspect: { value: 1 } },
+  vertexShader: /* glsl */ `
+    varying vec2 vUv;
+    void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDiffuse;
+    uniform float uStrength;
+    uniform float uAspect;
+    varying vec2 vUv;
+    void main() {
+      vec2 p = vUv * 2.0 - 1.0;
+      p.x *= uAspect;
+      float k = 0.055 * uStrength;
+      float corner = uAspect * uAspect + 1.0;
+      vec2 q = p * (1.0 + k * dot(p, p)) / (1.0 + k * corner);
+      q.x /= uAspect;
+      gl_FragColor = texture2D(tDiffuse, q * 0.5 + 0.5);
+    }`,
+};
 
 export const PRESETS = {
   high: { label: 'High', ao: true, halfRes: false, maxRatio: 2 },
@@ -42,8 +67,13 @@ export class Quality {
     this.ao.setQualityMode('Low');
     this.output = new OutputPass();
     this.smaa = new SMAAPass(innerWidth, innerHeight);
+    this.plain = new RenderPass(scene, camera); // when there is no ambient occlusion but a fisheye
+    this.fisheyePass = new ShaderPass(Fisheye);
+    this.fisheye = 0; // 0..1, set by the flybys
+    this.composer.addPass(this.plain);
     this.composer.addPass(this.ao);
     this.composer.addPass(this.output);
+    this.composer.addPass(this.fisheyePass);
     this.composer.addPass(this.smaa);
     this.apply();
   }
@@ -66,7 +96,14 @@ export class Quality {
   }
 
   render(dt) {
-    if (PRESETS[this.preset].ao && !this.failed) {
+    const ao = PRESETS[this.preset].ao && !this.failed;
+    const bend = this.fisheye > 0.001;
+    if (ao || bend) {
+      this.ao.enabled = ao;
+      this.plain.enabled = !ao;
+      this.fisheyePass.enabled = bend;
+      this.fisheyePass.uniforms.uStrength.value = this.fisheye;
+      this.fisheyePass.uniforms.uAspect.value = innerWidth / innerHeight;
       try {
         this.composer.render(dt);
       } catch (err) {

@@ -198,6 +198,48 @@ export class Soundscape {
     src.start(t, Math.random() * 2, len + 0.02);
   }
 
+  /** A heavy old door: a creak as it swings open, a soft thud as it shuts. */
+  door(opening, distance = 2) {
+    if (!this.on) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime + 0.02;
+    const level = 0.09 * Math.max(0.15, 1 - distance / 12);
+    if (opening) {
+      // a creak: a buzzy tone wandering in pitch, through a resonant band
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(95, t);
+      o.frequency.linearRampToValueAtTime(140, t + 0.25);
+      o.frequency.linearRampToValueAtTime(110, t + 0.55);
+      o.frequency.linearRampToValueAtTime(165, t + 0.8);
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = 900;
+      bp.Q.value = 5;
+      const e = ctx.createGain();
+      e.gain.setValueAtTime(0, t);
+      e.gain.linearRampToValueAtTime(level * 0.5, t + 0.08);
+      e.gain.linearRampToValueAtTime(level * 0.35, t + 0.6);
+      e.gain.exponentialRampToValueAtTime(0.0001, t + 0.95);
+      o.connect(bp).connect(e).connect(this.master);
+      o.start(t);
+      o.stop(t + 1);
+    }
+    // the latch (opening) or the thud of the door meeting its frame (closing)
+    const src = ctx.createBufferSource();
+    src.buffer = this.white;
+    const lp = ctx.createBiquadFilter();
+    lp.type = opening ? 'bandpass' : 'lowpass';
+    lp.frequency.value = opening ? 2200 : 260;
+    lp.Q.value = opening ? 6 : 0.8;
+    const e = ctx.createGain();
+    const at = opening ? t : t + 0.05;
+    e.gain.setValueAtTime(opening ? level * 0.8 : level * 3, at);
+    e.gain.exponentialRampToValueAtTime(0.0001, at + (opening ? 0.05 : 0.22));
+    src.connect(lp).connect(e).connect(this.master);
+    src.start(at, Math.random() * 2, 0.3);
+  }
+
   /** Call once a frame. */
   update(dt, camera, { night, inside }) {
     if (!this.on || !this.ctx) return;

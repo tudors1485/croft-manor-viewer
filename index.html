@@ -11,6 +11,7 @@
     <canvas id="view"></canvas>
     <button id="lock-hint" hidden>Click to look around</button>
     <div id="crosshair" hidden></div>
+    <div id="fade"></div>
     <div id="caption"></div>
     <button id="tour-stop" hidden>Stop the tour (Esc)</button>
 
@@ -28,7 +29,10 @@
         <button id="mode-walk">Walk</button>
         <button id="mode-fly">Fly</button>
       </div>
-      <button id="tour" class="tour">Take the tour</button>
+      <div class="row tours">
+        <button id="tour" class="tour">Take the tour</button>
+        <select id="flyby" title="Flybys in the old Tomb Raider style"><option value="">Flybys…</option></select>
+      </div>
       <p class="help" id="walk-status"></p>
 
       <label class="row">Place
@@ -50,13 +54,14 @@
         </select>
       </label>
       <label class="check"><input id="ivy" type="checkbox" checked /> Ivy</label>
+      <label class="check"><input id="walls" type="checkbox" /> Go through walls</label>
       <label class="check"><input id="shadows" type="checkbox" checked /> Shadows</label>
       <label class="check"><input id="sound" type="checkbox" /> Sound</label>
 
       <p id="stats"></p>
       <p class="help" id="help-orbit">Drag to turn, right-drag to pan, scroll to zoom. Double-click a spot to look at it.</p>
-      <p class="help" id="help-walk" hidden>W A S D walk, Shift runs, Space jumps. Stairs work, walls stop you, and you can walk through the closed doors. Esc frees the mouse.</p>
-      <p class="help" id="help-fly" hidden>Fly through anything. W A S D move, Space up, C down, Shift is faster. Esc frees the mouse.</p>
+      <p class="help" id="help-walk" hidden>W A S D walk, Shift runs, Space jumps. Stairs work and walls stop you. The front door and the kitchen door open as you reach them; the others are painted on and stay shut. Esc frees the mouse.</p>
+      <p class="help" id="help-fly" hidden>W A S D move, Space up, C down, Shift is faster, and you fly faster the higher you are. Walls stop you unless Go through walls is on. Esc frees the mouse.</p>
       <div class="row buttons">
         <button id="picture" class="small">Save a picture</button>
         <button id="copy-view" class="small">Copy this view</button>

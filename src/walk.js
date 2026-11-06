@@ -21,10 +21,12 @@ export function mergeForCollision(meshes) {
   const pos = new Float32Array(vCount * 3);
   const idx = new Uint32Array(iCount);
   const v = new THREE.Vector3();
+  const parts = []; // which vertices came from which mesh, for telling surfaces apart later
   let vo = 0;
   let io = 0;
   for (const m of meshes) {
     m.updateWorldMatrix(true, false);
+    parts.push({ start: vo, count: m.geometry.attributes.position.count, mesh: m });
     const g = m.geometry;
     const p = g.attributes.position;
     for (let i = 0; i < p.count; i++) {
@@ -45,7 +47,82 @@ export function mergeForCollision(meshes) {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   geo.setIndex(new THREE.BufferAttribute(idx, 1));
+  geo.userData.parts = parts;
   return geo;
+}
+
+/** The mesh a collision triangle came from (the tree reorders triangles, not vertices). */
+export function meshAtFace(geo, faceIndex) {
+  const v = geo.index.getX(faceIndex * 3);
+  const parts = geo.userData.parts;
+  let lo = 0;
+  let hi = parts.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (parts[mid].start <= v) lo = mid;
+    else hi = mid - 1;
+  }
+  return parts[lo]?.mesh ?? null;
+}
+
+const _ray = new THREE.Ray();
+const _dir = new THREE.Vector3();
+const _rest = new THREE.Vector3();
+const _n = new THREE.Vector3();
+const _closest = new THREE.Vector3();
+const _push = new THREE.Vector3();
+const _sphere = new THREE.Sphere();
+
+/** The nearest surface along a ray, skipping triangles `skip` lets through. */
+export function firstHit(bvh, origin, dir, far, skip) {
+  _ray.origin.copy(origin);
+  _ray.direction.copy(dir);
+  if (!skip) return bvh.raycastFirst(_ray, THREE.DoubleSide, 0, far);
+  let best = null;
+  for (const h of bvh.raycast(_ray, THREE.DoubleSide, 0, far)) {
+    if (skip(h.faceIndex)) continue;
+    if (!best || h.distance < best.distance) best = h;
+  }
+  return best;
+}
+
+/**
+ * Moves a sphere (a flying camera) from `from` towards `to` without passing through
+ * surfaces: it stops at a wall and slides along it. Changes `to` in place.
+ */
+export function moveSphere(bvh, from, to, radius, skip) {
+  const start = from.clone();
+  for (let i = 0; i < 3; i++) {
+    _dir.subVectors(to, start);
+    const len = _dir.length();
+    if (len < 1e-6) break;
+    _dir.divideScalar(len);
+    const hit = firstHit(bvh, start, _dir, len + radius, skip);
+    if (!hit) break;
+    _n.copy(hit.face.normal);
+    if (_n.dot(_dir) > 0) _n.negate();
+    const stop = Math.max(0, hit.distance - radius);
+    _rest.subVectors(to, start).addScaledVector(_dir, -stop);
+    _rest.addScaledVector(_n, -_rest.dot(_n));
+    start.addScaledVector(_dir, stop);
+    to.copy(start).add(_rest);
+  }
+  // and out of anything closer than the radius
+  _sphere.set(to, radius);
+  bvh.shapecast({
+    intersectsBounds: (b) => b.intersectsSphere(_sphere),
+    intersectsTriangle: (tri, t) => {
+      if (skip && skip(t)) return;
+      tri.closestPointToPoint(_sphere.center, _closest);
+      const d = _closest.distanceTo(_sphere.center);
+      if (d < radius && d > 1e-6) {
+        _push.subVectors(_sphere.center, _closest).multiplyScalar((radius - d) / d);
+        _sphere.center.add(_push);
+      }
+    },
+  });
+  to.copy(_sphere.center);
+  return to;
 }
 
 /** Builds the BVH in a worker when it can, so the page keeps drawing meanwhile. */
@@ -84,6 +161,9 @@ export class Walker {
     this.lastStepPhase = 0;
     this.onFootstep = null; // callback(speed)
     this.obstacles = []; // tree trunks: { x, z, r }
+    this.skipTriangle = null; // (triangleIndex) => true for surfaces you can pass (open doors)
+    this.ghost = false; // through walls: only floors and ceilings hold you
+    this._triN = new THREE.Vector3();
 
     this._seg = new THREE.Line3();
     this._box = new THREE.Box3();
@@ -138,7 +218,9 @@ export class Walker {
     const capPoint = this._capPoint;
     this.bvh.shapecast({
       intersectsBounds: (b) => b.intersectsBox(box),
-      intersectsTriangle: (tri) => {
+      intersectsTriangle: (tri, triIndex) => {
+        if (this.skipTriangle && this.skipTriangle(triIndex)) return;
+        if (this.ghost && Math.abs(tri.getNormal(this._triN).y) < 0.6) return;
         const d = tri.closestPointToSegment(seg, triPoint, capPoint);
         if (d < r) {
           const depth = r - d;
@@ -179,11 +261,19 @@ export class Walker {
       this.onGround = false;
     }
 
+    // through walls, over rooms that were never built: hold your height rather than fall
+    const hover = this.ghost && this.floorBelow(this._tmp.copy(this.feet).setY(this.feet.y + 0.3), 3) === null;
+    if (hover) this.vel.y = Math.max(this.vel.y, 0);
+
     const steps = 5;
     const h = dt / steps;
     for (let s = 0; s < steps; s++) {
       const wasGround = this.onGround;
-      if (this.onGround && this.vel.y <= 0) this.vel.y = this.gravity * h;
+      if (hover) {
+        if (this.vel.y > 0) this.vel.y += this.gravity * h; // a jump still comes back down to here
+        if (this.vel.y < 0) this.vel.y = 0;
+        this.onGround = true;
+      } else if (this.onGround && this.vel.y <= 0) this.vel.y = this.gravity * h;
       else this.vel.y += this.gravity * h;
       this.feet.addScaledVector(this.vel, h);
 

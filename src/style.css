@@ -210,3 +210,18 @@ body.touring #panel {
   grid-template-columns: auto auto;
   justify-content: start;
 }
+
+#fade {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+}
+#panel .tours {
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+#panel .tours select {
+  width: 100%;
+}
