@@ -8,6 +8,10 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.18.2, 6 November 2026
+
+- Videos: the text in the bottom bar is about twice the size, to read on a phone (the site name, "Fork it on GitHub" and the credit; on YouTube in two rows), and the end card's lines are bigger too. A reel's film bars are a little taller to hold it.
+
 ## 0.18.1, 6 November 2026
 
 - The seasons and weathers are the tick box's alone now: the flyby that had them is plain *Circling the manor* (the same spin round the house), and *A day at the manor* is gone.

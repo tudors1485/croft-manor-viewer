@@ -15,7 +15,7 @@ import { CREDITS } from './credits.js';
 
 export const FORMATS = {
   youtube: { label: 'YouTube, 16:9', w: 1920, h: 1080, fov: 68, bar: 0.105 },
-  portrait: { label: 'Instagram reel, 9:16', w: 1080, h: 1920, fov: 96, bar: 0.085 },
+  portrait: { label: 'Instagram reel, 9:16', w: 1080, h: 1920, fov: 96, bar: 0.1 },
 };
 
 const FPS = 30;
@@ -43,6 +43,15 @@ async function pickAudioCodec(sampleRate) {
     if ((await AudioEncoder.isConfigSupported(config)).supported) return { config, mux };
   }
   throw new Error('This browser cannot encode the sound.');
+}
+
+/** One line of text, shrunk if need be to fit `maxW`. */
+function fitText(g, text, x, y, maxW) {
+  const w = g.measureText(text).width;
+  if (w <= maxW) return g.fillText(text, x, y);
+  const size = parseFloat(g.font.match(/(\d+(?:\.\d+)?)px/)[1]);
+  g.font = g.font.replace(/\d+(?:\.\d+)?px/, `${Math.floor((size * maxW) / w)}px`);
+  g.fillText(text, x, y);
 }
 
 /** Text in the film bars, the title at the start, the end card at the end. */
@@ -82,25 +91,33 @@ function drawOverlay(g, W, H, f, frame, flyFrames, label, clock = '') {
     }
   }
 
-  // the links and the credit, in the bottom bar, all the way through
-  g.fillStyle = 'rgba(243, 231, 201, 0.92)';
-  g.font = `500 ${Math.round(19 * u)}px ${sans}`;
+  // the links and the credit, in the bottom bar, all the way through: big enough to read on a
+  // phone (a 1080-wide frame is shown about 400 pixels wide there)
+  const credit = `${CREDITS.free} · ${CREDITS.model.replace('Model: ', '')}`;
+  g.textAlign = 'center';
   if (portrait) {
-    g.textAlign = 'center';
-    g.fillText(CREDITS.site, W / 2, H - bar + bar * 0.3);
-    g.fillText(`${CREDITS.githubCall}: ${CREDITS.github}`, W / 2, H - bar + bar * 0.55);
-    g.fillStyle = 'rgba(243, 231, 201, 0.6)';
-    g.font = `400 ${Math.round(15 * u)}px ${sans}`;
-    g.fillText(`${CREDITS.free} · ${CREDITS.model.replace('Model: ', '')}`, W / 2, H - bar + bar * 0.8);
+    g.fillStyle = '#f3e7c9';
+    g.font = `600 ${Math.round(40 * u)}px ${sans}`;
+    g.fillText(CREDITS.site, W / 2, H - bar + bar * 0.24);
+    g.fillStyle = 'rgba(243, 231, 201, 0.92)';
+    g.font = `500 ${Math.round(31 * u)}px ${sans}`;
+    fitText(g, `${CREDITS.githubCall}: ${CREDITS.github}`, W / 2, H - bar + bar * 0.53, W * 0.94);
+    g.fillStyle = 'rgba(243, 231, 201, 0.7)';
+    g.font = `400 ${Math.round(26 * u)}px ${sans}`;
+    fitText(g, credit, W / 2, H - bar + bar * 0.8, W * 0.94);
   } else {
+    // two rows: the links on either side, the credit under them
+    g.fillStyle = 'rgba(243, 231, 201, 0.95)';
+    g.font = `600 ${Math.round(30 * u)}px ${sans}`;
     g.textAlign = 'left';
-    g.fillText(CREDITS.site, bar * 0.6, H - bar / 2);
+    g.fillText(CREDITS.site, bar * 0.6, H - bar + bar * 0.36);
     g.textAlign = 'right';
-    g.fillText(`${CREDITS.githubCall}: ${CREDITS.github}`, W - bar * 0.6, H - bar / 2);
+    g.font = `500 ${Math.round(28 * u)}px ${sans}`;
+    g.fillText(`${CREDITS.githubCall}: ${CREDITS.github}`, W - bar * 0.6, H - bar + bar * 0.36);
     g.textAlign = 'center';
-    g.fillStyle = 'rgba(243, 231, 201, 0.6)';
-    g.font = `400 ${Math.round(15 * u)}px ${sans}`;
-    g.fillText(`${CREDITS.free} · ${CREDITS.model.replace('Model: ', '')}`, W / 2, H - bar / 2);
+    g.fillStyle = 'rgba(243, 231, 201, 0.7)';
+    g.font = `400 ${Math.round(22 * u)}px ${sans}`;
+    g.fillText(credit, W / 2, H - bar + bar * 0.76);
   }
 
   // the end card: the picture fades to black, then the links and the credits
@@ -112,16 +129,16 @@ function drawOverlay(g, W, H, f, frame, flyFrames, label, clock = '') {
     g.globalAlpha = a;
     g.textAlign = 'center';
     const lines = [
-      [CREDITS.title, `500 ${Math.round(78 * u)}px ${serif}`, '#f3e7c9', 0],
-      [CREDITS.siteCall, `400 ${Math.round(26 * u)}px ${sans}`, 'rgba(243,231,201,0.75)', 1.9],
-      [CREDITS.site, `600 ${Math.round(40 * u)}px ${sans}`, '#d9b45a', 2.6],
-      [`${CREDITS.githubCall}`, `400 ${Math.round(26 * u)}px ${sans}`, 'rgba(243,231,201,0.75)', 3.9],
-      [CREDITS.github, `600 ${Math.round(30 * u)}px ${sans}`, '#d9b45a', 4.5],
-      [CREDITS.free, `500 ${Math.round(22 * u)}px ${sans}`, 'rgba(243,231,201,0.85)', 6.0],
-      [`${CREDITS.model} · ${CREDITS.viewer}`, `400 ${Math.round(17 * u)}px ${sans}`, 'rgba(243,231,201,0.6)', 6.7],
-      [CREDITS.rights, `400 ${Math.round(17 * u)}px ${sans}`, 'rgba(243,231,201,0.6)', 7.25],
+      [CREDITS.title, `500 ${Math.round(88 * u)}px ${serif}`, '#f3e7c9', 0],
+      [CREDITS.siteCall, `400 ${Math.round(32 * u)}px ${sans}`, 'rgba(243,231,201,0.8)', 1.9],
+      [CREDITS.site, `600 ${Math.round(50 * u)}px ${sans}`, '#d9b45a', 2.6],
+      [`${CREDITS.githubCall}`, `400 ${Math.round(32 * u)}px ${sans}`, 'rgba(243,231,201,0.8)', 3.9],
+      [CREDITS.github, `600 ${Math.round(38 * u)}px ${sans}`, '#d9b45a', 4.55],
+      [CREDITS.free, `500 ${Math.round(30 * u)}px ${sans}`, 'rgba(243,231,201,0.9)', 6.0],
+      [`${CREDITS.model} · ${CREDITS.viewer}`, `400 ${Math.round(25 * u)}px ${sans}`, 'rgba(243,231,201,0.7)', 6.75],
+      [CREDITS.rights, `400 ${Math.round(24 * u)}px ${sans}`, 'rgba(243,231,201,0.7)', 7.45],
     ];
-    const step = 46 * u;
+    const step = 54 * u;
     const top = H / 2 - step * 3.6;
     for (const [text, font, colour, row] of lines) {
       g.font = font;
