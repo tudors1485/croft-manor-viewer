@@ -201,6 +201,20 @@ window.addEventListener('blur', () => keys.clear());
 
 const velocity = new THREE.Vector3();
 const held = (...codes) => codes.some((c) => keys.has(c));
+
+// Nothing goes below the ground, whatever Go through walls says: the estate's lawns,
+// drive and ground floors are level, and beyond the walls the fields follow the hills.
+const GROUND_CLEARANCE = 0.35;
+function groundAt(x, z) {
+  return hillHeight ? hillHeight(x, z) + lawn.min.y : 0;
+}
+/** Lifts a point that is below the ground (plus a clearance) back up; true if it moved. */
+function keepAboveGround(p, clearance = GROUND_CLEARANCE) {
+  const floor = groundAt(p.x, p.z) + clearance;
+  if (p.y >= floor) return false;
+  p.y = floor;
+  return true;
+}
 function walkInput() {
   return {
     forward: (held('KeyW', 'ArrowUp') ? 1 : 0) - (held('KeyS', 'ArrowDown') ? 1 : 0),
@@ -231,6 +245,7 @@ function moveFly(dt) {
     // what is left of the velocity is what you actually moved (sliding along a wall)
     if (dt > 0) velocity.subVectors(next, camera.position).divideScalar(dt);
   }
+  if (keepAboveGround(next)) velocity.y = Math.max(0, velocity.y);
   camera.position.copy(next);
 }
 // higher up, fly faster: walking pace near the ground, a bird's pace over the roofs
@@ -275,6 +290,7 @@ function stepFlight(dt) {
   flight.t = Math.min(1, flight.t + dt / flight.seconds);
   const k = flight.t * flight.t * (3 - 2 * flight.t);
   camera.position.lerpVectors(flight.fromPos, flight.toPos, k);
+  keepAboveGround(camera.position); // over a hill, a straight line between two places can dip under it
   flight.look.lerpVectors(flight.fromTarget, flight.toTarget, k);
   if (mode === 'orbit') orbit.target.copy(flight.look);
   else camera.lookAt(flight.look);
@@ -466,6 +482,18 @@ async function prepareWalking(ground) {
   }
 }
 
+// Which version this is: the release number, and whether there are changes since it
+let appVersion = 'v' + (import.meta.env.APP_VERSION ?? '');
+fetch('/version.json')
+  .then((r) => (r.ok ? r.json() : null))
+  .then((v) => {
+    if (!v) return;
+    appVersion = v.describe || `v${v.version}`;
+    $('version').textContent = v.exact ? `v${v.version}` : `v${v.version} + changes`;
+    $('version').title = v.exact ? `Release v${v.version}, ${v.date}` : `Changes since release v${v.version} (${v.describe})`;
+  })
+  .catch(() => {});
+
 // Panel wiring
 $('stats').innerHTML = '<span id="stats-base"></span> · <span id="stats-fps"></span>';
 for (const id of ['time', 'sun-azim']) $(id).addEventListener('input', updateSun);
@@ -558,7 +586,7 @@ renderer.setAnimationLoop((time) => {
   }
   if (landscape) landscape.update(dt, tod);
   if (doors) doors.update(camera, dt);
-  sound.update(dt, camera, { night: tod.night, inside: tod.inside, birds: season.birds, crickets: season.crickets, snow: season.snow });
+  sound.update(dt, camera, { night: tod.night, inside: tod.inside, birds: season.birds, crickets: season.crickets, snow: season.snow, dusk: tod.lamps });
   if (mode === 'tour') {
     if (!tour.update(dt)) setMode('orbit');
   } else if (mode === 'orbit') {
@@ -569,6 +597,8 @@ renderer.setAnimationLoop((time) => {
     if (!jumping && !throughWalls && walker && before.distanceToSquared(camera.position) > 1e-10) {
       moveSphere(walker.bvh, before, camera.position, 0.25, passDoor);
     }
+    keepAboveGround(orbit.target, 0);
+    keepAboveGround(camera.position);
   } else if (mode === 'walk') {
     if (walker.update(dt, walkInput()) === 'fell') walker.placeAt(SPAWN.eye, SPAWN.look);
   } else if (!stepFlight(dt)) {
@@ -588,7 +618,7 @@ renderer.setAnimationLoop((time) => {
       if (!blob) return;
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `croft-manor-${tod.label().replace(':', '')}.png`;
+      a.download = `croft-manor-${dateLabel(seasonDay).replace(' ', '-')}-${tod.label().replace(':', '')}-${appVersion}.png`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     }, 'image/png');

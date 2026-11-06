@@ -84,29 +84,47 @@ export class Soundscape {
     hp.frequency.value = 500;
     this._loop(white).connect(bp).connect(hp).connect(this.waterGain).connect(this.master);
 
-    // crickets: a pulsed 4.5 kHz tone
+    // crickets: a chorus of a dozen, each its own pitch, place, rhythm and loudness. A
+    // cricket's chirp is a few quick pulses of a pure high tone; each one keeps a steady
+    // beat, with the odd rest. Every cricket is one oscillator whose gain is scheduled.
     this.cricketGain = ctx.createGain();
     this.cricketGain.gain.value = 0;
-    const osc = ctx.createOscillator();
-    osc.frequency.value = 4500;
-    const am = ctx.createGain();
-    am.gain.value = 0;
-    const lfo = ctx.createOscillator();
-    lfo.type = 'square';
-    lfo.frequency.value = 28;
-    const lfoGain = ctx.createGain();
-    lfoGain.gain.value = 0.5;
-    const chirp = ctx.createOscillator();
-    chirp.type = 'square';
-    chirp.frequency.value = 2.3;
-    const chirpGain = ctx.createGain();
-    chirpGain.gain.value = 0.5;
-    lfo.connect(lfoGain).connect(am.gain);
-    chirp.connect(chirpGain).connect(am.gain);
-    osc.connect(am).connect(this.cricketGain).connect(this.master);
-    osc.start();
-    lfo.start();
-    chirp.start();
+    this.cricketGain.connect(this.master);
+    this.crickets = [];
+    for (let i = 0; i < 12; i++) {
+      const o = ctx.createOscillator();
+      o.frequency.value = 3900 + Math.random() * 1500;
+      const g = ctx.createGain();
+      g.gain.value = 0;
+      const pan = ctx.createStereoPanner();
+      pan.pan.value = Math.random() * 1.8 - 0.9;
+      o.connect(g).connect(pan).connect(this.cricketGain);
+      o.start();
+      this.crickets.push({
+        gain: g,
+        next: ctx.currentTime + Math.random() * 2,
+        pulses: 2 + Math.floor(Math.random() * 3),
+        rate: 24 + Math.random() * 14, // pulses a second within a chirp
+        period: 0.45 + Math.random() * 0.6, // seconds from chirp to chirp
+        level: (0.35 + Math.random() * 0.65) * (i < 4 ? 1 : 0.45), // a few close, the rest further off
+      });
+    }
+    // and the far-off shimmer of many more, too many to pick out
+    this.shimmerGain = ctx.createGain();
+    this.shimmerGain.gain.value = 0;
+    const shimmerBand = ctx.createBiquadFilter();
+    shimmerBand.type = 'bandpass';
+    shimmerBand.frequency.value = 4600;
+    shimmerBand.Q.value = 9;
+    const shimmerAm = ctx.createGain();
+    shimmerAm.gain.value = 0.6;
+    const trill = ctx.createOscillator();
+    trill.frequency.value = 31;
+    const trillDepth = ctx.createGain();
+    trillDepth.gain.value = 0.4;
+    trill.connect(trillDepth).connect(shimmerAm.gain);
+    trill.start();
+    this._loop(white).connect(shimmerBand).connect(shimmerAm).connect(this.shimmerGain).connect(this.master);
 
     this.white = white;
   }
@@ -136,6 +154,25 @@ export class Soundscape {
       o.start(at);
       o.stop(at + len + 0.02);
       at += len + 0.03 + Math.random() * 0.08;
+    }
+  }
+
+  /** Schedules each cricket's next chirps, a little ahead of time. */
+  _chirps(now) {
+    for (const c of this.crickets) {
+      while (c.next < now + 0.25) {
+        const at = Math.max(c.next, now);
+        const g = c.gain.gain;
+        for (let p = 0; p < c.pulses; p++) {
+          const s = at + p / c.rate;
+          const len = 0.55 / c.rate;
+          g.setValueAtTime(0, s);
+          g.linearRampToValueAtTime(c.level, s + len * 0.25);
+          g.linearRampToValueAtTime(0, s + len);
+        }
+        // a steady beat, now and then a rest
+        c.next = at + c.period * (0.93 + Math.random() * 0.14) + (Math.random() < 0.06 ? 1.5 + Math.random() * 4 : 0);
+      }
     }
   }
 
@@ -243,7 +280,7 @@ export class Soundscape {
   }
 
   /** Call once a frame. */
-  update(dt, camera, { night, inside, birds = 1, crickets = 1, snow = 0 }) {
+  update(dt, camera, { night, inside, birds = 1, crickets = 1, snow = 0, dusk = 0 }) {
     this.snow = snow;
     if (!this.on || !this.ctx) return;
     const t = this.ctx.currentTime;
@@ -258,7 +295,11 @@ export class Soundscape {
     const water = Math.max(0, 1 - df / 28) ** 2;
     this.waterGain.gain.setTargetAtTime(0.18 * water * (0.4 + 0.6 * outdoors), t, 0.3);
 
-    this.cricketGain.gain.setTargetAtTime(0.008 * night * outdoors * crickets, t, 1.0);
+    // crickets from dusk on, on warm nights; through the windows when you're inside
+    const chorus = crickets * Math.max(night, dusk * 0.7);
+    this.cricketGain.gain.setTargetAtTime(0.05 * chorus * (0.15 + 0.85 * outdoors), t, 1.0);
+    this.shimmerGain.gain.setTargetAtTime(0.012 * chorus * (0.1 + 0.9 * outdoors), t, 1.0);
+    if (chorus > 0.01) this._chirps(t);
 
     if (t > this._nextBird) {
       if (day > 0.3) this._bird(t + 0.05);

@@ -1,13 +1,15 @@
 {
   "name": "croft-manor-viewer",
   "private": true,
-  "version": "0.9.0",
+  "version": "0.10.0",
   "type": "module",
   "scripts": {
     "build:model": "node scripts/build-model.mjs",
     "dev": "vite --port 5190",
     "build": "vite build",
-    "preview": "vite preview --port 5190"
+    "preview": "vite preview --port 5190",
+    "versions": "node scripts/serve-version.mjs --list",
+    "serve:version": "node scripts/serve-version.mjs"
   },
   "dependencies": {
     "@dgreenheck/ez-tree": "^1.1.0",

@@ -12,6 +12,16 @@ npm run dev           # http://localhost:5190
 
 `source/` holds the unpacked RAR. macOS cannot open that solid RAR, so it was unpacked with `node-unrar-js`. `source/`, `build/` and `public/manor.glb` are left out of git.
 
+## Versions
+
+Every release is a git tag, and `CHANGELOG.md` says what each one changed. The panel shows the version you are looking at: "v0.10.0" when it is exactly a release, "v0.10.0 + changes" when there is work since (the dev server asks git each time the page loads, through `/version.json`).
+
+- `npm run versions` lists the releases.
+- `npm run serve:version -- v0.8.0` runs an earlier release on http://localhost:5191, next to the current one on :5190, to compare or to go back to. Add a port to run two at once (`-- v0.7.0 5192`). The first time, it checks the release out into `../CroftManorViewer-versions/v0.8.0` (outside this folder, so the dev server doesn't watch it) with a clone of `node_modules`; delete that folder to tidy up (`git worktree prune` then forgets it).
+- To go back for good: `git checkout v0.8.0` (or branch from it).
+
+Numbering: the middle number goes up for new features, the last one for fixes to the release before.
+
 ## What the model build does
 
 `scripts/build-model.mjs`:

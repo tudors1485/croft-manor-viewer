@@ -66,7 +66,9 @@ export function seasonAt(day) {
   const snow = 1 - ss(apart(day, 12), 22, 34);
   // birds: the dawn chorus is a spring thing; few sing in winter
   const birds = 0.3 + 0.9 * ss(day, 60, 100) * (1 - ss(day, 170, 230)) + 0.35 * ss(day, 170, 200) * (1 - ss(day, 260, 320));
-  const crickets = ss(day, 150, 180) * (1 - ss(day, 245, 275));
+  // crickets: from late April, loudest in high summer, quiet again by late October
+  const warm = ss(day, 105, 140) * (1 - ss(day, 268, 300));
+  const crickets = warm * (0.6 + 0.4 * ss(day, 150, 195));
   const name = day < 59 || day >= 334 ? 'winter' : day < 151 ? 'spring' : day < 243 ? 'summer' : 'autumn';
   return { day, snow, grass: grassOn(day), birds, crickets, name };
 }
