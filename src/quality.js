@@ -9,6 +9,7 @@ import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { N8AOPass } from 'n8ao';
+import { SunbeamsPass } from './sunbeams.js';
 
 // A slight fisheye for the flybys: barrel distortion that keeps the corners in the corners
 // (so the middle is magnified a little; the flyby widens its lens to make up for it).
@@ -64,14 +65,22 @@ export class Quality {
     c.color = new THREE.Color(0x000000);
     c.gammaCorrection = false;
     c.transparencyAware = false;
+    // N8AO otherwise turns transparency mode back on every frame whenever any material is
+    // transparent (glass, water). That mode draws the scene twice more with the solid objects
+    // hidden, which also redraws the sun's shadow map with nothing in it: the sunbeams then
+    // saw no shadows at all, and it cost two extra scene renders a frame.
+    this.ao.autoDetectTransparency = false;
     this.ao.setQualityMode('Low');
     this.output = new OutputPass();
     this.smaa = new SMAAPass(innerWidth, innerHeight);
     this.plain = new RenderPass(scene, camera); // when there is no ambient occlusion but a fisheye
     this.fisheyePass = new ShaderPass(Fisheye);
     this.fisheye = 0; // 0..1, set by the flybys
+    this.beams = new SunbeamsPass(camera); // needs the scene depth, which the occlusion pass renders
+    this.beams.enabled = false;
     this.composer.addPass(this.plain);
     this.composer.addPass(this.ao);
+    this.composer.addPass(this.beams);
     this.composer.addPass(this.output);
     this.composer.addPass(this.fisheyePass);
     this.composer.addPass(this.smaa);
@@ -101,6 +110,8 @@ export class Quality {
     if (ao || bend) {
       this.ao.enabled = ao;
       this.plain.enabled = !ao;
+      this.beams.depthTexture = this.ao.beautyRenderTarget?.depthTexture ?? null;
+      this.beams.enabled = ao && this.beams.active;
       this.fisheyePass.enabled = bend;
       this.fisheyePass.uniforms.uStrength.value = this.fisheye;
       this.fisheyePass.uniforms.uAspect.value = innerWidth / innerHeight;

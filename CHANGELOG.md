@@ -8,6 +8,12 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.11.0, 6 November 2026
+
+- Sunlight indoors. Shafts of sunlight show in the air where the sun comes in through the windows, with the window bars in them. For each pixel a shader steps along the view ray through the sun's shadow map, so they appear wherever sunlight really crosses a room: through the kitchen windows in the late afternoon, the bedroom's, the ballroom's in the morning, and down through the pool's glass roof. There is a switch for them (Sunbeams indoors).
+- The rooms are no longer too dark. The eye adapts as you go in by day, as it does in a real house, so the sunlit patches and the windows are bright. The rooms keep more of the daylight that the sunlit floors, walls and gallery would bounce around. (The great hall never gets direct sun: the gallery round it catches the light from its high windows. So that bounced light was all it had, and there was too little of it.)
+- Faster on Balanced and High. The ambient-occlusion pass had been turning its transparency mode back on every frame, which drew the scene twice more and emptied the sun's shadow map. Now it doesn't, and the great hall went from about 45–50 to 60 frames a second at the same resolution.
+
 ## 0.10.0, 6 November 2026
 
 - Nothing goes below the ground, in any mode, with Go through walls on or off. The ground is the lawns, drive and ground floors inside the estate and the hills beyond the walls. Orbit, Fly and the jumps between places all stop 35 cm above it, and so does the orbit's pivot.

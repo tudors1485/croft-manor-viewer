@@ -308,8 +308,11 @@ export class TimeOfDay {
     this.hemi.groundColor.set(0x5a5040).lerp(this._groundIn ?? (this._groundIn = new THREE.Color(0x7a5a40)), this.inside);
     const env = THREE.MathUtils.lerp(0.35 + 0.5 * t, 0.04, this.night) + 0.2;
     // indoors the sky is mostly hidden: much less sky light, more warm bounce
-    this.scene.environmentIntensity = env * THREE.MathUtils.lerp(1, 0.22, this.inside);
-    this.hemi.intensity = this._hemiBase * THREE.MathUtils.lerp(1, 1.35, this.inside * (1 - this.night));
+    // by day the rooms also get the light the sunlit floors, walls and gallery bounce about
+    // (there is no real bounce light here), so they keep more of it than at night
+    const day = 1 - this.night;
+    this.scene.environmentIntensity = env * THREE.MathUtils.lerp(1, THREE.MathUtils.lerp(0.22, 0.34, day), this.inside);
+    this.hemi.intensity = this._hemiBase * THREE.MathUtils.lerp(1, 1.35 + 0.45 * t, this.inside * day);
   }
 
   tick(dt) {

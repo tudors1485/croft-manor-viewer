@@ -28,10 +28,12 @@ renderer.shadowMap.type = THREE.PCFShadowMap;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.08, 4000);
 const quality = new Quality(renderer, scene, camera);
+// (the sun for the sunbeams is set once the sky exists, below)
 quality.onResize = () => resizeWater();
 
 // Sky, sun, moon and the time of day
 const tod = new TimeOfDay(renderer, scene);
+quality.beams.light = tod.light;
 let modelCentre = new THREE.Vector3();
 let modelRadius = 100;
 let lamps = null;
@@ -63,9 +65,17 @@ function updateSeason(force = true) {
 }
 
 const LOOK = { exposure: 0.66 };
+const BEAMS = { strength: 0.8 }; // dust in the air indoors: how strongly it scatters sunlight
+const ADAPT = { indoors: 1.75 }; // how far the eye opens up when you go in by day
 function updateExposure() {
-  // the eye adapts a little at night
-  renderer.toneMappingExposure = LOOK.exposure * (Number($('exposure').value) / 100) * THREE.MathUtils.lerp(1, 1.7, tod.night);
+  // the eye adapts: a little at night, and indoors by day, where the light is far dimmer
+  // than outside (so the sunlit patches and the windows are bright, as they look)
+  const day = 1 - tod.night;
+  renderer.toneMappingExposure =
+    LOOK.exposure *
+    (Number($('exposure').value) / 100) *
+    THREE.MathUtils.lerp(1, 1.7, tod.night) *
+    THREE.MathUtils.lerp(1, ADAPT.indoors, tod.inside * day);
 }
 
 // Controls
@@ -610,6 +620,9 @@ renderer.setAnimationLoop((time) => {
     if (water.jet) water.jet.material.map.offset.y -= dt * 1.4;
   }
   quality.fisheye = mode === 'tour' ? tour.fisheye : 0;
+  // sunbeams indoors by day: they fade in as you go inside and with the sun's height
+  const sunUp = THREE.MathUtils.smoothstep(tod.sunDir.y, 0.02, 0.2) * (1 - tod.night);
+  quality.beams.strength = BEAMS.strength * tod.inside * sunUp * Number($('sunbeams').checked);
   quality.render(dt);
   if (wantPicture) {
     // read the canvas in the same task as the render, before the browser clears it
@@ -664,6 +677,8 @@ window.manor = {
   },
   tod,
   LOOK,
+  ADAPT,
+  BEAMS,
   TINTS,
   get season() {
     return season;
