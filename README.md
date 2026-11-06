@@ -2,6 +2,25 @@
 
 A three.js page that shows Classic Croft Manor HD v2.3 (OBJ by TRJTA, exported from SketchUp). It covers the house, the grounds, the assault course, the ivy and the zipline trolley.
 
+**See it in your browser: [sfatosu.com/croft-manor](https://sfatosu.com/croft-manor/)**
+
+![The manor from over the gate in the afternoon: the drive, the fountain, the walled grounds and the hills](docs/screenshots/gate.jpg)
+
+<p>
+<img src="docs/screenshots/front.jpg" width="49%" alt="The front of the house in the morning sun">
+<img src="docs/screenshots/night.jpg" width="49%" alt="The front of the house at night, with the windows and the lamps lit">
+</p>
+<p>
+<img src="docs/screenshots/hall.jpg" width="49%" alt="The great hall: the chequered floor, the double staircase and the paintings">
+<img src="docs/screenshots/ballroom.jpg" width="49%" alt="The ballroom with its chandeliers">
+</p>
+<p>
+<img src="docs/screenshots/pool.jpg" width="49%" alt="The pool room with its frieze and reflections">
+<img src="docs/screenshots/course.jpg" width="49%" alt="The assault course in the grounds, in the evening">
+</p>
+
+The model is **Classic Croft Manor HD v2.3 by TRJTA**, a fan remake of the classic FMV Croft Manor, published on [core-design.com](https://core-design.com/community_classicfmvmanorremake.html) under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) ([download the original OBJ](https://icedrive.net/0/dfdFFOROA9)). It is not in this repository. The screenshots show it as converted and lit by this viewer, and are shared under the same licence. Core Design, Lara Croft and Tomb Raider are trademarks of Embracer Group AB; this is a fan project, not made, endorsed or sponsored by them.
+
 ## Run it
 
 ```sh
