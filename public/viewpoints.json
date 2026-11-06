@@ -1,9 +1,14 @@
 [
-  {"name": "Front of the house", "pos": [-6, 3.2, 19], "target": [3, 4.5, -12]},
-  {"name": "Fountain", "pos": [12, 3, 17], "target": [5, 3, 8]},
+  {"name": "Over the gate", "pos": [4.5, 24, 66], "target": [4, 3, -8]},
+  {"name": "Straight down", "pos": [5, 165, -21], "target": [5, 0, -21.5]},
+  {"name": "Front of the house", "pos": [-3.2, 2.4, 9.8], "target": [-1.2, 5, -11]},
+  {"name": "Fountain", "pos": [4.6, 2.6, 15.8], "target": [4.6, 2, 8.4]},
   {"name": "Great hall", "pos": [2, 1.7, -14], "target": [-5, 2.5, -25]},
   {"name": "Hall from the landing", "pos": [-8, 5.1, -15], "target": [3, 1, -25]},
+  {"name": "Ballroom", "pos": [10.6, 1.75, -27.6], "target": [-6, 1.9, -27.6]},
   {"name": "Kitchen", "pos": [-9.4, 1.7, -25.2], "target": [-12.6, 1.0, -19.2]},
   {"name": "Pool", "pos": [20.8, 6.2, -23.0], "target": [26.2, 4.7, -26.6]},
+  {"name": "Bedroom", "pos": [-13.2, 7.3, -19.9], "target": [-11, 6.3, -24]},
+  {"name": "Attic", "pos": [6.4, 9.3, -27], "target": [-8, 8.9, -27]},
   {"name": "Assault course", "pos": [25, 14, -48], "target": [5, 0, -75]}
 ]

@@ -11,7 +11,7 @@ import { Lamps } from './lamps.js';
 import { Landscape, makeTerrain, makeHillHeight } from './landscape.js';
 import { installGrade } from './look.js';
 import { Quality } from './quality.js';
-import { tuneMaterials, GRASS_TINT } from './materials.js';
+import { tuneMaterials, GRASS_TINT, grassShader, TINTS } from './materials.js';
 import { Tour, FLYBYS, checkPath } from './tour.js';
 import { Soundscape } from './sound.js';
 
@@ -356,6 +356,7 @@ loader.load(
     hillHeight = makeHillHeight(lawn.getCenter(new THREE.Vector3()));
     const ground = makeTerrain({ lawn, centre: lawn.getCenter(new THREE.Vector3()), grassMap, hillHeight });
     ground.material.color.copy(GRASS_TINT);
+    grassShader(ground.material);
     scene.add(ground);
 
     const overviewPos = modelCentre.clone().add(new THREE.Vector3(size.x * 0.75, size.y * 3.5 + 25, size.z * 0.65));
@@ -593,6 +594,7 @@ window.manor = {
   },
   tod,
   LOOK,
+  TINTS,
   quality,
   tour,
   sound,

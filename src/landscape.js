@@ -193,7 +193,7 @@ function addWind(material, uniforms, stiff = 1) {
 }
 
 /** One ez-tree, scaled to `height` metres with its base at y = 0, with PBR materials. */
-function makeVariant(preset, seed, height, wind, { tint, leafCount, leafSize } = {}) {
+export function makeVariant(preset, seed, height, wind, { tint, leafCount, leafSize } = {}) {
   const tree = new Tree();
   tree.loadPreset(preset);
   tree.options.seed = seed;
@@ -373,10 +373,14 @@ export class Landscape {
       makeVariant('Ash Medium', 41, 14, this.wind, { ...full, tint: 0x9db374 }),
       makeVariant('Oak Large', 77, 15, this.wind, { ...full, tint: 0x8ea666 }),
     ];
+    // shrubs: ez-tree's bush with twice its leaves, and bigger ones, so they read as dense,
+    // round shrubs (they are the costly part of the planting, so not more than that)
     const bushes = [
-      makeVariant('Bush 1', 61, 1.7, this.wind, { tint: 0x8aa463 }),
-      makeVariant('Bush 2', 67, 1.3, this.wind, { tint: 0x93ab6a }),
+      makeVariant('Bush 1', 61, 1.8, this.wind, { tint: 0x8aa463, leafCount: 20, leafSize: 2.3 }),
+      makeVariant('Bush 1', 71, 1.2, this.wind, { tint: 0x7d9a58, leafCount: 22, leafSize: 2.6 }),
     ];
+    // the two trees inside the gate in TRJTA's renders: full, round oaks
+    const entrance = [makeVariant('Oak Medium', 91, 10.5, this.wind, { tint: 0x9fb478, leafCount: 32, leafSize: 1.45 })];
     const R = rng(20261105);
 
     // --- real trees: some on the lawns, a belt outside the walls ---
@@ -385,6 +389,20 @@ export class Landscape {
     const free = (x, z, d) => taken.every(([tx, tz, td]) => Math.hypot(tx - x, tz - z) > Math.max(d, td));
     const L = this.lawn;
     const inLawn = (x, z, m = 0) => x > L.min.x - m && x < L.max.x + m && z > L.min.z - m && z < L.max.z + m;
+
+    // the entrance first, so the other trees keep clear of it
+    this.drive = this._findDrive();
+    this.gate = this._findGate();
+    const entranceSpots = [];
+    if (this.gate) {
+      for (const side of [-1, 1]) {
+        const x = this.gate.x + side * 5.4;
+        const z = this.gate.z - 6.5;
+        if (!this._grassAt(x, z)) continue;
+        entranceSpots.push([0, x, z, 1, side > 0 ? 0.8 : 2.3]);
+        taken.push([x, z, 12]);
+      }
+    }
 
     // inside the walls: open lawn, clear of paths and buildings by a few metres
     let tries = 0;
@@ -401,7 +419,6 @@ export class Landscape {
     }
 
     // the drive carries on south of the gate; keep trees off it
-    this.drive = this._findDrive();
     const onDrive = (x, z) => this.drive && z > L.max.z - 2 && x > this.drive.x0 - 4 && x < this.drive.x1 + 4;
 
     // outside: a belt hugging the walls, thicker in clumps
@@ -458,21 +475,28 @@ export class Landscape {
       });
     };
     addInstanced(variants, spots);
-    this.stats.trees = spots.length;
-    for (const [v, x, z, s] of spots) {
-      this.obstacles.push({ x, z, r: 0.35 * s * (variants[v].height / 14) });
-      // the crown, roughly, for keeping camera paths out of the leaves
-      this.crowns.push({ x, z, r: (variants[v].width * s) / 2, y0: variants[v].height * s * 0.22, y1: variants[v].height * s });
+    addInstanced(entrance, entranceSpots);
+    this.stats.trees = spots.length + entranceSpots.length;
+    for (const [list, vs] of [
+      [spots, variants],
+      [entranceSpots, entrance],
+    ]) {
+      for (const [v, x, z, s] of list) {
+        this.obstacles.push({ x, z, r: 0.35 * s * (vs[v].height / 14) });
+        // the crown, roughly, for keeping camera paths out of the leaves
+        this.crowns.push({ x, z, r: (vs[v].width * s) / 2, y0: vs[v].height * s * 0.22, y1: vs[v].height * s });
+      }
     }
 
     // --- bushes at the foot of the house and by the walls ---
     const bushSpots = [];
     const ray = new THREE.Ray();
+    // a close row along the front and back of the house, in its planting strips
     for (const [x0, x1, faceZ] of [
       [-13, 28, 5],
       [-13, 28, -45],
     ]) {
-      for (let x = x0; x <= x1; x += 2.2 + R() * 2.5) {
+      for (let x = x0; x <= x1; x += 1.9 + R() * 0.8) {
         if (faceZ > 0 && x > -4.5 && x < 1.5) continue; // the porch
         ray.origin.set(x, 0.6, faceZ);
         ray.direction.set(0, 0, faceZ > 0 ? -1 : 1);
@@ -480,12 +504,31 @@ export class Landscape {
         if (!hit) continue;
         const z = hit.point.z + (faceZ > 0 ? 0.9 : -0.9);
         if (this._ground(x, z) === null || this._ground(x, z) > 0.25) continue;
-        if (R() < 0.35) continue;
-        bushSpots.push([Math.floor(R() * bushes.length), x, z, 0.8 + R() * 0.6, R() * Math.PI * 2]);
+        if (R() < 0.12) continue;
+        bushSpots.push([0, x, z, 0.75 + R() * 0.35, R() * Math.PI * 2]);
       }
     }
-    addInstanced(bushes, bushSpots);
+    // outside the front wall: clumps of low shrubs, thick by the gate and thinning away from it
+    if (this.gate) {
+      for (let x = L.min.x + 4; x <= L.max.x - 4; x += 1.6 + R() * 1.6) {
+        const fromGate = Math.abs(x - this.gate.x);
+        if (fromGate < 3.4) continue; // the gateway and the drive
+        if (R() < THREE.MathUtils.lerp(0.05, 0.7, Math.min(1, fromGate / 30))) continue;
+        ray.origin.set(x, 0.6, this.gate.z + 12);
+        ray.direction.set(0, 0, -1);
+        // (the wall angles back from the gate towards the corners)
+        const hit = this.bvh.raycastFirst(ray, THREE.DoubleSide, 0, 45);
+        if (!hit || hit.point.y > 3) continue;
+        const z = hit.point.z + 0.8 + R() * 0.7;
+        if (!this._grassAt(x, z)) continue;
+        bushSpots.push([1, x, z, 0.8 + R() * 0.6, R() * Math.PI * 2]);
+      }
+    }
+    // no sun shadows from shrubs: the ambient occlusion grounds them, and it halves their cost
+    addInstanced(bushes, bushSpots, false);
     this.stats.bushes = bushSpots.length;
+    // you can't walk through a shrub
+    for (const [v, x, z, s] of bushSpots) this.obstacles.push({ x, z, r: (bushes[v].width * s) / 2 * 0.6 });
 
     // --- distant forest: billboards of the same trees, once their textures have loaded ---
     await texturesReady(variants.flatMap((v) => [v.leaves.map, v.bark.map]));
@@ -527,8 +570,18 @@ export class Landscape {
     if (this.drive) this.group.add(this._makeDriveOn());
 
     this.stats.ms = Math.round(performance.now() - t0);
-    for (const v of [...variants, ...bushes]) v.tree.clear();
+    for (const v of [...variants, ...bushes, ...entrance]) v.tree.clear();
     return this.stats;
+  }
+
+  /** The front gate: where the drive meets the front wall. */
+  _findGate() {
+    if (!this.drive) return null;
+    const x = (this.drive.x0 + this.drive.x1) / 2;
+    // the wall beside the gateway, found from outside
+    const ray = new THREE.Ray(new THREE.Vector3(x + 3.6, 1, this.lawn.max.z), new THREE.Vector3(0, 0, -1));
+    const hit = this.bvh.raycastFirst(ray, THREE.DoubleSide, 0, 80);
+    return hit ? { x, z: hit.point.z } : null;
   }
 
   _findDrive() {

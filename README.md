@@ -43,13 +43,14 @@ The result is about 83 MB: 36 MB of textures and 47 MB of geometry, with 763k tr
 - **Ivy**: the eight ivy OBJs come centred on the origin, meant for placing by hand (TRJTA placed them in Lumion). `src/ivy.js` puts each one on a plain stretch of brick, found by scanning the facades with rays.
 - **Landscape** (`src/landscape.js`): the OBJ stops at the estate walls, so the page adds the country around it.
   - Oaks and ashes from ez-tree (MIT, procedural), instanced, on open lawn inside the walls and in a belt outside them. They sway in the wind, and in Walk mode their trunks stop you.
-  - Bushes at the foot of the house.
+  - The entrance as in TRJTA's renders: two full oaks either side of the path just inside the gate, a close row of dense shrubs along the front and back of the house, and clumps of low shrubs outside the front wall, thick by the gate and thinning away from it. Shrubs stop you in Walk mode.
   - About 1,400 far trees, drawn as billboards made from the same trees.
   - Rolling hills from 420 m out, with fields and woods tinted in.
   - The drive carries on past the gate.
 - **Look**:
   - `src/look.js` is a custom tone-mapping curve: Neutral, slightly warmer and a touch more saturated.
-  - `src/materials.js` warms and saturates the lawn, brick, roof and gravel only, so interiors stay natural.
+  - `src/materials.js` sets the outdoor colours to match TRJTA's Lumion renders. They were measured from his render over the gate (sunlit lawn about rgb(107, 139, 65), brick about rgb(181, 118, 88), gravel a warm beige), then the same view was rendered here, sampled, and each tint nudged in linear light until they matched. Brick is tinted on the brick faces only, so the mortar between them stays a light grey and the courses still read.
+  - The lawn and the fields around it share a grass shader that hides the texture's tiling, which from above read as a grid. It samples the texture in world space at two scales turned against each other, blended by noise. Each sample is divided by a blurred copy of itself, so the light and dark patches that repeat inside one tile flatten out. Drier and lusher patches drift over tens of metres on top. As both surfaces use it, the line where the estate's lawn meets the fields is gone.
   - Indoors, the sky light drops and the bounce light turns warm.
 - **Quality** (`src/quality.js`):
   - *Balanced* (the default) adds ambient occlusion (N8AO) at half resolution, plus SMAA.
@@ -65,7 +66,7 @@ The result is about 83 MB: 36 MB of textures and 47 MB of geometry, with 763k tr
   - The grandfather clock ticks in the hall.
   - In Walk mode, footsteps change with the surface: stone, gravel or grass.
 - **Save a picture** downloads the current view as a PNG, without the panel.
-- **Place** jumps to a saved view. To add one, use "Copy this view" and paste the line into `public/viewpoints.json`.
+- **Place** jumps to a saved view: from above (over the gate, as in the renders, and straight down), the front of the house, the fountain, and the rooms. To add one, use "Copy this view" and paste the line into `public/viewpoints.json`.
 - **Time**: the sun follows its real path over Surrey in late May, with the front of the house facing south. The ▶ button runs a day in two minutes, and Compass turns the sun's path. From about 9° above the horizon the lamps come on (`src/lamps.js`):
   - every chandelier candle, wall sconce and kitchen tube gets a flame or glow, found by splitting the merged fitting meshes into pieces (one draw call for all the flames);
   - eight point lights follow you to the nearest fittings, outdoor ones first when you're outside;
