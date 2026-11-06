@@ -8,6 +8,22 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.17.0, 6 November 2026
+
+- Flybys:
+  - *Over the estate* comes first.
+  - *Through the gate* starts just outside the gate, flies in through the window over the front door (a lancet 40 cm wide) and round the great hall.
+  - *Rising over the gate* starts a little further out.
+  - *A day at the manor* runs from midday to just after sunset.
+  - *All weathers* and *A year at the manor* are one flyby now, *Seasons and weathers*: it cuts every three seconds to another season, time and weather, in a different order each time.
+  - *The great hall* goes straight in at the front door.
+  - Hold ← or → to rewind or fast-forward a flyby (they used to end it).
+- Flybys look sharper and run smoother: the resolution drops in one step when a scene is far too slow (over the estate it used to stutter at 7–18 frames a second for ten seconds), a single long frame no longer counts, the shrubs lost the twigs their leaves hide (355k triangles), the water's reflection leaves out the shrubs and the fallen leaves, and a light sharpening runs when the picture is drawn smaller than the screen.
+- Walk: the mouse looks round from the first move key or click (and the Walk and Fly buttons), and before that you can drag on the picture to look round. The hint sits at the bottom, out of the way.
+- Lights: after midnight most of them go out one by one, until you go into the house, when the lights inside come back on. *Room* and *House* switches in the panel (and L for the room).
+- The moon is where the real moon is, rising and setting at the right times, with NASA's map of its face, the right phase, bigger (about 2.4° across), and pale by day. Moonlight follows it.
+- Halloween: carved pumpkins at the front door from 25 October to 1 November, glowing after dark. Christmas: lights along the top of the house and over the gate, and coloured lights in the two oaks inside the gate, from 1 December to 6 January.
+
 ## 0.16.1, 6 November 2026
 
 - The loading screen's "Loading" keeps its big condensed type in a published build (the build had turned its style into one browsers reject, so it showed in small plain text).

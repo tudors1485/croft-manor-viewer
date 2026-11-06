@@ -109,8 +109,8 @@ body {
 #lock-hint {
   position: fixed;
   left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
+  bottom: 28px;
+  transform: translateX(-50%);
   font: 600 15px/1 system-ui, -apple-system, sans-serif;
   color: #1b1d22;
   background: rgba(217, 180, 90, 0.95);
@@ -293,6 +293,18 @@ body.flyby .film-bar {
   z-index: 7;
 }
 
+#panel .light-buttons {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+#panel .light-buttons button {
+  flex: 1;
+}
+#panel button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
 #panel .weather-now {
   display: block;
   font-weight: 500;

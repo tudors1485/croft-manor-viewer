@@ -76,6 +76,10 @@
         <select id="weather"></select>
       </label>
       <p class="help" id="weather-source"></p>
+      <div class="row lights">
+        <span>Lights</span>
+        <span class="light-buttons"><button id="lights-room" class="small" title="The lights of the room you are in (L)" disabled>Room</button><button id="lights-house" class="small on" title="Every light in the house and grounds">House</button></span>
+      </div>
       <label class="row">Compass <input id="sun-azim" type="range" min="-180" max="180" value="0" /></label>
       <label class="row">Brightness <input id="exposure" type="range" min="20" max="200" value="100" /></label>
 
@@ -111,8 +115,9 @@
           <p><button data-key="Space" class="wide">Space</button> jump</p>
           <p><kbd>Mouse</kbd> look</p>
           <p><kbd>Esc</kbd> frees the mouse</p>
+          <p><button data-key="KeyL">L</button> this room's light</p>
         </div>
-        <p class="note">Click the picture to look around with the mouse. Stairs work and walls stop you; the front and kitchen doors open as you reach them.</p>
+        <p class="note">The mouse looks around once you click or start walking (Esc frees it); before that, drag on the picture. Stairs work and walls stop you; the front and kitchen doors open as you reach them.</p>
       </div>
       <div class="keys" id="keys-fly" hidden>
         <div class="pad"><span></span><button data-key="KeyW">W</button><span></span><button data-key="KeyA">A</button><button data-key="KeyS">S</button><button data-key="KeyD">D</button></div>

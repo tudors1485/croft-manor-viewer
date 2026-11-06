@@ -3,6 +3,12 @@
 // pieces. Every fitting gets a glowing flame (one Points draw call for all of them);
 // every fitting casts real light: fittings within a few metres of each other share one
 // point light, so the whole house is lit at once, wherever you are.
+//
+// After midnight the household goes to bed: most lights go out one by one between about
+// half past eleven and half past one (a few stay on all night, and the porch lantern), until
+// you go into the house, when the lights inside come back on. The panel can switch the lights
+// of the room you are in, or of the whole house, on and off. A light going out only fades its
+// brightness (switching a light off outright would recompile every shader).
 
 import * as THREE from 'three';
 
@@ -86,6 +92,7 @@ export class Lamps {
     this.fixtures = []; // { pos, kind, power }
     this.level = 0;
     this.windowsGlow = 0;
+    this.houseOn = true; // the panel's switch for the whole house
     this.houseBox = new THREE.Box3(new THREE.Vector3(-14.6, -1, -32.2), new THREE.Vector3(29.4, 13, -9.3));
 
     const flames = []; // [x, y, z, size, phase, kind]
@@ -123,18 +130,20 @@ export class Lamps {
           const tips = candleTips(b);
           if (span >= 0.7) {
             // chandelier: a flame on every candle, or a ring on the arms if none are found
-            if (tips.length) for (const t of tips) flames.push([t.x, t.y, t.z, 0.15, Math.random() * 10, 0]);
+            const fx = this.fixtures.length;
+            if (tips.length) for (const t of tips) flames.push([t.x, t.y, t.z, 0.15, Math.random() * 10, 0, fx]);
             else {
               const r = span * 0.42;
               for (let i = 0; i < 8; i++) {
                 const a = (i / 8) * Math.PI * 2;
-                flames.push([c.x + Math.cos(a) * r, b.max.y + 0.02, c.z + Math.sin(a) * r, 0.15, Math.random() * 10, 0]);
+                flames.push([c.x + Math.cos(a) * r, b.max.y + 0.02, c.z + Math.sin(a) * r, 0.15, Math.random() * 10, 0, fx]);
               }
             }
             this.fixtures.push({ pos: new THREE.Vector3(c.x, b.min.y + size.y * 0.6, c.z), kind: 'chandelier', power: 16 });
           } else {
-            if (tips.length) for (const t of tips) flames.push([t.x, t.y, t.z, 0.12, Math.random() * 10, 0]);
-            else flames.push([c.x, b.max.y + 0.03, c.z, 0.12, Math.random() * 10, 0]);
+            const fx = this.fixtures.length;
+            if (tips.length) for (const t of tips) flames.push([t.x, t.y, t.z, 0.12, Math.random() * 10, 0, fx]);
+            else flames.push([c.x, b.max.y + 0.03, c.z, 0.12, Math.random() * 10, 0, fx]);
             this.fixtures.push({ pos: new THREE.Vector3(c.x, b.max.y, c.z), kind: 'sconce', power: 3.5 });
           }
         }
@@ -142,7 +151,7 @@ export class Lamps {
         tlMat = o.material;
         for (const b of fittingsIn(o, 0.3)) {
           const c = b.getCenter(new THREE.Vector3());
-          flames.push([c.x, c.y - 0.02, c.z, 0.5, 0, 1]);
+          flames.push([c.x, c.y - 0.02, c.z, 0.5, 0, 1, this.fixtures.length]);
           this.fixtures.push({ pos: new THREE.Vector3(c.x, c.y - 0.15, c.z), kind: 'tube', power: 9 });
         }
       } else if (/glass/.test(name)) {
@@ -165,10 +174,13 @@ export class Lamps {
     geo.setAttribute('size', new THREE.Float32BufferAttribute(flames.map((f) => f[3]), 1));
     geo.setAttribute('phase', new THREE.Float32BufferAttribute(flames.map((f) => f[4]), 1));
     geo.setAttribute('kind', new THREE.Float32BufferAttribute(flames.map((f) => f[5]), 1));
+    geo.setAttribute('group', new THREE.Float32BufferAttribute(new Float32Array(flames.length), 1));
+    this._flameFixtures = flames.map((f) => f[6]);
     this.glowMat = new THREE.ShaderMaterial({
       uniforms: {
         uMap: { value: glowTexture() },
         uLevel: { value: 0 },
+        uOn: { value: new Float32Array(64) }, // each light group's brightness, 0..1
         uTime: { value: 0 },
         uScale: { value: 800 },
       },
@@ -176,15 +188,17 @@ export class Lamps {
         attribute float size;
         attribute float phase;
         attribute float kind;
+        attribute float group;
         uniform float uTime;
         uniform float uScale;
+        uniform float uOn[64];
         varying float vFlicker;
         varying float vKind;
         void main() {
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
           gl_Position = projectionMatrix * mv;
           float f = kind > 0.5 ? 1.0 : 0.82 + 0.1 * sin(uTime * 9.0 + phase) + 0.08 * sin(uTime * 23.0 + phase * 3.1);
-          vFlicker = f;
+          vFlicker = f * uOn[int(group + 0.5)];
           vKind = kind;
           gl_PointSize = size * f * uScale / -mv.z;
         }`,
@@ -211,20 +225,28 @@ export class Lamps {
     this._buildLights();
   }
 
-  /** One point light per group of nearby fittings; all of them on together. */
+  /** One point light per group of nearby fittings, each switched (and put to bed) on its own. */
   _buildLights() {
     for (const l of this.lights) this.scene.remove(l.light);
     const groups = [];
-    for (const f of [...this.fixtures].sort((a, b) => b.power - a.power)) {
-      const g = groups.find(
+    const fixtureGroup = new Int32Array(this.fixtures.length);
+    const order = this.fixtures.map((f, i) => i).sort((a, b) => this.fixtures[b].power - this.fixtures[a].power);
+    for (const i of order) {
+      const f = this.fixtures[i];
+      let gi = groups.findIndex(
         (g) => !!g.outdoor === !!f.outdoor && g.kind === f.kind && Math.hypot(g.pos.x - f.pos.x, g.pos.z - f.pos.z) < JOIN && Math.abs(g.pos.y - f.pos.y) < 1.5,
       );
-      if (g) {
+      if (gi >= 0) {
+        const g = groups[gi];
         g.pos.multiplyScalar(g.power).addScaledVector(f.pos, f.power).divideScalar(g.power + f.power);
         g.power += f.power;
-      } else groups.push({ pos: f.pos.clone(), power: f.power, kind: f.kind, outdoor: f.outdoor });
+      } else {
+        gi = groups.length;
+        groups.push({ pos: f.pos.clone(), power: f.power, kind: f.kind, outdoor: f.outdoor });
+      }
+      fixtureGroup[i] = gi;
     }
-    this.lights = groups.map((g) => {
+    this.lights = groups.map((g, i) => {
       const colour = g.kind === 'tube' ? 0xe8f0ff : g.kind === 'flood' || g.kind === 'lantern' ? 0xffc890 : g.kind === 'pool' ? 0x7fe6ff : 0xffb870;
       // a shared light is stronger, but less than the sum (the fittings were close together)
       const power = g.power * 0.85;
@@ -233,8 +255,61 @@ export class Lamps {
       light.castShadow = false;
       light.visible = false;
       this.scene.add(light);
-      return { light, power };
+      // bedtime: most lights go out between about 23:25 and 01:30, one by one; about a quarter
+      // stay on all night, as does the porch lantern; the floodlights go off around half past
+      // midnight and the pool light at eleven
+      const r = hash(i * 7.31 + g.pos.x * 0.13 + g.pos.z * 0.71);
+      const bedtime = g.kind === 'lantern' ? null : g.kind === 'flood' ? 0.4 + r * 0.25 : g.kind === 'pool' ? 23 : r < 0.25 ? null : 23.4 + ((r - 0.25) / 0.75) * 2.1;
+      return { light, power, pos: g.pos, kind: g.kind, outdoor: !!g.outdoor, bedtime, manual: null, on: 0 };
     });
+    // the flames take their light group's brightness
+    for (const [glow, fixtures] of [
+      [this.glow, this._flameFixtures],
+      [this.outdoorGlow, this._outFlameFixtures],
+    ]) {
+      if (!glow || !fixtures) continue;
+      const attr = glow.geometry.attributes.group;
+      fixtures.forEach((fx, k) => attr.setX(k, fx != null && fx < fixtureGroup.length ? fixtureGroup[fx] : 0));
+      attr.needsUpdate = true;
+    }
+  }
+
+  /** The whole house's switch: off puts out every light; on hands them back to the evening and bedtime. */
+  setHouse(on) {
+    this.houseOn = on;
+    for (const l of this.lights) l.manual = null;
+  }
+
+  /**
+   * The light groups of the room you are in: indoor ones you can see from where you stand
+   * (a ray to the light meets nothing on the way), within a dozen metres.
+   */
+  roomGroups(camera, bvh, skip) {
+    if (!this.houseBox.containsPoint(camera.position)) return [];
+    const out = [];
+    const ray = new THREE.Ray();
+    const to = new THREE.Vector3();
+    this.lights.forEach((l, i) => {
+      if (l.outdoor) return;
+      to.subVectors(l.pos, camera.position);
+      const d = to.length();
+      if (d > 12 || Math.abs(to.y) > 4) return;
+      ray.set(camera.position, to.divideScalar(d));
+      const hit = bvh.raycastFirst(ray, THREE.DoubleSide, 0, d - 0.35);
+      if (hit && !(skip && skip(hit.faceIndex))) return;
+      out.push(i);
+    });
+    return out;
+  }
+
+  /** Is a group lit (or going to be, once it fades up)? */
+  lit(i) {
+    return this._want?.[i] > 0.5;
+  }
+
+  /** Switch the given groups (the room's) on or off, whatever the time or the house switch says. */
+  setGroups(list, on) {
+    for (const i of list) this.lights[i].manual = on;
   }
 
   get lightCount() {
@@ -250,7 +325,7 @@ export class Lamps {
     const flames = [];
     const add = (pos, power, glowSize, kind = 'flood') => {
       this.fixtures.push({ pos, kind, power, outdoor: true });
-      flames.push([pos.x, pos.y - (kind === 'flood' ? 0.13 : 0), pos.z, glowSize, Math.random() * 10, 2]);
+      flames.push([pos.x, pos.y - (kind === 'flood' ? 0.13 : 0), pos.z, glowSize, Math.random() * 10, 2, this.fixtures.length - 1]);
     };
     add(new THREE.Vector3(-1.5, 2.7, -10.2), 9, 0.35, 'lantern');
     for (const x of [-12, -6.5, 3.5, 9.5, 15.5, 21, 25.5]) {
@@ -265,6 +340,8 @@ export class Lamps {
     geo.setAttribute('size', new THREE.Float32BufferAttribute(flames.map((f) => f[3]), 1));
     geo.setAttribute('phase', new THREE.Float32BufferAttribute(flames.map((f) => f[4]), 1));
     geo.setAttribute('kind', new THREE.Float32BufferAttribute(flames.map((f) => f[5]), 1));
+    geo.setAttribute('group', new THREE.Float32BufferAttribute(new Float32Array(flames.length), 1));
+    this._outFlameFixtures = flames.map((f) => f[6]);
     this.outdoorGlow = new THREE.Points(geo, this.glowMat);
     this.outdoorGlow.frustumCulled = false;
     this.outdoorGlow.renderOrder = 10;
@@ -280,27 +357,59 @@ export class Lamps {
     return this.glow.geometry.attributes.position.count;
   }
 
-  /** @param level 0..1 how far into the evening it is */
-  update(camera, level, dt, renderer) {
+  /**
+   * @param level 0..1 how far into the evening it is
+   * @param hours the time on the clock, for bedtime
+   */
+  update(camera, level, dt, renderer, hours = 18) {
     this.level = level;
-    this.glowMat.uniforms.uLevel.value = level;
-    this.glowMat.uniforms.uTime.value += dt;
-    this.glowMat.uniforms.uScale.value = renderer.domElement.height * 0.5 / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-    this.glow.visible = level > 0.001;
-    if (this.outdoorGlow) this.outdoorGlow.visible = level > 0.001;
-    if (this.tlMat) this.tlMat.emissiveIntensity = 2.2 * level;
+    const u = this.glowMat.uniforms;
+    u.uLevel.value = 1;
+    u.uTime.value += dt;
+    u.uScale.value = renderer.domElement.height * 0.5 / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    const inside = this.houseBox.containsPoint(camera.position);
+    // hours since noon, so the night runs on without a break at midnight
+    const sinceNoon = (h) => (h - 12 + 24) % 24;
+    const now = sinceNoon(hours);
+    this._want = this._want ?? new Float32Array(this.lights.length);
+    let lit = 0;
+    let tubes = 0;
+    let indoorOn = 0;
+    let indoor = 0;
+    this.lights.forEach((l, i) => {
+      // in bed from its bedtime until half past six, unless you are in the house (then the lights
+      // inside come back on: nobody wants to walk round a dark house)
+      const asleep = l.bedtime != null && now >= sinceNoon(l.bedtime) && now < sinceNoon(6.5) && !(inside && !l.outdoor);
+      const auto = this.houseOn !== false && !asleep ? level : 0;
+      // a light switched on by hand shines by day too
+      const want = l.manual === true ? 1 : l.manual === false ? 0 : auto;
+      this._want[i] = want;
+      l.on += (want - l.on) * (1 - Math.exp(-dt * 3.5));
+      if (Math.abs(want - l.on) < 0.002) l.on = want;
+      u.uOn.value[i] = l.on;
+      l.light.intensity = l.power * l.on;
+      lit = Math.max(lit, l.on);
+      if (l.kind === 'tube') tubes = Math.max(tubes, l.on);
+      if (!l.outdoor) {
+        indoor++;
+        indoorOn += l.on;
+      }
+    });
+    // every light stays in the scene while any is lit (adding or removing one recompiles every shader)
+    const any = lit > 0.001;
+    for (const { light } of this.lights) light.visible = any;
+    this.glow.visible = any;
+    if (this.outdoorGlow) this.outdoorGlow.visible = any;
+    if (this.tlMat) this.tlMat.emissiveIntensity = 2.2 * tubes;
 
-    // windows glow warmly when you are outside the house
-    const outside = !this.houseBox.containsPoint(camera.position);
-    const target = outside ? level : 0;
+    // windows glow warmly when you are outside the house, as much as the lights inside are on
+    const target = inside ? 0 : indoor ? indoorOn / indoor : 0;
     this.windowsGlow += (target - this.windowsGlow) * (1 - Math.exp(-dt * 4));
     for (const m of this.glass) m.emissiveIntensity = 0.9 * this.windowsGlow;
-
-    // every light on together (switching lights on or off recompiles every shader)
-    const on = level > 0.001;
-    for (const { light, power } of this.lights) {
-      light.visible = on;
-      light.intensity = on ? power * level : 0;
-    }
   }
+}
+
+function hash(n) {
+  const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+  return x - Math.floor(x);
 }

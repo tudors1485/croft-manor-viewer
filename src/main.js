@@ -19,6 +19,7 @@ import { weatherAt, WEATHERS, Rainfall } from './weather.js';
 import { LiveWeather } from './liveweather.js';
 import { Snowman } from './snowman.js';
 import { FallenLeaves } from './leaves.js';
+import { Festive } from './festive.js';
 import { makeVideo, FORMATS, videoSupported } from './video.js';
 import { setupPool, poolUniforms } from './pool.js';
 import { installErrorLog, setupReport } from './report.js';
@@ -87,6 +88,8 @@ let wind = 0.2; // eased towards the weather's wind, for the trees and the sound
 const rainfall = new Rainfall(scene);
 let snowman = null;
 let leaves = null; // fallen leaves under the trees in autumn (leaves.js)
+let festive = null; // pumpkins at Halloween, lights at Christmas (festive.js)
+let pathProblems = null; // what the check of the camera paths found (for the console)
 let forcedWeather = null;
 const live = new LiveWeather(() => {
   refreshWeather();
@@ -151,8 +154,19 @@ orbit.screenSpacePanning = true;
 orbit.maxPolarAngle = Math.PI * 0.96;
 
 const look = new PointerLockControls(camera, canvas);
-look.addEventListener('lock', () => updateLockHint());
-look.addEventListener('unlock', () => updateLockHint());
+look.addEventListener('lock', () => {
+  autoLook = false;
+  updateLockHint();
+});
+look.addEventListener('unlock', () => {
+  // (freed with Esc: the keys leave the mouse alone now; a click on the picture takes it again)
+  autoLook = false;
+  updateLockHint();
+});
+// Walk and Fly look round with the mouse from the start: the browser only hands the mouse over
+// after a click or a key, so it is taken at the first move key (or the click on Walk or Fly),
+// and until then you can press and drag on the picture to look round
+let autoLook = true;
 const keys = new Set();
 let mode = 'orbit';
 
@@ -195,7 +209,7 @@ function setMode(next) {
   document.body.classList.toggle('flyby', mode === 'tour' && !!flybyId);
   $('tour-stop').hidden = mode !== 'tour';
   $('tour-stop').textContent = flybyId ? 'Leave the flyby (Esc)' : 'Stop the tour (Esc)';
-  if (mode === 'tour') showLeaveHint(flybyId ? 'Esc, a click or W A S D leaves the flyby' : 'Esc, a click or W A S D stops the tour');
+  if (mode === 'tour') showLeaveHint(`← → rewind and fast-forward · Esc, a click or W A S D ${flybyId ? 'leaves the flyby' : 'stops the tour'}`);
   for (const m of ['orbit', 'walk', 'fly']) $(`keys-${m}`).hidden = mode !== m;
   placeDock();
   orbit.enabled = mode === 'orbit';
@@ -220,6 +234,7 @@ function setMode(next) {
     velocity.set(0, 0, 0);
   }
   if (mode === 'fly' && prev !== 'fly' && camera.position.y < ABOVE.pos.y - 2) flyTo(ABOVE.pos, ABOVE.target, 2.2);
+  if ((mode === 'walk' || mode === 'fly') && prev !== mode) autoLook = true;
   if (mode === 'walk' && prev !== 'walk') {
     const fwd = new THREE.Vector3();
     camera.getWorldDirection(fwd);
@@ -233,6 +248,7 @@ for (const m of ['orbit', 'walk', 'fly']) {
   $(`mode-${m}`).onclick = (e) => {
     setMode(m);
     e.currentTarget.blur(); // so Space does not press the button again
+    if ((m === 'walk' || m === 'fly') && mode === m && !look.isLocked) lockMouse();
   };
 }
 // The keys for the mode: under the panel if there is room for them there, else bottom right.
@@ -271,8 +287,34 @@ for (const b of document.querySelectorAll('#dock [data-key]')) {
 const lightKey = (code, on) => document.querySelectorAll(`#dock [data-key="${code}"]`).forEach((b) => b.classList.toggle('down', on));
 window.addEventListener('keydown', (e) => lightKey(e.code === 'ShiftRight' ? 'ShiftLeft' : e.code, true));
 window.addEventListener('keyup', (e) => lightKey(e.code === 'ShiftRight' ? 'ShiftLeft' : e.code, false));
+const MOVE_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
+window.addEventListener('keydown', (e) => {
+  if (!autoLook || e.repeat || look.isLocked || !(mode === 'walk' || mode === 'fly') || !MOVE_KEYS.has(e.code)) return;
+  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
+  lockMouse();
+});
+// press and drag on the picture to look round (when the mouse isn't taken)
+let drag = null;
+canvas.addEventListener('pointerdown', (e) => {
+  if (e.button === 0 && (mode === 'walk' || mode === 'fly') && !look.isLocked) drag = { x: e.clientX, y: e.clientY, moved: false };
+});
+window.addEventListener('pointermove', (e) => {
+  if (!drag || look.isLocked) return;
+  if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) > 5) drag.moved = true;
+  if (!drag.moved) return;
+  const eu = new THREE.Euler().setFromQuaternion(camera.quaternion, 'YXZ');
+  eu.y -= e.movementX * 0.003;
+  eu.x = THREE.MathUtils.clamp(eu.x - e.movementY * 0.003, -Math.PI / 2 + 0.05, Math.PI / 2 - 0.05);
+  camera.quaternion.setFromEuler(eu);
+});
+window.addEventListener('pointerup', () => {
+  if (drag?.moved) dragged = performance.now();
+  drag = null;
+});
+let dragged = 0;
 function updateLockHint() {
   const free = mode === 'walk' || mode === 'fly';
+  $('lock-hint').textContent = autoLook ? 'Click or press W to look around' : 'Click to look around';
   $('lock-hint').hidden = !(free && !look.isLocked);
   $('crosshair').hidden = !(free && look.isLocked);
 }
@@ -290,21 +332,18 @@ function startTour(id = null) {
   } else setMode('orbit'); // (from one flyby straight to another)
   flybyId = id;
   const lapse = id && FLYBYS[id].lapse;
-  // a day flyby runs from just before sunrise to after sunset, on whatever the date is
-  lapseRange = lapse?.what === 'hours' ? daylightOn(seasonDay) : null;
-  if (lapse?.what === 'weather') {
-    // (the weather flyby keeps the clock; it sets the time of day it wants, then puts it back)
-    $('time').value = String(lapse.hours);
-    tod.hours = lapse.hours;
-    liveClock = false;
-    setPlaying(false);
-    setPlayingYear(false);
-  } else if (lapse) {
+  // a day flyby runs from midday to just after sunset, on whatever the date is
+  lapseRange = lapse?.what === 'hours' ? middayToSunset(seasonDay) : null;
+  // the seasons flyby cuts between its scenes in a new order each time (never the same one twice running)
+  sceneOrder = lapse?.what === 'scenes' ? shuffled(lapse.scenes.length) : null;
+  sceneShown = -1;
+  if (lapse) {
     // the flyby runs the clock or the calendar itself
     liveClock = false;
     setPlaying(false);
     setPlayingYear(false);
   }
+  tour.rate = 1;
   setMode('tour');
   $('bar-clock').hidden = !lapse;
 }
@@ -345,32 +384,52 @@ function leaveTour() {
   } else setMode('orbit');
 }
 let lapseRange = null;
-/** Sunrise to sunset on a day, widened to take in the dawn and the evening lights. */
-function daylightOn(day) {
-  let rise = 6;
+let sceneOrder = null;
+let sceneShown = -1;
+/** Midday to just after sunset on a day (the lamps come on as it ends). */
+function middayToSunset(day) {
   let set = 18;
   let prev = null;
-  for (let h = 0; h <= 24; h += 1 / 30) {
+  for (let h = 12; h <= 24; h += 1 / 30) {
     const e = sunAt(h, day).elevation;
-    if (prev !== null && prev < 0 && e >= 0) rise = h;
     if (prev !== null && prev >= 0 && e < 0) set = h;
     prev = e;
   }
-  return { from: rise - 1.0, to: Math.min(23.9, set + 1.6) };
+  return { from: 12, to: Math.min(23.9, set + 0.45) };
+}
+/** 0..n-1 in a random order. */
+function shuffled(n) {
+  const a = [...Array(n).keys()];
+  for (let i = n - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
 }
 /** A time-lapse flyby moves the clock or the calendar (or the weather) with its progress. */
 function applyLapse(l) {
-  if (l.what === 'weather') {
-    // the weather cuts from one kind to the next, all at once: the ground is soaked or under
-    // snow in an instant, as in a cut
-    const now = [...l.steps].reverse().find((st) => l.progress >= st.at) ?? l.steps[0];
-    if (forcedWeather !== now.weather) {
-      forcedWeather = now.weather;
-      refreshWeather();
-      wet = Math.min(1, weather.rain * 3);
-      tod.update(true);
-      $('bar-clock').textContent = WEATHERS[now.weather];
+  if (l.what === 'scenes') {
+    // a cut to another season, time and weather every few seconds, all at once: the trees, the
+    // light, the ground soaked or under snow in an instant
+    const k = Math.floor(l.seconds / l.every);
+    if (k === sceneShown) return;
+    // (past the end of the order, a fresh one that doesn't start with the scene just shown)
+    while (k >= sceneOrder.length) {
+      const more = shuffled(l.scenes.length);
+      if (more[0] === sceneOrder[sceneOrder.length - 1]) more.push(more.shift());
+      sceneOrder = sceneOrder.concat(more);
     }
+    sceneShown = k;
+    const sc = l.scenes[sceneOrder[k]];
+    seasonDay = sc.day;
+    $('season').value = String(sc.day);
+    $('time').value = String(sc.hours);
+    tod.hours = sc.hours;
+    forcedWeather = sc.weather;
+    updateSeason(true);
+    wet = Math.min(1, weather.rain * 3);
+    $('time-label').textContent = tod.label();
+    $('bar-clock').textContent = `${dateLabel(sc.day)} · ${WEATHERS[sc.weather]}`;
     return;
   }
   if (l.what === 'hours') {
@@ -405,10 +464,19 @@ $('flyby').onchange = (e) => {
   e.target.blur();
   if (id) startTour(id);
 };
-// leaving a tour or a flyby: Esc, a click on the picture, or a move key (you take over)
-const LEAVE_KEYS = new Set(['Escape', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
+// leaving a tour or a flyby: Esc, a click on the picture, or a move key (you take over);
+// ← and → rewind and fast-forward it while you hold them
+const LEAVE_KEYS = new Set(['Escape', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown']);
+const SCRUB = { ArrowLeft: -4, ArrowRight: 4 };
 window.addEventListener('keydown', (e) => {
-  if (mode === 'tour' && !exporting && LEAVE_KEYS.has(e.code)) leaveTour();
+  if (mode !== 'tour' || exporting) return;
+  if (Object.hasOwn(SCRUB, e.code)) {
+    e.preventDefault();
+    tour.rate = SCRUB[e.code];
+  } else if (LEAVE_KEYS.has(e.code)) leaveTour();
+});
+window.addEventListener('keyup', (e) => {
+  if (Object.hasOwn(SCRUB, e.code) && tour.rate === SCRUB[e.code]) tour.rate = 1;
 });
 let hintTimer = 0;
 function showLeaveHint(text) {
@@ -433,6 +501,7 @@ function lockMouse() {
 }
 canvas.addEventListener('click', () => {
   if (mode === 'tour') return exporting ? null : leaveTour();
+  if (performance.now() - dragged < 300) return; // (the end of a drag, not a click)
   if ((mode === 'walk' || mode === 'fly') && !look.isLocked) lockMouse();
 });
 $('lock-hint').addEventListener('click', lockMouse);
@@ -442,7 +511,10 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Space') e.preventDefault();
 });
 window.addEventListener('keyup', (e) => keys.delete(e.code));
-window.addEventListener('blur', () => keys.clear());
+window.addEventListener('blur', () => {
+  keys.clear();
+  tour.rate = 1;
+});
 
 const velocity = new THREE.Vector3();
 const held = (...codes) => codes.some((c) => keys.has(c));
@@ -692,6 +764,25 @@ loader.load(
   },
 );
 
+/** The glass and leading of the windows inside a box, by triangle (a flyby may pass through them). */
+function windowPanes(geo, box) {
+  const out = new Set();
+  // (the collision tree reorders the triangles, not the vertices: find a triangle's mesh by its first vertex)
+  const ranges = (geo.userData.parts ?? []).filter((p) => /glass|window_grid/i.test(p.mesh.material.name || '')).map((p) => [p.start, p.start + p.count]);
+  const pos = geo.attributes.position;
+  const index = geo.index;
+  const c = new THREE.Vector3();
+  const v = new THREE.Vector3();
+  for (let t = 0; t < index.count / 3; t++) {
+    const first = index.getX(t * 3);
+    if (!ranges.some(([a, b]) => first >= a && first < b)) continue;
+    c.set(0, 0, 0);
+    for (let k = 0; k < 3; k++) c.add(v.fromBufferAttribute(pos, index.getX(t * 3 + k)));
+    if (box.containsPoint(c.divideScalar(3))) out.add(t);
+  }
+  return out;
+}
+
 /** The loading bar (0..1) and the line under it. */
 function setLoading(f, text) {
   $('loading-bar').style.clipPath = `inset(0 ${(100 - f * 100).toFixed(1)}% 0 0)`;
@@ -751,13 +842,23 @@ async function prepareWalking(ground) {
       snowman.setSnow(seasonUniforms.uSnow.value);
     }
     leaves = new FallenLeaves(scene, landscape.treeSpots, (x, z) => landscape.groundHeight(x, z));
+    // Halloween's pumpkins by the front door, Christmas lights on the house, the gate and the two oaks inside it
+    const front = doors.usable.find((d) => d.centre.z > -12 && d.centre.z < -8 && Math.abs(d.centre.x + 1.85) < 1.5);
+    const oaks = landscape.gate ? landscape.treeSpots.filter((t) => Math.abs(t.z - (landscape.gate.z - 6.5)) < 1 && Math.abs(Math.abs(t.x - landscape.gate.x) - 5.4) < 1) : [];
+    festive = new Festive(scene, { bvh: geo.boundsTree, door: front, oaks, gate: landscape.gate });
+    for (const pk of festive.pumpkins) landscape.obstacles.push({ x: pk.position.x, z: pk.position.z, r: 0.3, when: () => festive.halloween.visible });
+    // the fountain's and the pool's reflections leave out the shrubs and the fallen leaves (costly, too small to see there)
+    water?.notMirrored.push(...landscape.shrubs, leaves.mesh);
     // everything is in place: off with the loading screen
     doneLoading();
     // the tour and the flybys must not pass through walls or trees (doors that open are fine)
-    const opens = (t) => doors.triDoor[t] > 0;
+    const frontWindow = new THREE.Box3(new THREE.Vector3(-3.3, 4.3, -9.8), new THREE.Vector3(-0.4, 6.9, -9.0));
+    const panes = windowPanes(geo, frontWindow);
+    const opens = (t) => doors.triDoor[t] > 0 || panes.has(t);
     const moves = [...tour.tourMoves, ...Object.values(tour.flybyMoves)];
-    const problems = await checkPath(moves, geo.boundsTree, opens, { crowns: landscape.crowns });
-    if (problems.length) console.warn(`camera paths touch walls or trees at ${problems.length} points`, problems.slice(0, 30));
+    const problems = await checkPath(moves, geo.boundsTree, opens, { crowns: landscape.crowns, allow: [frontWindow] });
+    pathProblems = problems;
+    if (problems.length) console.warn(`camera paths touch walls or trees at ${problems.length} points`, JSON.stringify(problems.slice(0, 12)));
     else console.info('camera paths: clear of walls and trees');
     console.info(`landscape: ${st.trees} trees, ${st.bushes} bushes, ${st.billboards} far trees, ${Math.round(st.triangles / 1000)}k triangles, ${st.ms} ms`);
     $('stats-base').textContent = `${Math.round((modelTris + st.triangles) / 1000).toLocaleString('en-GB')}k triangles`;
@@ -785,6 +886,42 @@ async function prepareWalking(ground) {
     setMode('walk');
   }
 }
+
+// The lights: the room you are in, and the whole house
+let roomTicker = 0;
+let room = [];
+function updateRoomButton() {
+  room = lamps && walker && mode !== 'tour' ? lamps.roomGroups(camera, walker.bvh, passDoor) : [];
+  const b = $('lights-room');
+  b.disabled = !room.length;
+  b.classList.toggle('on', room.length > 0 && room.some((i) => lamps.lit(i)));
+  b.title = room.length ? `The lights of the room you are in (L): ${room.length} light${room.length > 1 ? 's' : ''}` : 'Go into the house to switch a room\'s lights';
+}
+function toggleRoom() {
+  updateRoomButton();
+  if (!room.length) return;
+  const anyOn = room.some((i) => lamps.lit(i));
+  lamps.setGroups(room, !anyOn);
+  roomTicker = 0;
+}
+$('lights-room').onclick = (e) => {
+  toggleRoom();
+  e.currentTarget.blur();
+};
+$('lights-house').onclick = (e) => {
+  const on = !e.currentTarget.classList.contains('on');
+  lamps?.setHouse(on);
+  e.currentTarget.classList.toggle('on', on);
+  e.currentTarget.blur();
+  roomTicker = 0;
+};
+window.addEventListener('keydown', (e) => {
+  if (e.code !== 'KeyL' || e.repeat || mode === 'tour') return;
+  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
+  toggleRoom();
+});
+// (the on-screen L key)
+document.querySelector('#dock [data-key="KeyL"]')?.addEventListener('pointerdown', () => toggleRoom());
 
 // Which version this is: the release number, and whether there are changes since it
 let appVersion = 'v' + (import.meta.env.APP_VERSION ?? '');
@@ -979,7 +1116,16 @@ function step(dt, exporting = false) {
   rainfall.update(dt, camera, weather.rain * (1 - tod.inside));
   updateExposure(dt);
   if (lamps) {
-    lamps.update(camera, tod.lamps, dt, renderer);
+    lamps.update(camera, tod.lamps, dt, renderer, tod.hours);
+    if (festive) {
+      festive.update(dt, tod.lamps, seasonDay, tod.hours, lamps.houseOn !== false);
+      festive.setScale(lamps.glowMat.uniforms.uScale.value);
+    }
+    roomTicker -= dt;
+    if (roomTicker <= 0) {
+      roomTicker = 0.4;
+      updateRoomButton();
+    }
     const inside = lamps.houseBox.containsPoint(camera.position) ? 1 : 0;
     tod.inside += (inside - tod.inside) * (1 - Math.exp(-dt * 3));
     tod.applyAmbient();
@@ -1088,7 +1234,7 @@ const videoApp = {
   /** What the top bar says on this frame: the time or the date in a time-lapse flyby. */
   clock() {
     const l = tour.lapse;
-    return !l ? '' : l.what === 'hours' ? tod.label() : l.what === 'weather' ? $('bar-clock').textContent : dateLabel(seasonDay);
+    return !l ? '' : l.what === 'hours' ? tod.label() : l.what === 'scenes' ? $('bar-clock').textContent : dateLabel(seasonDay);
   },
   end() {
     leaveTour();
@@ -1233,6 +1379,12 @@ window.manor = {
   },
   get leaves() {
     return leaves;
+  },
+  get festive() {
+    return festive;
+  },
+  get pathProblems() {
+    return pathProblems;
   },
   live,
   /** Jump to a day of the year (0 = 1 January). */

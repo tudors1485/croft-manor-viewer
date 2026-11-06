@@ -34,6 +34,35 @@ const Fisheye = {
     }`,
 };
 
+// Light sharpening for a picture drawn below the screen's own resolution (the adaptive
+// resolution steps down on a busy scene, and the browser then stretches it to fit): each pixel
+// is pushed away from the average of its four neighbours, less where the contrast is already
+// high, so edges firm up without ringing.
+const Sharpen = {
+  uniforms: { tDiffuse: { value: null }, uTexel: { value: new THREE.Vector2(1, 1) }, uAmount: { value: 0 } },
+  vertexShader: /* glsl */ `
+    varying vec2 vUv;
+    void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDiffuse;
+    uniform vec2 uTexel;
+    uniform float uAmount;
+    varying vec2 vUv;
+    void main() {
+      vec4 c = texture2D(tDiffuse, vUv);
+      vec3 n = texture2D(tDiffuse, vUv + vec2(0.0, uTexel.y)).rgb;
+      vec3 s = texture2D(tDiffuse, vUv - vec2(0.0, uTexel.y)).rgb;
+      vec3 e = texture2D(tDiffuse, vUv + vec2(uTexel.x, 0.0)).rgb;
+      vec3 w = texture2D(tDiffuse, vUv - vec2(uTexel.x, 0.0)).rgb;
+      vec3 mn = min(c.rgb, min(min(n, s), min(e, w)));
+      vec3 mx = max(c.rgb, max(max(n, s), max(e, w)));
+      // contrast-adaptive: full strength on soft detail, little on edges that are already hard
+      float k = uAmount * (1.0 - smoothstep(0.08, 0.45, dot(mx - mn, vec3(0.333))));
+      vec3 sharp = c.rgb + (c.rgb - 0.25 * (n + s + e + w)) * k;
+      gl_FragColor = vec4(clamp(sharp, mn * 0.9, mx * 1.1 + 0.02), c.a);
+    }`,
+};
+
 export const PRESETS = {
   high: { label: 'High', ao: true, halfRes: false, maxRatio: 2 },
   balanced: { label: 'Balanced', ao: true, halfRes: true, maxRatio: 1.5 },
@@ -75,6 +104,8 @@ export class Quality {
     this.smaa = new SMAAPass(innerWidth, innerHeight);
     this.plain = new RenderPass(scene, camera); // when there is no ambient occlusion but a fisheye
     this.fisheyePass = new ShaderPass(Fisheye);
+    this.sharpenPass = new ShaderPass(Sharpen);
+    this.sharpenPass.enabled = false;
     this.fisheye = 0; // 0..1, set by the flybys
     this.beams = new SunbeamsPass(camera); // needs the scene depth, which the occlusion pass renders
     this.beams.enabled = false;
@@ -84,6 +115,7 @@ export class Quality {
     this.composer.addPass(this.output);
     this.composer.addPass(this.fisheyePass);
     this.composer.addPass(this.smaa);
+    this.composer.addPass(this.sharpenPass);
     this.apply();
   }
 
@@ -108,6 +140,7 @@ export class Quality {
       this.renderer.setSize(innerWidth, innerHeight);
       this.composer.setPixelRatio(this.ratio);
       this.composer.setSize(innerWidth, innerHeight);
+      this.sharpenPass.uniforms.uTexel.value.set(1 / (innerWidth * this.ratio), 1 / (innerHeight * this.ratio));
     }
     this.onResize?.();
   }
@@ -132,6 +165,10 @@ export class Quality {
       this.beams.depthTexture = this.ao.beautyRenderTarget?.depthTexture ?? null;
       this.beams.enabled = ao && this.beams.active;
       this.fisheyePass.enabled = bend;
+      // sharpen when the picture is drawn smaller than the screen and then stretched
+      const stretch = this.fixed ? 1 : window.devicePixelRatio / this.ratio;
+      this.sharpenPass.enabled = stretch > 1.15;
+      this.sharpenPass.uniforms.uAmount.value = THREE.MathUtils.clamp((stretch - 1) * 0.35, 0, 0.5);
       this.fisheyePass.uniforms.uStrength.value = this.fisheye;
       this.fisheyePass.uniforms.uAspect.value = this.aspect;
       try {
@@ -151,21 +188,26 @@ export class Quality {
 
   _adapt(dt) {
     if (!this.adaptive) return;
+    this._cooldown -= dt;
+    // (a single long frame, a cut in a flyby or a shader being prepared, says nothing about the
+    // frame rate: leave it out)
+    if (dt > 0.2) return;
     this._frames++;
     this._time += dt;
-    this._cooldown -= dt;
-    if (this._time < 1.5) return;
+    if (this._time < 1) return;
     const fps = this._frames / this._time;
     this._frames = 0;
     this._time = 0;
     if (this._cooldown > 0 || document.hidden) return;
     const max = Math.min(window.devicePixelRatio, PRESETS[this.preset].maxRatio);
     let next = this.ratio;
-    if (fps < 38 && this.ratio > this.minRatio) next = Math.max(this.minRatio, this.ratio - 0.15);
+    // far too slow (a flyby over the whole estate, say): one big step, sized to the shortfall
+    if (fps < 26 && this.ratio > this.minRatio) next = Math.max(this.minRatio, this.ratio * THREE.MathUtils.clamp(Math.sqrt(fps / 45), 0.6, 0.88));
+    else if (fps < 38 && this.ratio > this.minRatio) next = Math.max(this.minRatio, this.ratio - 0.15);
     else if (fps > 57 && this.ratio < max) next = Math.min(max, this.ratio + 0.1);
     if (next !== this.ratio) {
+      this._cooldown = next < this.ratio ? 1.5 : 2.5;
       this.ratio = Math.round(next * 100) / 100;
-      this._cooldown = 2.5;
       this.apply();
     }
   }

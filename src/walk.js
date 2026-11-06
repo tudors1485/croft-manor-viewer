@@ -318,6 +318,7 @@ export class Walker {
 
       // tree trunks
       for (const o of this.obstacles) {
+        if (o.r <= 0 || (o.when && !o.when())) continue; // (the snowman and the pumpkins come and go)
         const dx = this.feet.x - o.x;
         const dz = this.feet.z - o.z;
         const min = o.r + this.radius;

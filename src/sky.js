@@ -5,6 +5,8 @@
 
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
+// NASA's CGI Moon Kit colour map (LRO, 1024 x 512): credit NASA's Scientific Visualization Studio
+import moonMapUrl from './moon.jpg';
 
 const LAT = THREE.MathUtils.degToRad(51.3);
 const LON = -0.3;
@@ -30,6 +32,33 @@ export function sunAt(hours, day = 145) {
   const e = Math.asin(sinE);
   const az = Math.atan2(Math.sin(H), Math.cos(H) * Math.sin(LAT) - Math.tan(decl) * Math.cos(LAT)) + Math.PI;
   return { elevation: e, azimuth: az };
+}
+
+/**
+ * Where the moon is, seen from Surrey, at `hours` local time on `day` of `year`: elevation and
+ * azimuth (radians, azimuth clockwise from north, as sunAt). The low-precision lunar theory
+ * (ecliptic longitude good to about a degree), with the hour angle from sidereal time, so it
+ * rises and sets on the right days at the right times and is in the right part of the sky.
+ */
+export function moonAt(hours, day, year) {
+  const rad = Math.PI / 180;
+  const utc = hours - (isSummerTime(day) ? 1 : 0);
+  const ms = Date.UTC(year, 0, 1) + (day + utc / 24) * 864e5;
+  const d = ms / 864e5 + 2440587.5 - 2451545; // days since J2000
+  const L = rad * (218.316 + 13.176396 * d);
+  const M = rad * (134.963 + 13.064993 * d);
+  const F = rad * (93.272 + 13.22935 * d);
+  const l = L + rad * 6.289 * Math.sin(M); // ecliptic longitude
+  const b = rad * 5.128 * Math.sin(F); // and latitude
+  const dist = 385001 - 20905 * Math.cos(M); // km
+  const e = rad * 23.4397;
+  const ra = Math.atan2(Math.sin(l) * Math.cos(e) - Math.tan(b) * Math.sin(e), Math.cos(l));
+  const dec = Math.asin(Math.sin(b) * Math.cos(e) + Math.cos(b) * Math.sin(e) * Math.sin(l));
+  const H = rad * (280.16 + 360.9856235 * d) + rad * LON - ra;
+  let el = Math.asin(Math.sin(LAT) * Math.sin(dec) + Math.cos(LAT) * Math.cos(dec) * Math.cos(H));
+  el -= Math.asin(6378.14 / dist) * Math.cos(el); // parallax: seen from the ground, not the Earth's centre
+  const az = Math.atan2(Math.sin(H), Math.cos(H) * Math.sin(LAT) - Math.tan(dec) * Math.cos(LAT)) + Math.PI;
+  return { elevation: el, azimuth: az, distance: dist };
 }
 
 function dirFrom(elevation, azimuth, compass, out) {
@@ -122,35 +151,94 @@ function makeNightDome() {
   return dome;
 }
 
+// The moon's apparent size: about 2.4 degrees across, between four and five times the real
+// moon's half a degree, as it looks to the eye rather than to a lens
+const MOON_DISTANCE = 1250;
+const MOON_RADIUS = MOON_DISTANCE * Math.tan(THREE.MathUtils.degToRad(1.2));
+
+/**
+ * The moon: a sphere with NASA's map of the near side turned towards you, lit by the sun from
+ * where the sun really is (so its phase and which side is lit come out right), with the
+ * near-flat brightness of the real moon, a faint earthshine on the dark side, a warm tint
+ * near the horizon, and a soft halo.
+ */
 function makeMoon() {
+  const group = new THREE.Group();
+  group.renderOrder = -1;
+  const map = new THREE.TextureLoader().load(moonMapUrl);
+  map.colorSpace = THREE.SRGBColorSpace;
+  map.anisotropy = 4;
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uMap: { value: map },
+      uSunDir: { value: new THREE.Vector3(0, 1, 0) },
+      uOpacity: { value: 1 },
+      uNight: { value: 1 },
+      uDark: { value: 1 }, // 1 once the twilight has gone (then the unlit part hides the stars)
+      uTint: { value: new THREE.Color(1, 1, 1) },
+    },
+    vertexShader: /* glsl */ `
+      varying vec3 vN;
+      varying vec3 vView;
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        vec4 wp = modelMatrix * vec4(position, 1.0);
+        vN = normalize(mat3(modelMatrix) * normal);
+        vView = normalize(cameraPosition - wp.xyz);
+        gl_Position = projectionMatrix * viewMatrix * wp;
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform sampler2D uMap;
+      uniform vec3 uSunDir;
+      uniform float uOpacity;
+      uniform float uNight;
+      uniform float uDark;
+      uniform vec3 uTint;
+      varying vec3 vN;
+      varying vec3 vView;
+      varying vec2 vUv;
+      void main() {
+        vec3 n = normalize(vN);
+        float ci = max(dot(n, uSunDir), 0.0);
+        float ce = max(dot(n, normalize(vView)), 0.05);
+        // Lommel-Seeliger: the moon's dust scatters light so the full moon looks almost flat,
+        // not shaded like a ball, and the terminator is sharp
+        float lit = 2.0 * ci / (ci + ce);
+        vec3 albedo = texture2D(uMap, vUv).rgb;
+        vec3 c = albedo * uTint * (lit * 1.3 + 0.03 * uDark);
+        // by day and in the twilight the unlit part is lost in the sky; in the dark it hides the
+        // stars, with a faint earthshine
+        float a = mix(clamp(lit * 1.5, 0.0, mix(0.85, 1.0, uNight)), 1.0, uDark) * uOpacity;
+        gl_FragColor = vec4(c, a);
+      }`,
+    transparent: true,
+    depthWrite: false,
+    fog: false,
+  });
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(MOON_RADIUS, 64, 32), mat);
+  ball.renderOrder = -1;
+  ball.frustumCulled = false;
+  group.add(ball);
+  // the halo: moonlight scattered in the air round it
   const c = document.createElement('canvas');
-  c.width = c.height = 256;
+  c.width = c.height = 128;
   const g = c.getContext('2d');
-  const glow = g.createRadialGradient(128, 128, 30, 128, 128, 128);
-  glow.addColorStop(0, 'rgba(220,228,255,0.55)');
+  const glow = g.createRadialGradient(64, 64, 8, 64, 64, 64);
+  glow.addColorStop(0, 'rgba(220,228,255,0.32)');
+  glow.addColorStop(0.22, 'rgba(220,228,255,0.12)');
+  glow.addColorStop(0.55, 'rgba(220,228,255,0.03)');
   glow.addColorStop(1, 'rgba(220,228,255,0)');
   g.fillStyle = glow;
-  g.fillRect(0, 0, 256, 256);
-  const disc = g.createRadialGradient(118, 118, 4, 128, 128, 34);
-  disc.addColorStop(0, '#fbfbf4');
-  disc.addColorStop(1, '#d9dbd2');
-  g.fillStyle = disc;
-  g.beginPath();
-  g.arc(128, 128, 34, 0, Math.PI * 2);
-  g.fill();
-  g.fillStyle = 'rgba(150,152,160,0.35)';
-  for (const [x, y, r] of [[116, 120, 8], [140, 136, 6], [132, 108, 5], [112, 142, 4], [146, 118, 3]]) {
-    g.beginPath();
-    g.arc(x, y, r, 0, Math.PI * 2);
-    g.fill();
-  }
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  const mat = new THREE.SpriteMaterial({ map: tex, depthWrite: false, fog: false, transparent: true, blending: THREE.AdditiveBlending });
-  const s = new THREE.Sprite(mat);
-  s.scale.setScalar(110);
-  s.renderOrder = -1;
-  return s;
+  g.fillRect(0, 0, 128, 128);
+  const haloTex = new THREE.CanvasTexture(c);
+  haloTex.colorSpace = THREE.SRGBColorSpace;
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex, depthWrite: false, fog: false, transparent: true, blending: THREE.AdditiveBlending }));
+  halo.scale.setScalar(MOON_RADIUS * 9);
+  halo.renderOrder = -0.5; // (glare is in our air, in front of the moon: drawn over it)
+  group.add(halo);
+  group.userData = { ball, halo, mat };
+  return group;
 }
 
 function mulberry32(a) {
@@ -234,6 +322,9 @@ export class TimeOfDay {
 
     this.sunDir = new THREE.Vector3();
     this.moonDir = new THREE.Vector3();
+    this.year = new Date().getFullYear(); // the moon's place needs the year (the date is the slider's)
+    this.moonUp = 0; // 0 below the horizon .. 1 a few degrees up
+    this.moonPhase = 1; // how much of it is lit, 0 new .. 1 full
   }
 
   setBounds(centre, radius) {
@@ -256,8 +347,11 @@ export class TimeOfDay {
   update(force = false) {
     const { elevation, azimuth } = sunAt(this.hours, this.day);
     dirFrom(elevation, azimuth, this.compass, this.sunDir);
-    // the moon: opposite side of the sky, fairly high
-    dirFrom(THREE.MathUtils.degToRad(32), azimuth + Math.PI + 0.4, this.compass, this.moonDir);
+    // the moon, where it really is (it rises and sets, an hour or so later each day)
+    const moon = moonAt(this.hours, this.day, this.year);
+    dirFrom(moon.elevation, moon.azimuth, this.compass, this.moonDir);
+    this.moonUp = THREE.MathUtils.smoothstep(THREE.MathUtils.radToDeg(moon.elevation), -1, 4);
+    this.moonPhase = (1 - this.moonDir.dot(this.sunDir)) / 2; // the lit fraction, from how far apart they are
 
     const deg = THREE.MathUtils.radToDeg(elevation);
     this.night = THREE.MathUtils.smoothstep(-deg, -2, 9); // 0 above the horizon, 1 by 9° below
@@ -289,7 +383,10 @@ export class TimeOfDay {
     this.light.target.position.copy(this.centre);
     if (useMoon) {
       this.light.color.set(0x9db4ff);
-      this.light.intensity = 0.9 * this.night;
+      // brighter for a high, full moon; with the moon down (or new) the starlit night is darker,
+      // and its faint light comes from high in the sky
+      if (this.moonUp < 0.5) this.light.position.copy(this.centre).addScaledVector(this._starlight ?? (this._starlight = new THREE.Vector3(0.3, 0.9, 0.3).normalize()), this.radius * 1.5);
+      this.light.intensity = this.night * (0.3 + 0.75 * this.moonUp * (0.25 + 0.75 * this.moonPhase));
     } else {
       this.light.color.setHSL(0.08, (0.75 - 0.45 * t) * (1 - 0.6 * oc), 0.58 + 0.32 * t);
       // under cloud the sun is dimmed and its shadows go soft and faint
@@ -309,9 +406,24 @@ export class TimeOfDay {
     const blueHour = THREE.MathUtils.smoothstep(-deg, 0.5, 3.5) * (1 - THREE.MathUtils.smoothstep(-deg, 7, 13));
     this.nightDome.material.uniforms.uTwilight.value = blueHour;
     this.nightDome.visible = this.night > 0.001 || blueHour > 0.001;
-    this.moon.position.copy(this.moonDir).multiplyScalar(1250);
-    this.moon.material.opacity = this.night * (1 - oc * 0.9);
-    this.moon.visible = this.night > 0.01;
+    // the moon: up when it is above the horizon, by day too (pale), hidden behind thick cloud
+    const md = this.moon.userData;
+    this.moon.position.copy(this.moonDir).multiplyScalar(MOON_DISTANCE);
+    // the near side (the middle of NASA's map, the sphere's +x) turned towards the house
+    md.ball.lookAt(0, 0, 0);
+    md.ball.rotateY(-Math.PI / 2);
+    md.mat.uniforms.uSunDir.value.copy(this.sunDir);
+    md.mat.uniforms.uNight.value = this.night;
+    md.mat.uniforms.uDark.value = THREE.MathUtils.smoothstep(-deg, 9, 15);
+    const moonOpacity = this.moonUp * (1 - oc * 0.92) * THREE.MathUtils.lerp(0.55, 1, this.night);
+    md.mat.uniforms.uOpacity.value = moonOpacity;
+    // low down it is warmer, through more air
+    const lowness = 1 - THREE.MathUtils.smoothstep(THREE.MathUtils.radToDeg(moon.elevation), 0, 14);
+    md.mat.uniforms.uTint.value.setRGB(1, 1 - 0.3 * lowness, 1 - 0.55 * lowness);
+    // the glare grows with how much of the moon is lit: a full moon dazzles, a thin crescent hardly at all
+    md.halo.material.opacity = this.night * this.moonUp * (1 - oc) * Math.pow(this.moonPhase, 1.5);
+    md.halo.scale.setScalar(MOON_RADIUS * (4 + 5 * this.moonPhase));
+    this.moon.visible = moonOpacity > 0.01;
 
     // fog follows the sky: blue-grey by day, warm at dusk, deep blue at night
     const day = new THREE.Color(0xc9d6e2).lerp(new THREE.Color(0xb9bfc6), oc).lerp(new THREE.Color(0xd0d4d8), w.fog);

@@ -201,6 +201,7 @@ export class WaterSystem {
     this.surfaces = surfaces;
     this.maxDistance = 55;
     this.scale = 0.5; // mirror resolution relative to the screen
+    this.notMirrored = []; // objects left out of the reflection (the shrubs, the fallen leaves)
     this.enabled = true;
     this.target = new THREE.WebGLRenderTarget(16, 16, { type: THREE.HalfFloatType, samples: 0 });
     this.target.texture.generateMipmaps = false;
@@ -294,10 +295,11 @@ export class WaterSystem {
     pm.elements[14] = clip.w;
 
     const hidden = [];
-    for (const s of this.surfaces) {
-      if (s.mesh.visible) {
-        s.mesh.visible = false;
-        hidden.push(s.mesh);
+    // (the water itself, and whatever is too small or too costly to matter in a reflection: notMirrored)
+    for (const o of [...this.surfaces.map((s) => s.mesh), ...this.notMirrored]) {
+      if (o.visible) {
+        o.visible = false;
+        hidden.push(o);
       }
     }
     const prevTarget = renderer.getRenderTarget();

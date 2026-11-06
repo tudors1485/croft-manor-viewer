@@ -448,6 +448,7 @@ export class Landscape {
     this.obstacles = []; // trunks, for walking
     this.crowns = []; // tree crowns: { x, z, r, y0, y1 }
     this.treeSpots = []; // the real trees (not the far billboards): { x, z, r, inside }, for the fallen leaves
+    this.shrubs = []; // the shrubs' meshes (left out of the water's reflection)
     this.billboards = [];
     this.stats = { trees: 0, bushes: 0, billboards: 0, triangles: 0 };
   }
@@ -573,12 +574,12 @@ export class Landscape {
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
     const up = new THREE.Vector3(0, 1, 0);
-    const addInstanced = (vList, list, cast = true) => {
+    const addInstanced = (vList, list, cast = true, { bark = true, into = null } = {}) => {
       vList.forEach((v, vi) => {
         const mine = list.filter((s) => s[0] === vi);
         if (!mine.length) return;
         for (const [geo, mat, depth] of [
-          [v.bGeo, v.bark, null],
+          ...(bark ? [[v.bGeo, v.bark, null]] : []),
           [v.lGeo, v.leaves, v.leavesDepth],
         ]) {
           const im = new THREE.InstancedMesh(geo, mat, mine.length);
@@ -592,6 +593,7 @@ export class Landscape {
           im.receiveShadow = true;
           im.computeBoundingSphere();
           this.group.add(im);
+          into?.push(im);
           this.stats.triangles += (geo.index.count / 3) * mine.length;
         }
       });
@@ -647,8 +649,10 @@ export class Landscape {
         bushSpots.push([1, x, z, 0.8 + R() * 0.6, R() * Math.PI * 2]);
       }
     }
-    // no sun shadows from shrubs: the ambient occlusion grounds them, and it halves their cost
-    addInstanced(bushes, bushSpots, false);
+    // no sun shadows from shrubs: the ambient occlusion grounds them, and it halves their cost.
+    // Nor their twigs: the evergreen leaves hide them all year, and they were half the shrubs'
+    // triangles (355k of 700k)
+    addInstanced(bushes, bushSpots, false, { bark: false, into: this.shrubs });
     this.stats.bushes = bushSpots.length;
     // you can't walk through a shrub
     for (const [v, x, z, s] of bushSpots) this.obstacles.push({ x, z, r: (bushes[v].width * s) / 2 * 0.6 });

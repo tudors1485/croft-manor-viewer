@@ -100,77 +100,6 @@ function circuit(start, radius, height, turns = 1, speed = 6) {
 }
 
 export const FLYBYS = {
-  gate: {
-    label: 'Through the gate',
-    // the classic: low down the drive outside, straight through the gateway, up over the
-    // fountain and down to the front door
-    keys: [
-      k([4.6, 1.6, 66], [4.6, 2.3, 20], { speed: 2.5 }),
-      k([4.6, 1.9, 44], [4.6, 2.2, 12], { speed: 5.5 }),
-      k([4.6, 2.1, 28], [4.6, 2.3, 8.4], { speed: 5 }),
-      k([4.6, 2.2, 20.7], [4.6, 2.8, 6], { speed: 4.5 }),
-      k([4.6, 3.8, 14], [4, 4, 2], { speed: 4.5 }),
-      k([4.3, 6.4, 8.4], [-1.85, 3, -6], { speed: 4 }),
-      k([0.2, 4.2, 4], [-1.85, 2.4, -8], { speed: 2.8 }),
-      k([-1.85, 2.1, 2.2], [-1.85, 2.0, -10], { speed: 0.8 }),
-    ],
-  },
-  lift: {
-    label: 'Rising over the gate',
-    // from the drive outside, the house framed by the gateway, straight up into the air
-    keys: [
-      k([4.6, 1.5, 27], [4.6, 3.2, 0], { speed: 0.7 }),
-      k([4.6, 4, 27.1], [4.6, 3.4, 0], { speed: 2.4 }),
-      k([4.6, 12, 27.5], [4.5, 3, -5], { speed: 3.4 }),
-      k([4.6, 24, 28.2], [4.3, 2, -11], { speed: 3 }),
-      k([4.6, 35, 29], [4.1, 1, -16], { speed: 0.8 }),
-    ],
-  },
-  day: {
-    label: 'A day at the manor',
-    // the clock runs from before dawn to night while it flies (quickly: a day in under a minute)
-    lapse: { what: 'hours', from: 4.2, to: 23.2 },
-    keys: circuit(0.35, 62, 26, 0.7),
-  },
-  year: {
-    label: 'A year at the manor',
-    // from the front of the house, the year turns, spring round to spring, at midday, while
-    // the camera spins round twice
-    lapse: { what: 'day', from: 75, to: 75 + 365, hours: 13 },
-    keys: circuit(0, 66, 28, 2, 17),
-  },
-  weather: {
-    label: 'All weathers',
-    // round the house while the weather cuts from one kind to the next
-    lapse: {
-      what: 'weather',
-      hours: 13,
-      steps: [
-        { at: 0, weather: 'clear' },
-        { at: 0.12, weather: 'rain' },
-        { at: 0.25, weather: 'snow' },
-        { at: 0.38, weather: 'fog' },
-        { at: 0.5, weather: 'clouds' },
-        { at: 0.62, weather: 'overcast' },
-        { at: 0.74, weather: 'snow' },
-        { at: 0.86, weather: 'clear' },
-      ],
-    },
-    keys: [
-      k([-24, 12, 30], [5, 5, -10], { speed: 4 }),
-      k([-6, 14, 34], [5, 5, -14], { speed: 8 }),
-      k([18, 15, 32], [6, 5, -18], { speed: 8 }),
-      k([30, 16, 22], [8, 5, -20], { speed: 8 }),
-      k([52, 19, -8], [8, 6, -21], { speed: 8 }),
-      k([44, 19, -38], [8, 6, -21], { speed: 8 }),
-      k([24, 20, -58], [8, 6, -21], { speed: 8 }),
-      k([-6, 20, -60], [6, 6, -21], { speed: 8 }),
-      k([-31, 19, -44], [6, 6, -21], { speed: 8 }),
-      k([-35, 18, -12], [6, 6, -21], { speed: 8 }),
-      k([-24, 16, 14], [5, 5, -16], { speed: 6 }),
-      k([-4, 14, 26], [3, 4, -10], { speed: 3 }),
-    ],
-  },
   estate: {
     label: 'Over the estate',
     keys: [
@@ -191,12 +120,78 @@ export const FLYBYS = {
       k([4.5, 26, 72], [4, 3, -10], { speed: 2.5 }),
     ],
   },
+  gate: {
+    label: 'Through the gate',
+    // the classic: from just outside the gate, through the gateway and up past the fountain,
+    // in through the window over the front door (a lancet 40 cm wide), over the landing and
+    // round the great hall
+    keys: [
+      k([4.6, 1.8, 31], [4.6, 2.3, 8.4], { speed: 2.6 }),
+      k([4.6, 2.1, 25], [4.6, 2.6, 6], { speed: 4.5 }),
+      k([4.6, 2.3, 20.7], [3.4, 3.6, 2], { speed: 4.5 }),
+      k([4.2, 3.4, 15], [0, 5.2, -6], { speed: 4.5 }),
+      k([2.2, 4.9, 6.5], [-1.45, 5.4, -12], { speed: 4.2 }),
+      k([-0.4, 5.35, 0.5], [-1.45, 5.45, -14], { speed: 3.6 }),
+      k([-1.45, 5.4, -5], [-1.45, 5.5, -16], { speed: 2.6 }),
+      k([-1.45, 5.45, -9.42], [-1.2, 5.3, -18], { speed: 2.2 }),
+      k([-1.45, 5.65, -12.4], [0.5, 4.2, -20], { speed: 2.6 }),
+      k([0.6, 4.7, -16], [-3, 4.2, -22], { speed: 3 }),
+      k([2.2, 4.4, -19.5], [-4, 4, -18], { speed: 3 }),
+      k([-1.5, 5.4, -22], [-4, 3, -14], { speed: 3 }),
+      k([-5.4, 4.6, -18.5], [0, 3, -13], { speed: 3 }),
+      k([-3.6, 3.2, -14.6], [0.7, 1.8, -22], { speed: 2.2 }),
+      k([-0.8, 2.3, -17], [0.7, 1.8, -26], { speed: 0.8 }),
+    ],
+  },
+  lift: {
+    label: 'Rising over the gate',
+    // from the drive a little way outside, the house framed by the gateway, straight up into the air
+    keys: [
+      k([4.6, 1.5, 33], [4.6, 3.2, 0], { speed: 0.7 }),
+      k([4.6, 4, 33.1], [4.6, 3.4, 0], { speed: 2.4 }),
+      k([4.6, 12, 33.5], [4.5, 3, -5], { speed: 3.4 }),
+      k([4.6, 24, 34.2], [4.3, 2, -11], { speed: 3 }),
+      k([4.6, 36, 35], [4.1, 1, -16], { speed: 0.8 }),
+    ],
+  },
+  day: {
+    label: 'A day at the manor',
+    // the clock runs from midday to just after sunset (the lamps coming on) while it flies
+    lapse: { what: 'hours', from: 12, to: 18 },
+    keys: circuit(0.35, 62, 26, 0.5),
+  },
+  seasons: {
+    label: 'Seasons and weathers',
+    // from the front of the house, spinning round, while it cuts every few seconds to another
+    // season and weather, in a different order each time
+    lapse: {
+      what: 'scenes',
+      every: 3,
+      scenes: [
+        { day: 95, hours: 12, weather: 'overcast' }, // early spring, grey
+        { day: 112, hours: 13, weather: 'rain' }, // an April shower
+        { day: 128, hours: 13, weather: 'clouds' }, // spring, fluffy clouds
+        { day: 165, hours: 14, weather: 'clear' }, // early summer
+        { day: 196, hours: 19.5, weather: 'clear' }, // a summer evening
+        { day: 232, hours: 15, weather: 'clouds' }, // late summer
+        { day: 290, hours: 13, weather: 'clear' }, // autumn gold
+        { day: 300, hours: 14, weather: 'rain' }, // autumn rain
+        { day: 318, hours: 9, weather: 'fog' }, // a November morning
+        { day: 340, hours: 15.5, weather: 'overcast' }, // December dusk
+        { day: 8, hours: 12, weather: 'snow' }, // snowing
+        { day: 16, hours: 13, weather: 'clear' }, // snow lying, blue sky
+        { day: 26, hours: 10, weather: 'fog' }, // freezing fog
+      ],
+    },
+    keys: circuit(0, 66, 28, 2, 17),
+  },
   hall: {
     label: 'The great hall',
     keys: [
-      k([-1.85, 1.8, 3], [-1.85, 1.9, -12], { speed: 1.5 }),
-      k([-1.85, 1.8, -10], [-1.85, 2.4, -20], { speed: 3 }),
-      k([-1.6, 2.3, -13.8], [-3, 4.4, -22], { speed: 3 }),
+      // (straight in: from the porch, the front door swinging open ahead of you)
+      k([-1.85, 1.8, -3.5], [-1.85, 2.0, -14], { speed: 4 }),
+      k([-1.85, 1.8, -10], [-1.85, 2.4, -20], { speed: 4.5 }),
+      k([-1.6, 2.3, -13.8], [-3, 4.4, -22], { speed: 3.5 }),
       k([0.9, 3.4, -16.5], [-4, 4.4, -22], { speed: 3.2 }),
       k([2.2, 4.4, -19.5], [-4, 4, -18], { speed: 3 }),
       k([-1.5, 5.4, -22], [-4, 3, -14], { speed: 3 }),
@@ -310,7 +305,7 @@ class Move {
  * move must not pass through anything, nor through a tree's crown. Returns the places
  * where it would, so a bad key can be found and fixed.
  */
-export async function checkPath(moves, bvh, skip, { radius = 0.2, step = 0.15, crowns = [] } = {}) {
+export async function checkPath(moves, bvh, skip, { radius = 0.2, step = 0.15, crowns = [], allow = [] } = {}) {
   const { moveSphere } = await import('./walk.js');
   const problems = [];
   const a = new THREE.Vector3();
@@ -324,7 +319,8 @@ export async function checkPath(moves, bvh, skip, { radius = 0.2, step = 0.15, c
       moved.copy(b);
       moveSphere(bvh, a, moved, radius, skip);
       const at = () => b.toArray().map((x) => Math.round(x * 100) / 100);
-      if (moved.distanceTo(b) > 0.05) problems.push({ move: mi, at: at(), by: Math.round(moved.distanceTo(b) * 100) / 100 });
+      // (allow: places a path squeezes through on purpose, like the 40 cm window over the front door)
+      if (moved.distanceTo(b) > 0.05 && !allow.some((box) => box.containsPoint(b))) problems.push({ move: mi, at: at(), by: Math.round(moved.distanceTo(b) * 100) / 100 });
       for (const c of crowns) {
         if (b.y < c.y0 || b.y > c.y1 + radius) continue;
         const d = Math.hypot(b.x - c.x, b.z - c.z);
@@ -403,7 +399,7 @@ export class Tour {
     const f = FLYBYS[this.flybyId];
     if (!f?.lapse) return null;
     const move = this.moves[0];
-    return { ...f.lapse, progress: THREE.MathUtils.clamp(this.t / move.duration, 0, 1) };
+    return { ...f.lapse, progress: THREE.MathUtils.clamp(this.t / move.duration, 0, 1), seconds: this.t };
   }
 
   /** Returns false when it has ended. */
@@ -411,6 +407,17 @@ export class Tour {
     if (!this.running) return false;
     this.t += dt * this.rate;
     let move = this.moves[this.shot];
+    // (rewinding: back into the shot before, or held at the very start)
+    while (this.t < 0) {
+      if (this.shot === 0) {
+        this.t = 0;
+        break;
+      }
+      this.shot--;
+      move = this.moves[this.shot];
+      this.t += move.duration;
+      this._heading = null;
+    }
     if (this.t > move.duration) {
       if (this.shot === this.moves.length - 1) {
         this.stop();
