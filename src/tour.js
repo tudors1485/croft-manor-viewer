@@ -115,7 +115,7 @@ export const SCENES = {
     { day: 300, hours: 14, weather: 'rain' }, // autumn rain
     { day: 318, hours: 9, weather: 'fog' }, // a November morning
     { day: 340, hours: 15.5, weather: 'overcast' }, // December dusk
-    { day: 8, hours: 12, weather: 'snow' }, // snowing
+    { day: 8, hours: 12, weather: 'snow', first: true }, // heavy snow falling (always the first cut)
     { day: 16, hours: 13, weather: 'clear' }, // snow lying, blue sky
     { day: 26, hours: 10, weather: 'fog' }, // freezing fog
   ],
@@ -181,6 +181,28 @@ export const FLYBYS = {
     // from the front of the house, spinning round it twice, high up (with "With seasons and
     // weathers" ticked, the seasons cut by as it goes)
     keys: circuit(0, 66, 28, 2, 17),
+  },
+  halloween: {
+    label: 'Halloween night',
+    // 31 October, near midnight, in the fog: through the gate past the ghosts on the lawn, down to
+    // the pumpkins at the door, then along the front at the height of the windows, where figures
+    // stand for a moment, and away over the garden (the seasons tick box doesn't apply)
+    lapse: { what: 'scenes', every: 1e9, fixed: true, scenes: [{ day: 303, hours: 23.3, weather: 'fog' }] },
+    keys: [
+      k([4.6, 1.8, 30], [4.6, 2.2, 10], { speed: 2.4 }),
+      k([4.6, 2.0, 20.7], [0, 1.8, 8], { speed: 3 }),
+      k([0.6, 1.8, 14], [-8, 1.4, 9], { speed: 3 }),
+      k([-5, 1.9, 9.5], [-1.85, 1, -6], { speed: 2.6 }),
+      k([-1.85, 1.6, 0.5], [-1.85, 0.6, -7], { speed: 1.6 }),
+      k([-1.85, 1.9, -3.4], [-1.85, 0.9, -9], { speed: 0.9 }),
+      k([-4.5, 4.2, -0.5], [-8, 4.6, -9.4], { speed: 2.2 }),
+      k([-10, 4.6, -2.5], [-12, 4.6, -9.4], { speed: 2.2 }),
+      k([2, 5.2, -1.5], [6, 4.6, -9.4], { speed: 2.4 }),
+      k([12, 4.8, -1.5], [16, 4.6, -9.4], { speed: 2.4 }),
+      k([22, 4.8, -1], [26, 4.2, -9.4], { speed: 2.2 }),
+      k([24, 7, 10], [12, 1.5, 8], { speed: 2.6 }),
+      k([12, 12, 26], [2, 3, 0], { speed: 1.2 }),
+    ],
   },
   hall: {
     label: 'The great hall',

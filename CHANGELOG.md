@@ -8,6 +8,21 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.19.0, 6 November 2026
+
+- You arrive at noon today, with today's real weather at noon; *Now* jumps to the time now.
+- The sound comes on with your first click on a mode, a flyby, the tour, Now, the lights or a holiday (unless you switched it off).
+- *House* switches the lights inside the house all at once and leaves the outdoor lights on; by day it moves the clock on to the evening first.
+- Holidays, in a new menu:
+  - *Halloween*: the pumpkins are out from 26 October to 3 November, their candles lighting the steps. On Halloween night dark figures appear at the front windows and ghosts drift in the foggy garden, moaning; a *Halloween night* flyby shows it all.
+  - *Bonfire Night* (5 November): a bonfire with smoke and embers on the front lawn, and fireworks over the house in the evening, with their whistles and bangs.
+  - *Christmas*: the house's lights are cooler, a red, green and gold chase now and then and icicle lights dripping below, and they stay on all day and all night from Christmas Eve to New Year's Eve.
+  - *New Year*: fireworks at midnight, and 2027 written across the sky in gold.
+- *With seasons and weathers* always opens on heavy snow.
+- Videos: croftmanor.sfatosu.com is a bigger watermark over the picture, and there is a 2× speed.
+- Sounds: splashing when you wade into the fountain, the moat or the pool; a push-off when you jump and a thud when you land; the doors are a low groan and an iron latch, not a squeak.
+- Fixed: the sound could stop with an error when the wind came out a hair below zero.
+
 ## 0.18.2, 6 November 2026
 
 - Videos: the text in the bottom bar is about twice the size, to read on a phone (the site name, "Fork it on GitHub" and the credit; on YouTube in two rows), and the end card's lines are bigger too. A reel's film bars are a little taller to hold it.

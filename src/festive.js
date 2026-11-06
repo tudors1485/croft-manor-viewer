@@ -1,14 +1,17 @@
-// The festive days. For the week of Halloween (25 October to 1 November) carved pumpkins sit
-// either side of the front door, their faces glowing and flickering after dark. From
-// 1 December to Twelfth Night (6 January) there are Christmas lights: warm white bulbs along
-// the top of the front of the house and over the gate, and coloured ones twinkling in the two
-// oaks at the entrance. Both are lit from dusk, follow the house's light switch, and the
-// Christmas lights go off at half past midnight like the rest.
+// The festive days. From 26 October to 3 November carved pumpkins sit either side of the
+// front door, their faces glowing and flickering after dark (Halloween's ghosts and figures
+// are in spooky.js, Bonfire Night's fire and fireworks in bonfire.js). From 1 December to
+// Twelfth Night (6 January) there are Christmas lights: along the top of the front of the
+// house (warm white, or a red, green and gold chase, changing every so often) with icicle
+// lights dripping below, over the gate, and coloured ones twinkling in the two oaks at the
+// entrance. They are lit from dusk to half past midnight, and from Christmas Eve to New Year's
+// Eve all day and all night.
 
 import * as THREE from 'three';
 
-const HALLOWEEN = [297, 305]; // 25 October .. 1 November (days of the year, from 0)
+const HALLOWEEN = [298, 306]; // 26 October .. 3 November (days of the year, from 0)
 const CHRISTMAS = [334, 5]; // 1 December .. 6 January
+const ALL_DAY = [357, 364]; // Christmas Eve .. New Year's Eve: the lights stay on
 
 const inRange = (day, [a, b]) => (a <= b ? day >= a && day <= b : day >= a || day <= b);
 
@@ -134,17 +137,25 @@ function glowSprite() {
   return t;
 }
 
-/** Small glowing bulbs (one draw call): position, colour, twinkle phase. */
-function bulbs(list, size) {
+/**
+ * Small glowing bulbs (one draw call): position, colour, twinkle phase, and `along` (the bulb's
+ * place along its string, for the chase and the drips). kind: 'twinkle' (each bulb in its own
+ * time), 'chase' (warm white, then every so often red, green and gold running along the string),
+ * 'icicle' (cool white, a drip of light running down each icicle).
+ */
+function bulbs(list, size, kind = 'twinkle') {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(list.flatMap((b) => b.pos), 3));
   geo.setAttribute('colour', new THREE.Float32BufferAttribute(list.flatMap((b) => b.colour), 3));
   geo.setAttribute('phase', new THREE.Float32BufferAttribute(list.map((b) => b.phase), 1));
+  geo.setAttribute('along', new THREE.Float32BufferAttribute(list.map((b) => b.along ?? 0), 1));
   const mat = new THREE.ShaderMaterial({
+    defines: { KIND: kind === 'chase' ? 1 : kind === 'icicle' ? 2 : 0 },
     uniforms: { uMap: { value: glowSprite() }, uOn: { value: 0 }, uTime: { value: 0 }, uScale: { value: 800 }, uSize: { value: size } },
     vertexShader: /* glsl */ `
       attribute vec3 colour;
       attribute float phase;
+      attribute float along;
       uniform float uTime;
       uniform float uScale;
       uniform float uSize;
@@ -154,7 +165,19 @@ function bulbs(list, size) {
         gl_Position = projectionMatrix * mv;
         // a slow twinkle, each bulb in its own time
         float tw = 0.75 + 0.25 * sin(uTime * (0.8 + fract(phase * 7.1) * 1.6) + phase * 6.28);
-        vColour = colour * tw;
+        vec3 c = colour * tw;
+        #if KIND == 1
+          // every 16 seconds the warm white gives way to red, green and gold running along the roof
+          float mode = smoothstep(0.42, 0.5, fract(uTime / 32.0)) * (1.0 - smoothstep(0.92, 1.0, fract(uTime / 32.0)));
+          float k = mod(floor(along / 3.0 - uTime * 3.0), 3.0);
+          vec3 chase = k < 0.5 ? vec3(1.0, 0.12, 0.08) : k < 1.5 ? vec3(0.12, 0.95, 0.25) : vec3(1.0, 0.72, 0.18);
+          c = mix(c, chase * (0.75 + 0.25 * sin(uTime * 6.0 + along)), mode);
+        #elif KIND == 2
+          // a drip of light running down each icicle, every few seconds
+          float drip = pow(fract(phase - uTime * 0.45 + along * 0.18), 8.0);
+          c = colour * (0.35 + 0.1 * tw + 1.1 * drip);
+        #endif
+        vColour = c;
         gl_PointSize = clamp(uSize * uScale / -mv.z, 2.0, 22.0);
       }`,
     fragmentShader: /* glsl */ `
@@ -232,6 +255,11 @@ export class Festive {
       }
       this.pumpkinGlow = bulbs(lights, 0.55);
       this.halloween.add(this.pumpkinGlow);
+      // the candles inside them light the steps and the porch, flickering (one light, always in
+      // the scene and dark the rest of the year: adding a light later would recompile every shader)
+      this.candle = new THREE.PointLight(0xff8a2a, 0, 5.5, 2);
+      this.candle.position.copy(door.centre).addScaledVector(out, 2.1).setY((groundAt(this.candle.position.x, this.candle.position.z, door.y0 + 1.5) ?? door.y0) + 0.45);
+      this.halloween.parent.add(this.candle);
     }
 
     // --- Christmas: warm white along the top of the front of the house and over the gate ---
@@ -246,15 +274,24 @@ export class Festive {
           const hit = bvh.raycastFirst(ray, THREE.DoubleSide, 0, 60);
           if (!hit || hit.point.z > zNear || hit.point.z < zFar) continue;
           if (Math.abs(hit.face.normal.z) < 0.6) continue; // a roof, not a wall
-          outline.push({ pos: [x, y - 0.06, hit.point.z + dz], colour: warm(), phase: Math.random() });
+          outline.push({ pos: [x, y - 0.06, hit.point.z + dz], colour: warm(), phase: Math.random(), along: outline.length });
           break;
         }
       }
     };
     traceTop(-14.4, 29.2, 6, 1, -12.5, 16, 0.14); // the front of the house
+    // icicle lights hanging under the house's line: strands of four to nine bulbs, cool white
+    const icicles = [];
+    for (const b of outline) {
+      const n = 4 + Math.floor(Math.random() * 6);
+      const phase = Math.random();
+      for (let k = 1; k <= n; k++) icicles.push({ pos: [b.pos[0] + (Math.random() - 0.5) * 0.03, b.pos[1] - k * 0.1, b.pos[2] + 0.02], colour: [0.85, 0.93, 1], phase, along: k });
+    }
     if (gate) traceTop(gate.x - 3.4, gate.x + 3.4, gate.z + 6, gate.z + 2.5, gate.z - 2, 8, 0.16); // the gate
-    this.outline = bulbs(outline, 0.16);
+    this.outline = bulbs(outline, 0.18, 'chase');
     this.christmas.add(this.outline);
+    this.icicles = bulbs(icicles, 0.1, 'icicle');
+    this.christmas.add(this.icicles);
     // coloured lights through the two bare oaks inside the gate
     const tree = [];
     const colours = [
@@ -297,20 +334,25 @@ export class Festive {
     this.christmas.visible = christmas;
     const t = (this._t = (this._t ?? 0) + dt);
     if (halloween) {
-      // candles inside: a flicker, lit from dusk, out at half past one
+      // candles inside: a flicker, lit from dusk (and a little by day, in the shade of the porch),
+      // out at half past one
       const late = hours > 1.5 && hours < 6.5;
-      const on = houseOn && !late ? level : 0;
+      const on = late ? 0 : Math.max(level, 0.12);
       const flicker = 0.85 + 0.1 * Math.sin(t * 11) + 0.05 * Math.sin(t * 27 + 1.3);
-      for (const pk of this.pumpkins) if (pk.userData.carved) pk.userData.mat.emissiveIntensity = 2.6 * on * flicker;
+      for (const pk of this.pumpkins) if (pk.userData.carved) pk.userData.mat.emissiveIntensity = 4 * on * flicker;
       if (this.pumpkinGlow) {
-        this.pumpkinGlow.material.uniforms.uOn.value = on * flicker * 0.9;
+        this.pumpkinGlow.material.uniforms.uOn.value = on * flicker;
         this.pumpkinGlow.material.uniforms.uTime.value = t;
       }
-    }
+      if (this.candle) this.candle.intensity = 6 * on * flicker;
+    } else if (this.candle) this.candle.intensity = 0;
     if (christmas) {
+      // dusk to half past midnight; from Christmas Eve to New Year's Eve, all day and all night
+      // (by day they show a little less against the light)
+      const allDay = inRange(Math.floor(day), ALL_DAY);
       const late = hours > 0.5 && hours < 6.5;
-      const on = houseOn && !late ? level : 0;
-      for (const p of [this.outline, this.treeLights]) {
+      const on = !houseOn ? 0 : allDay ? Math.max(level, 0.75) : late ? 0 : level;
+      for (const p of [this.outline, this.icicles, this.treeLights]) {
         p.material.uniforms.uOn.value = on;
         p.material.uniforms.uTime.value = t;
         p.visible = on > 0.01;
@@ -320,6 +362,6 @@ export class Festive {
 
   /** Points need the screen's size to size their bulbs in metres. */
   setScale(scale) {
-    for (const p of [this.pumpkinGlow, this.outline, this.treeLights]) if (p) p.material.uniforms.uScale.value = scale;
+    for (const p of [this.pumpkinGlow, this.outline, this.icicles, this.treeLights]) if (p) p.material.uniforms.uScale.value = scale;
   }
 }

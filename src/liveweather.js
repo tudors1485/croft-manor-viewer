@@ -1,11 +1,12 @@
-// The real weather in Surrey now, where the manor stands (the same place the sun's path is
+// The real weather in Surrey today, where the manor stands (the same place the sun's path is
 // worked out for, sky.js), from Open-Meteo: free, no key, no account, weather data under
-// CC BY 4.0 (credited in the panel). It is asked for when the viewer opens and every 15
-// minutes after, while the page is open. Nothing about the visitor is sent: only the place.
+// CC BY 4.0 (credited in the panel): the conditions now, and today's hour by hour (so the
+// viewer can show today's real weather at noon, or at whatever hour the clock is set to). It is
+// asked for when the viewer opens and every 15 minutes after, while the page is open. Nothing
+// about the visitor is sent: only the place.
 
-const URL_NOW =
-  'https://api.open-meteo.com/v1/forecast?latitude=51.3&longitude=-0.3&timezone=Europe%2FLondon' +
-  '&current=weather_code,cloud_cover,precipitation,snow_depth,temperature_2m,wind_speed_10m,wind_gusts_10m,visibility';
+const FIELDS = 'weather_code,cloud_cover,precipitation,snow_depth,temperature_2m,wind_speed_10m,wind_gusts_10m,visibility';
+const URL_NOW = `https://api.open-meteo.com/v1/forecast?latitude=51.3&longitude=-0.3&timezone=Europe%2FLondon&forecast_days=1&current=${FIELDS}&hourly=${FIELDS}`;
 const EVERY = 15 * 60 * 1000;
 
 export class LiveWeather {
@@ -30,6 +31,7 @@ export class LiveWeather {
       const body = await res.json();
       if (!body?.current || typeof body.current.weather_code !== 'number') throw new Error('no current weather');
       this.now = body.current;
+      this.hourly = body.hourly ?? null;
       this.failed = false;
     } catch (err) {
       console.warn('live weather:', err.message);
@@ -38,20 +40,32 @@ export class LiveWeather {
     this.onChange(this.now);
   }
 
+  /**
+   * The conditions at `hours` today (the nearest hour of today's forecast), or now when `hours`
+   * is null; in the same shape as Open-Meteo's `current`.
+   */
+  at(hours = null) {
+    if (hours == null || !this.hourly?.time?.length) return this.now;
+    const i = Math.min(this.hourly.time.length - 1, Math.max(0, Math.round(hours)));
+    const out = {};
+    for (const k of FIELDS.split(',')) out[k] = this.hourly[k]?.[i];
+    return typeof out.weather_code === 'number' ? out : this.now;
+  }
+
   /** Snow lying, 0..1, from the snow depth (3 cm covers the ground). */
-  get snowLies() {
-    const d = this.now?.snow_depth ?? 0;
+  snowLies(c) {
+    const d = c?.snow_depth ?? 0;
     return Math.min(1, Math.max(0, d / 0.03));
   }
 
   /** Ponds freeze when it is below freezing for a while: 0 at 1 °C, frozen over at -3 °C. */
-  get ice() {
-    const t = this.now?.temperature_2m;
+  ice(c) {
+    const t = c?.temperature_2m;
     return t == null ? 0 : Math.min(1, Math.max(0, (1 - t) / 4));
   }
 
-  get temperature() {
-    const t = this.now?.temperature_2m;
+  temperature(c) {
+    const t = c?.temperature_2m;
     return t == null ? '' : `${Math.round(t)}°C`;
   }
 }

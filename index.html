@@ -58,7 +58,10 @@
           <button data-format="youtube" class="on" role="radio" aria-checked="true" title="1920 x 1080 landscape">YouTube <span>16:9</span></button>
           <button data-format="portrait" role="radio" aria-checked="false" title="1080 x 1920 portrait">Reel <span>9:16</span></button>
         </div>
-        <button id="make-video" class="record" title="An MP4 with sound, the credits and the links"><i></i>Record</button>
+        <div class="record-row">
+          <button id="make-video" class="record" title="An MP4 with sound, the credits and the links"><i></i>Record</button>
+          <label class="check" title="The flyby at twice the speed: a video half as long"><input id="video-fast" type="checkbox" /> 2× speed</label>
+        </div>
       </details>
 
       <label class="row">Place
@@ -79,7 +82,17 @@
       <p class="help" id="weather-source"></p>
       <div class="row lights">
         <span>Lights</span>
-        <span class="light-buttons"><button id="lights-room" class="small" title="The lights of the room you are in (L)" disabled>Room</button><button id="lights-house" class="small on" title="Every light in the house and grounds">House</button></span>
+        <span class="light-buttons"><button id="lights-room" class="small" title="The lights of the room you are in (L)" disabled>Room</button><button id="lights-house" class="small on" title="Every light inside the house, at once (the outdoor lights stay on); by day the clock moves on to the evening">House</button></span>
+      </div>
+      <div class="row lights">
+        <span>Holidays</span>
+        <select id="holiday" title="Jump to a holiday">
+          <option value="">Holidays…</option>
+          <option value="halloween">Halloween night</option>
+          <option value="bonfire">Bonfire Night</option>
+          <option value="christmas">Christmas Eve</option>
+          <option value="newyear">New Year</option>
+        </select>
       </div>
       <label class="row">Compass <input id="sun-azim" type="range" min="-180" max="180" value="0" /></label>
       <label class="row">Brightness <input id="exposure" type="range" min="20" max="200" value="100" /></label>

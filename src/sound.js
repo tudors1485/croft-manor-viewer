@@ -98,7 +98,7 @@ export class Soundscape {
     this.master.gain.value = this._context ? 0.9 : 0;
     this.master.connect(ctx.destination);
 
-    const brown = this._noiseBuffer(4, true);
+    const brown = (this.brown = this._noiseBuffer(4, true));
     const white = (this.white = this._noiseBuffer(3));
 
     // breeze: brown noise through a slowly wandering low-pass, with gusts
@@ -182,34 +182,230 @@ export class Soundscape {
   }
 
   /**
-   * A dry hinge: stick-slip, a train of tiny clicks whose rate wanders, each one ringing
-   * the wood of the door (two resonances), louder in the middle of the swing.
+   * A heavy oak door on old iron hinges: not a squeak but a low, slow groan. The hinge sticks
+   * and slips a few dozen times a second (a grainy texture rather than a whistle), and each slip
+   * rings the door's wood low down, with only a little of the hinge's metal above it.
    */
   _creakBuffer() {
     const ctx = this.ctx;
     const sr = ctx.sampleRate;
-    const len = Math.round(sr * 1.25);
+    const len = Math.round(sr * 1.3);
     const buf = ctx.createBuffer(1, len, sr);
     const d = buf.getChannelData(0);
-    let t = 0.02;
-    let n = 0;
-    while (t < 1.15) {
-      const u = t / 1.15;
-      const rate = 38 + 90 * Math.sin(u * Math.PI * 1.3 + 0.4) ** 2 + 25 * Math.sin(u * 23 + n * 0.3);
-      const amp = Math.sin(u * Math.PI) ** 0.6 * (0.6 + 0.4 * Math.random());
-      const i0 = Math.round(t * sr);
-      for (let i = 0; i < sr * 0.012 && i0 + i < len; i++) {
+    const ring = (i0, amp, pitch) => {
+      for (let i = 0; i < sr * 0.05 && i0 + i < len; i++) {
         const s = i / sr;
-        const ring = Math.sin(2 * Math.PI * 740 * s) * Math.exp(-s * 520) + 0.6 * Math.sin(2 * Math.PI * 1620 * s) * Math.exp(-s * 800) + 0.35 * Math.sin(2 * Math.PI * 310 * s) * Math.exp(-s * 300);
-        d[i0 + i] += ring * amp;
+        d[i0 + i] +=
+          amp *
+          (Math.sin(2 * Math.PI * 165 * pitch * s) * Math.exp(-s * 55) +
+            0.7 * Math.sin(2 * Math.PI * 310 * pitch * s) * Math.exp(-s * 110) +
+            0.35 * Math.sin(2 * Math.PI * 520 * pitch * s) * Math.exp(-s * 220) +
+            0.08 * Math.sin(2 * Math.PI * 1150 * pitch * s) * Math.exp(-s * 600));
       }
-      t += 1 / Math.max(25, rate);
+    };
+    let t = 0.03;
+    let n = 0;
+    while (t < 1.2) {
+      const u = t / 1.2;
+      // slow at first, quickening as the door gets going, slowing as it stops
+      const rate = 16 + 34 * Math.sin(u * Math.PI) ** 1.5 + 6 * Math.sin(u * 17 + n * 0.21);
+      const amp = Math.sin(u * Math.PI) ** 0.8 * (0.55 + 0.45 * Math.random());
+      ring(Math.round(t * sr), amp, 0.94 + 0.12 * Math.sin(u * 5.3));
+      t += 1 / Math.max(12, rate);
       n++;
+    }
+    // the air the door pushes: a soft sigh under it
+    for (let i = 0, lp = 0; i < len; i++) {
+      const u = i / len;
+      lp += ((Math.random() * 2 - 1) - lp) * 0.04;
+      d[i] += lp * 2.2 * Math.sin(Math.min(1, u * 1.1) * Math.PI) ** 2;
     }
     let peak = 0;
     for (let i = 0; i < len; i++) peak = Math.max(peak, Math.abs(d[i]));
     for (let i = 0; i < len; i++) d[i] /= peak || 1;
     return buf;
+  }
+
+  /** A splash: bright noise with a bubbling flutter, and the slosh of the water under it. */
+  _splash(t, level, len = 0.35) {
+    const ctx = this.ctx;
+    const src = ctx.createBufferSource();
+    src.buffer = this.white;
+    const am = ctx.createGain();
+    am.gain.value = 0.6;
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 16 + Math.random() * 16;
+    const depth = ctx.createGain();
+    depth.gain.value = 0.4;
+    lfo.connect(depth).connect(am.gain);
+    const e = ctx.createGain();
+    e.gain.setValueAtTime(0, t);
+    e.gain.linearRampToValueAtTime(level, t + 0.015);
+    e.gain.exponentialRampToValueAtTime(0.0001, t + len);
+    src.connect(this._filter('bandpass', 1400 + Math.random() * 1000, 0.9)).connect(am).connect(e).connect(this.master);
+    src.start(t, Math.random() * 2, len + 0.05);
+    lfo.start(t);
+    lfo.stop(t + len + 0.05);
+    const slosh = ctx.createBufferSource();
+    slosh.buffer = this.white;
+    const e2 = ctx.createGain();
+    e2.gain.setValueAtTime(0, t);
+    e2.gain.linearRampToValueAtTime(level * 1.5, t + 0.05);
+    e2.gain.exponentialRampToValueAtTime(0.0001, t + len * 1.35);
+    slosh.connect(this._filter('lowpass', 420, 1.2)).connect(e2).connect(this.master);
+    slosh.start(t, Math.random() * 2, len * 1.35 + 0.05);
+  }
+
+  /** A ghost's moan at `position`: a low, wavering "ooh", rising a little, then sliding away. */
+  moan(position) {
+    if (!this.on) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime + 0.05;
+    const out = this._placed(position, { ref: 4, rolloff: 1.2 });
+    const o = ctx.createOscillator();
+    o.type = 'sawtooth';
+    const f0 = 140 + Math.random() * 60;
+    o.frequency.setValueAtTime(f0, t);
+    o.frequency.linearRampToValueAtTime(f0 * 1.12, t + 0.9);
+    o.frequency.linearRampToValueAtTime(f0 * 0.8, t + 2.7);
+    const vib = ctx.createOscillator();
+    vib.frequency.value = 5 + Math.random();
+    const vg = ctx.createGain();
+    vg.gain.value = f0 * 0.025;
+    vib.connect(vg).connect(o.frequency);
+    // an "oo" vowel: two narrow resonances
+    const e = ctx.createGain();
+    e.gain.setValueAtTime(0, t);
+    e.gain.linearRampToValueAtTime(0.1, t + 0.8);
+    e.gain.linearRampToValueAtTime(0.0001, t + 2.9);
+    o.connect(this._filter('bandpass', 450, 7)).connect(e);
+    o.connect(this._filter('bandpass', 880, 9)).connect(e);
+    e.connect(out);
+    o.start(t);
+    vib.start(t);
+    o.stop(t + 3);
+    vib.stop(t + 3);
+  }
+
+  /** The bonfire: a low roar and the crackle of the wood, at `position` (level 0 puts it out). */
+  setBonfire(position, level) {
+    if (!this.on || !this.ctx) return;
+    const t = this.ctx.currentTime;
+    if (!position || level < 0.01) {
+      this._fireGain?.gain.setTargetAtTime(0, t, 0.4);
+      return;
+    }
+    if (!this._fireGain) {
+      this._fireOut = this._placed(position, { ref: 3, rolloff: 1 });
+      this._fireGain = this.ctx.createGain();
+      this._fireGain.gain.value = 0;
+      this._loop(this.brown).connect(this._filter('lowpass', 420, 0.8)).connect(this._fireGain).connect(this._fireOut);
+    }
+    this._fireGain.gain.setTargetAtTime(0.5 * level, t, 0.4);
+    if (t > (this._nextCrackle ?? 0)) {
+      const src = this.ctx.createBufferSource();
+      src.buffer = this.white;
+      const e = this.ctx.createGain();
+      e.gain.setValueAtTime(0.25 * level * (0.4 + Math.random()), t);
+      e.gain.exponentialRampToValueAtTime(0.0001, t + 0.02 + Math.random() * 0.03);
+      src.connect(this._filter('bandpass', 1800 + Math.random() * 2600, 2)).connect(e).connect(this._fireOut);
+      src.start(t, Math.random() * 2, 0.06);
+      this._nextCrackle = t + 0.02 + Math.random() * (Math.random() < 0.2 ? 0.02 : 0.2);
+    }
+  }
+
+  /** A rocket going up from `position`: a rising whistle over `time` seconds, and its rush. */
+  rocket(position, time) {
+    if (!this.on) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const out = this._placed(position, { ref: 20, rolloff: 0.7, max: 600 });
+    const o = ctx.createOscillator();
+    o.frequency.setValueAtTime(700 + Math.random() * 300, t);
+    o.frequency.exponentialRampToValueAtTime(2200 + Math.random() * 900, t + time);
+    const e = ctx.createGain();
+    e.gain.setValueAtTime(0, t);
+    e.gain.linearRampToValueAtTime(Math.random() < 0.5 ? 0.025 : 0, t + 0.1);
+    e.gain.linearRampToValueAtTime(0.0001, t + time);
+    o.connect(e).connect(out);
+    o.start(t);
+    o.stop(t + time + 0.05);
+    const src = ctx.createBufferSource();
+    src.buffer = this.white;
+    const e2 = ctx.createGain();
+    e2.gain.setValueAtTime(0.12, t);
+    e2.gain.exponentialRampToValueAtTime(0.0001, t + time * 0.7);
+    src.connect(this._filter('bandpass', 1400, 0.8)).connect(e2).connect(out);
+    src.start(t, Math.random() * 2, time);
+  }
+
+  /** A burst at `position`, `distance` metres away: heard that much later, a deep boom and a crack, and sometimes a crackle. */
+  bang(position, distance) {
+    if (!this.on) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime + distance / 343;
+    const out = this._placed(position, { ref: 30, rolloff: 0.6, max: 800 });
+    const boom = ctx.createBufferSource();
+    boom.buffer = this.brown;
+    const e = ctx.createGain();
+    e.gain.setValueAtTime(1.6, t);
+    e.gain.exponentialRampToValueAtTime(0.0001, t + 1.4);
+    boom.connect(this._filter('lowpass', 200, 0.9)).connect(e).connect(out);
+    boom.start(t, Math.random() * 2, 1.5);
+    const crack = ctx.createBufferSource();
+    crack.buffer = this.white;
+    const e2 = ctx.createGain();
+    e2.gain.setValueAtTime(0.5, t);
+    e2.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+    crack.connect(this._filter('highpass', 900)).connect(e2).connect(out);
+    crack.start(t, Math.random() * 2, 0.15);
+    if (Math.random() < 0.35) {
+      for (let k = 0; k < 24; k++) {
+        const c = ctx.createBufferSource();
+        c.buffer = this.white;
+        const at = t + 0.4 + Math.random() * 1.4;
+        const ce = ctx.createGain();
+        ce.gain.setValueAtTime(0.08 + Math.random() * 0.1, at);
+        ce.gain.exponentialRampToValueAtTime(0.0001, at + 0.03);
+        c.connect(this._filter('bandpass', 2500 + Math.random() * 3000, 3)).connect(ce).connect(out);
+        c.start(at, Math.random() * 2, 0.05);
+      }
+    }
+  }
+
+  /** Leaving the ground: a harder push-off on whatever you stand on, and the swish of moving. */
+  jump(surface = 'stone') {
+    if (!this.on) return;
+    this.footstep(surface, 4.6);
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const src = ctx.createBufferSource();
+    src.buffer = this.white;
+    const e = ctx.createGain();
+    e.gain.setValueAtTime(0, t);
+    e.gain.linearRampToValueAtTime(0.035, t + 0.05);
+    e.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+    src.connect(this._filter('lowpass', 700, 0.8)).connect(e).connect(this.master);
+    src.start(t, Math.random() * 2, 0.25);
+  }
+
+  /** Coming down: the thud of landing (heavier after a longer fall), and the surface. */
+  land(surface = 'stone', air = 0.5) {
+    if (!this.on) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const k = Math.min(1.6, 0.6 + air);
+    if (surface === 'water') return this._splash(t, 0.16 * k, 0.55);
+    const o = ctx.createOscillator();
+    o.frequency.setValueAtTime(95, t);
+    o.frequency.exponentialRampToValueAtTime(45, t + 0.12);
+    const e = ctx.createGain();
+    e.gain.setValueAtTime(0.22 * k, t);
+    e.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+    o.connect(e).connect(this.master);
+    o.start(t);
+    o.stop(t + 0.18);
+    this.footstep(surface, 5 * k);
   }
 
   _bird(t) {
@@ -309,6 +505,10 @@ export class Soundscape {
     if (!this.on) return;
     const ctx = this.ctx;
     const t = ctx.currentTime;
+    // wading: a splash with every step
+    if (surface === 'water') return this._splash(t, 0.075 * Math.min(1.4, speed / 3), 0.32);
+    // ice: a hard, glassy tap
+    if (surface === 'ice') surface = 'stone';
     const src = ctx.createBufferSource();
     src.buffer = this.white;
     // snow on the ground: a soft, squeaky crunch outdoors
@@ -340,18 +540,19 @@ export class Soundscape {
       const e = ctx.createGain();
       e.gain.setValueAtTime(level, at);
       e.gain.exponentialRampToValueAtTime(0.0001, at + 0.035);
-      src.connect(this._filter('bandpass', 2600, 5)).connect(e).connect(out);
+      // an iron latch: a dull clack, not a tick
+      src.connect(this._filter('bandpass', 1300, 3)).connect(e).connect(out);
       src.start(at, Math.random() * 2, 0.05);
     };
     if (opening) {
-      click(t, 0.5);
+      click(t, 0.35);
       const src = ctx.createBufferSource();
       src.buffer = this.creak;
-      src.playbackRate.value = 0.85 + Math.random() * 0.3;
+      src.playbackRate.value = 0.92 + Math.random() * 0.12;
       const e = ctx.createGain();
-      e.gain.value = 0.55;
-      src.connect(this._filter('highpass', 180)).connect(e).connect(out);
-      src.start(t + 0.08);
+      e.gain.value = 0.5;
+      src.connect(this._filter('highpass', 60)).connect(this._filter('lowpass', 2400)).connect(e).connect(out);
+      src.start(t + 0.1);
     } else {
       // the weight of the door meeting its frame, then the latch dropping
       const src = ctx.createBufferSource();
@@ -393,7 +594,20 @@ export class Soundscape {
    *   rain, windy (weather, 0..1); frozen (the fountain); speed (camera, m/s); flyby (bool)
    */
   update(dt, camera, env) {
-    const { night, inside, dusk = 0, birds = 1, crickets = 1, snow = 0, rain = 0, windy = 0, frozen = 0, speed = 0, flyby = false } = env;
+    // (every level is a number between 0 and 1, speed at least 0: one bad value would otherwise
+    // stop every sound with an error, frame after frame)
+    const unit = (v, d = 0) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : d);
+    const night = unit(env.night);
+    const inside = unit(env.inside);
+    const dusk = unit(env.dusk);
+    const birds = unit(env.birds, 1);
+    const crickets = unit(env.crickets, 1);
+    const snow = unit(env.snow);
+    const rain = unit(env.rain);
+    const windy = unit(env.windy);
+    const frozen = unit(env.frozen);
+    const speed = Number.isFinite(env.speed) ? Math.max(0, env.speed) : 0;
+    const flyby = !!env.flyby;
     this.snow = snow;
     if (!this.on || !this.ctx) return;
     const t = this.ctx.currentTime;

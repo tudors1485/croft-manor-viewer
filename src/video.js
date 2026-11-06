@@ -91,34 +91,36 @@ function drawOverlay(g, W, H, f, frame, flyFrames, label, clock = '') {
     }
   }
 
-  // the links and the credit, in the bottom bar, all the way through: big enough to read on a
-  // phone (a 1080-wide frame is shown about 400 pixels wide there)
+  // the site, as a watermark over the picture (in a reel, high enough to clear Instagram's
+  // caption), all the way through until the end card
+  if (frame < flyFrames + FPS * 0.8) {
+    g.save();
+    g.globalAlpha = 0.62 * Math.max(0, 1 - Math.max(0, frame - flyFrames) / (FPS * 0.8));
+    g.font = `700 ${Math.round((portrait ? 54 : 46) * u)}px ${sans}`;
+    g.fillStyle = '#ffffff';
+    g.shadowColor = 'rgba(0, 0, 0, 0.55)';
+    g.shadowBlur = 10 * u;
+    g.shadowOffsetY = 2 * u;
+    if (portrait) {
+      g.textAlign = 'center';
+      g.fillText(CREDITS.site, W / 2, H - bar - 300 * u);
+    } else {
+      g.textAlign = 'right';
+      g.fillText(CREDITS.site, W - 56 * u, H - bar - 44 * u);
+    }
+    g.restore();
+  }
+
+  // the GitHub link and the credit, in the bottom bar, all the way through: big enough to read on
+  // a phone (a 1080-wide frame is shown about 400 pixels wide there)
   const credit = `${CREDITS.free} · ${CREDITS.model.replace('Model: ', '')}`;
   g.textAlign = 'center';
-  if (portrait) {
-    g.fillStyle = '#f3e7c9';
-    g.font = `600 ${Math.round(40 * u)}px ${sans}`;
-    g.fillText(CREDITS.site, W / 2, H - bar + bar * 0.24);
-    g.fillStyle = 'rgba(243, 231, 201, 0.92)';
-    g.font = `500 ${Math.round(31 * u)}px ${sans}`;
-    fitText(g, `${CREDITS.githubCall}: ${CREDITS.github}`, W / 2, H - bar + bar * 0.53, W * 0.94);
-    g.fillStyle = 'rgba(243, 231, 201, 0.7)';
-    g.font = `400 ${Math.round(26 * u)}px ${sans}`;
-    fitText(g, credit, W / 2, H - bar + bar * 0.8, W * 0.94);
-  } else {
-    // two rows: the links on either side, the credit under them
-    g.fillStyle = 'rgba(243, 231, 201, 0.95)';
-    g.font = `600 ${Math.round(30 * u)}px ${sans}`;
-    g.textAlign = 'left';
-    g.fillText(CREDITS.site, bar * 0.6, H - bar + bar * 0.36);
-    g.textAlign = 'right';
-    g.font = `500 ${Math.round(28 * u)}px ${sans}`;
-    g.fillText(`${CREDITS.githubCall}: ${CREDITS.github}`, W - bar * 0.6, H - bar + bar * 0.36);
-    g.textAlign = 'center';
-    g.fillStyle = 'rgba(243, 231, 201, 0.7)';
-    g.font = `400 ${Math.round(22 * u)}px ${sans}`;
-    g.fillText(credit, W / 2, H - bar + bar * 0.76);
-  }
+  g.fillStyle = 'rgba(243, 231, 201, 0.95)';
+  g.font = `500 ${Math.round((portrait ? 31 : 30) * u)}px ${sans}`;
+  fitText(g, `${CREDITS.githubCall}: ${CREDITS.github}`, W / 2, H - bar + bar * 0.38, W * 0.94);
+  g.fillStyle = 'rgba(243, 231, 201, 0.7)';
+  g.font = `400 ${Math.round((portrait ? 26 : 23) * u)}px ${sans}`;
+  fitText(g, credit, W / 2, H - bar + bar * 0.74, W * 0.94);
 
   // the end card: the picture fades to black, then the links and the credits
   if (frame >= flyFrames) {

@@ -160,6 +160,9 @@ export class Walker {
     this.bobAmount = 0;
     this.lastStepPhase = 0;
     this.onFootstep = null; // callback(speed)
+    this.onJump = null; // callback() as you leave the ground
+    this.onLand = null; // callback(seconds in the air) as you come down
+    this._air = 0;
     this.obstacles = []; // tree trunks: { x, z, r }
     this.skipTriangle = null; // (triangleIndex) => true for surfaces you can pass (open doors)
     this.ghost = false; // through walls: only floors and ceilings hold you
@@ -259,6 +262,7 @@ export class Walker {
     if (input.jump && this.onGround) {
       this.vel.y = this.jumpSpeed;
       this.onGround = false;
+      this.onJump?.();
     }
 
     // through walls, over rooms that were never built: hold your height rather than fall
@@ -344,6 +348,13 @@ export class Walker {
     }
 
     if (this.feet.y < -40) return 'fell';
+
+    // coming down after a jump or a drop
+    if (!this.onGround) this._air += dt;
+    else {
+      if (this._air > 0.18) this.onLand?.(this._air);
+      this._air = 0;
+    }
 
     // camera: smooth out steps, add a little head bob
     const eyeY = this.feet.y + this.eye;

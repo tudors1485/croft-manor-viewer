@@ -293,6 +293,9 @@ body.flyby .film-bar {
   z-index: 7;
 }
 
+#panel .row.lights {
+  grid-template-columns: auto 1fr;
+}
 #panel .light-buttons {
   display: flex;
   gap: 6px;
@@ -516,6 +519,11 @@ body.touring #dock {
 }
 #panel .pills button.on span {
   color: #4a3d1a;
+}
+#panel .record-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 #panel button.record {
   display: flex;

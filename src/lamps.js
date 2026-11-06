@@ -274,10 +274,13 @@ export class Lamps {
     }
   }
 
-  /** The whole house's switch: off puts out every light; on hands them back to the evening and bedtime. */
+  /**
+   * The house's switch: off puts out every light inside the house at once (the porch lantern and
+   * the floodlights outside stay on); on hands them back to the evening and bedtime.
+   */
   setHouse(on) {
     this.houseOn = on;
-    for (const l of this.lights) l.manual = null;
+    for (const l of this.lights) if (!l.outdoor) l.manual = null;
   }
 
   /**
@@ -380,7 +383,7 @@ export class Lamps {
       // in bed from its bedtime until half past six, unless you are in the house (then the lights
       // inside come back on: nobody wants to walk round a dark house)
       const asleep = l.bedtime != null && now >= sinceNoon(l.bedtime) && now < sinceNoon(6.5) && !(inside && !l.outdoor);
-      const auto = this.houseOn !== false && !asleep ? level : 0;
+      const auto = (this.houseOn !== false || l.outdoor) && !asleep ? level : 0;
       // a light switched on by hand shines by day too
       const want = l.manual === true ? 1 : l.manual === false ? 0 : auto;
       this._want[i] = want;
