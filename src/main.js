@@ -6,7 +6,7 @@ import { Walker, buildCollider, moveSphere, firstHit, meshAtFace } from './walk.
 import { Doors } from './doors.js';
 import { setupWater } from './water.js';
 import { placeIvy } from './ivy.js';
-import { TimeOfDay, sunAt } from './sky.js';
+import { TimeOfDay } from './sky.js';
 import { Lamps } from './lamps.js';
 import { Landscape, makeTerrain, makeHillHeight } from './landscape.js';
 import { installGrade } from './look.js';
@@ -335,9 +335,7 @@ function startTour(id = null) {
   tour.lapseOver = id && $('flyby-scenes').checked ? SCENES : null;
   const lapse = id && (tour.lapseOver ?? FLYBYS[id].lapse);
   playingLapse = lapse || null;
-  // a day flyby runs from midday to just after sunset, on whatever the date is
-  lapseRange = lapse?.what === 'hours' ? middayToSunset(seasonDay) : null;
-  // the seasons flyby cuts between its scenes in a new order each time (never the same one twice running)
+  // the seasons cut between their scenes in a new order each time (never the same one twice running)
   sceneOrder = lapse?.what === 'scenes' ? shuffled(lapse.scenes.length) : null;
   sceneShown = -1;
   if (lapse) {
@@ -389,21 +387,9 @@ function leaveTour() {
     setMode(r.mode === 'tour' ? 'orbit' : r.mode);
   } else setMode('orbit');
 }
-let lapseRange = null;
 let playingLapse = null; // the time-lapse the running flyby plays (its own, or the seasons laid over it)
 let sceneOrder = null;
 let sceneShown = -1;
-/** Midday to just after sunset on a day (the lamps come on as it ends). */
-function middayToSunset(day) {
-  let set = 18;
-  let prev = null;
-  for (let h = 12; h <= 24; h += 1 / 30) {
-    const e = sunAt(h, day).elevation;
-    if (prev !== null && prev >= 0 && e < 0) set = h;
-    prev = e;
-  }
-  return { from: 12, to: Math.min(23.9, set + 0.45) };
-}
 /** 0..n-1 in a random order. */
 function shuffled(n) {
   const a = [...Array(n).keys()];
@@ -413,7 +399,7 @@ function shuffled(n) {
   }
   return a;
 }
-/** A time-lapse flyby moves the clock or the calendar (or the weather) with its progress. */
+/** With seasons and weathers: the flyby cuts to another season, time and weather every few seconds. */
 function applyLapse(l) {
   if (l.what === 'scenes') {
     // a cut to another season, time and weather every few seconds, all at once: the trees, the
@@ -437,25 +423,6 @@ function applyLapse(l) {
     wet = Math.min(1, weather.rain * 3);
     $('time-label').textContent = tod.label();
     $('bar-clock').textContent = `${dateLabel(sc.day)} · ${WEATHERS[sc.weather]}`;
-    return;
-  }
-  if (l.what === 'hours') {
-    const r = lapseRange ?? l;
-    const h = r.from + (r.to - r.from) * l.progress;
-    $('time').value = String(h);
-    tod.hours = h;
-    tod.update();
-    $('time-label').textContent = tod.label();
-    $('bar-clock').textContent = tod.label();
-  } else {
-    seasonDay = (l.from + (l.to - l.from) * l.progress) % 365;
-    $('season').value = String(Math.floor(seasonDay));
-    if (l.hours != null && tod.hours !== l.hours) {
-      $('time').value = String(l.hours);
-      tod.hours = l.hours;
-    }
-    updateSeason(false);
-    $('bar-clock').textContent = dateLabel(seasonDay);
   }
 }
 $('tour').onclick = (e) => {
@@ -725,7 +692,7 @@ loader.load(
     model.traverse((o) => o.isMesh && !/water/i.test(o.material.name || '') && skyMeshes.push(o));
     buildSkyMap(renderer, scene, skyMeshes, lawn.clone().expandByVector(new THREE.Vector3(10, 0, 10)));
 
-    const overviewPos = modelCentre.clone().add(new THREE.Vector3(size.x * 0.75, size.y * 3.5 + 25, size.z * 0.65));
+    const overviewPos = modelCentre.clone().add(new THREE.Vector3(size.x * 0.75, size.y * 3.5 + 25, size.z * 0.65).multiplyScalar(0.78));
     viewpoints[0][1] = overviewPos;
     viewpoints[0][2] = modelCentre.clone();
     // you start on the drive, looking past the fountain at the house (on foot once walking is ready)
@@ -1242,7 +1209,7 @@ const videoApp = {
   /** What the top bar says on this frame: the time or the date in a time-lapse flyby. */
   clock() {
     const l = tour.lapse;
-    return !l ? '' : l.what === 'hours' ? tod.label() : l.what === 'scenes' ? $('bar-clock').textContent : dateLabel(seasonDay);
+    return l ? $('bar-clock').textContent : '';
   },
   end() {
     leaveTour();

@@ -8,6 +8,11 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.18.1, 6 November 2026
+
+- The seasons and weathers are the tick box's alone now: the flyby that had them is plain *Circling the manor* (the same spin round the house), and *A day at the manor* is gone.
+- Go to a place: *Overview* and *Over the gate* are a little closer.
+
 ## 0.18.0, 6 November 2026
 
 - *With seasons and weathers*, a tick box under the flybys: any flyby (and a video of it) cuts to another season, time and weather every three seconds, in a different order each time, as the *Seasons and weathers* flyby does. Over the estate with it ticked gives that flyby's motion with the cuts. Leaving puts the date, time and weather back.

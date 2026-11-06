@@ -1,5 +1,5 @@
 [
-  {"name": "Over the gate", "pos": [4.5, 24, 66], "target": [4, 3, -8]},
+  {"name": "Over the gate", "pos": [4.4, 20, 52], "target": [4, 3, -8]},
   {"name": "Straight down", "pos": [5, 165, -21], "target": [5, 0, -21.5]},
   {"name": "Front of the house", "pos": [-3.2, 2.4, 9.8], "target": [-1.2, 5, -11]},
   {"name": "Fountain", "pos": [4.6, 2.6, 15.8], "target": [4.6, 2, 8.4]},

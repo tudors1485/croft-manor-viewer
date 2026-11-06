@@ -176,17 +176,10 @@ export const FLYBYS = {
       k([4.6, 36, 35], [4.1, 1, -16], { speed: 0.8 }),
     ],
   },
-  day: {
-    label: 'A day at the manor',
-    // the clock runs from midday to just after sunset (the lamps coming on) while it flies
-    lapse: { what: 'hours', from: 12, to: 18 },
-    keys: circuit(0.35, 62, 26, 0.5),
-  },
-  seasons: {
-    label: 'Seasons and weathers',
-    // from the front of the house, spinning round, while it cuts every few seconds to another
-    // season and weather, in a different order each time
-    lapse: SCENES,
+  circle: {
+    label: 'Circling the manor',
+    // from the front of the house, spinning round it twice, high up (with "With seasons and
+    // weathers" ticked, the seasons cut by as it goes)
     keys: circuit(0, 66, 28, 2, 17),
   },
   hall: {
