@@ -99,6 +99,28 @@ function circuit(start, radius, height, turns = 1, speed = 6) {
   return keys;
 }
 
+// The cuts of the seasons-and-weathers flyby, also laid over any other flyby when the panel's
+// "With seasons and weathers" is ticked: every few seconds another season, time and weather.
+export const SCENES = {
+  what: 'scenes',
+  every: 3,
+  scenes: [
+    { day: 95, hours: 12, weather: 'overcast' }, // early spring, grey
+    { day: 112, hours: 13, weather: 'rain' }, // an April shower
+    { day: 128, hours: 13, weather: 'clouds' }, // spring, fluffy clouds
+    { day: 165, hours: 14, weather: 'clear' }, // early summer
+    { day: 196, hours: 19.5, weather: 'clear' }, // a summer evening
+    { day: 232, hours: 15, weather: 'clouds' }, // late summer
+    { day: 290, hours: 13, weather: 'clear' }, // autumn gold
+    { day: 300, hours: 14, weather: 'rain' }, // autumn rain
+    { day: 318, hours: 9, weather: 'fog' }, // a November morning
+    { day: 340, hours: 15.5, weather: 'overcast' }, // December dusk
+    { day: 8, hours: 12, weather: 'snow' }, // snowing
+    { day: 16, hours: 13, weather: 'clear' }, // snow lying, blue sky
+    { day: 26, hours: 10, weather: 'fog' }, // freezing fog
+  ],
+};
+
 export const FLYBYS = {
   estate: {
     label: 'Over the estate',
@@ -164,25 +186,7 @@ export const FLYBYS = {
     label: 'Seasons and weathers',
     // from the front of the house, spinning round, while it cuts every few seconds to another
     // season and weather, in a different order each time
-    lapse: {
-      what: 'scenes',
-      every: 3,
-      scenes: [
-        { day: 95, hours: 12, weather: 'overcast' }, // early spring, grey
-        { day: 112, hours: 13, weather: 'rain' }, // an April shower
-        { day: 128, hours: 13, weather: 'clouds' }, // spring, fluffy clouds
-        { day: 165, hours: 14, weather: 'clear' }, // early summer
-        { day: 196, hours: 19.5, weather: 'clear' }, // a summer evening
-        { day: 232, hours: 15, weather: 'clouds' }, // late summer
-        { day: 290, hours: 13, weather: 'clear' }, // autumn gold
-        { day: 300, hours: 14, weather: 'rain' }, // autumn rain
-        { day: 318, hours: 9, weather: 'fog' }, // a November morning
-        { day: 340, hours: 15.5, weather: 'overcast' }, // December dusk
-        { day: 8, hours: 12, weather: 'snow' }, // snowing
-        { day: 16, hours: 13, weather: 'clear' }, // snow lying, blue sky
-        { day: 26, hours: 10, weather: 'fog' }, // freezing fog
-      ],
-    },
+    lapse: SCENES,
     keys: circuit(0, 66, 28, 2, 17),
   },
   hall: {
@@ -393,13 +397,16 @@ export class Tour {
     }
   }
 
-  /** The running flyby's time-lapse ({ what, from, to }) and how far through it is (0..1), or null. */
+  /**
+   * The running flyby's time-lapse ({ what, from, to } or the scenes) and how far through it is
+   * (0..1), or null. `lapseOver` lays one over a flyby that has none (or replaces its own).
+   */
   get lapse() {
     if (!this.running || !this.flyby) return null;
-    const f = FLYBYS[this.flybyId];
-    if (!f?.lapse) return null;
+    const l = this.lapseOver ?? FLYBYS[this.flybyId]?.lapse;
+    if (!l) return null;
     const move = this.moves[0];
-    return { ...f.lapse, progress: THREE.MathUtils.clamp(this.t / move.duration, 0, 1), seconds: this.t };
+    return { ...l, progress: THREE.MathUtils.clamp(this.t / move.duration, 0, 1), seconds: this.t };
   }
 
   /** Returns false when it has ended. */

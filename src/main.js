@@ -12,7 +12,7 @@ import { Landscape, makeTerrain, makeHillHeight } from './landscape.js';
 import { installGrade } from './look.js';
 import { Quality } from './quality.js';
 import { tuneMaterials, GRASS_TINT, grassShader, TINTS, buildSkyMap } from './materials.js';
-import { Tour, FLYBYS, checkPath } from './tour.js';
+import { Tour, FLYBYS, SCENES, checkPath } from './tour.js';
 import { Soundscape } from './sound.js';
 import { seasonAt, seasonUniforms, dateLabel, Snowfall } from './season.js';
 import { weatherAt, WEATHERS, Rainfall } from './weather.js';
@@ -331,7 +331,10 @@ function startTour(id = null) {
     };
   } else setMode('orbit'); // (from one flyby straight to another)
   flybyId = id;
-  const lapse = id && FLYBYS[id].lapse;
+  // (with "With seasons and weathers" ticked, any flyby cuts through the seasons as it flies)
+  tour.lapseOver = id && $('flyby-scenes').checked ? SCENES : null;
+  const lapse = id && (tour.lapseOver ?? FLYBYS[id].lapse);
+  playingLapse = lapse || null;
   // a day flyby runs from midday to just after sunset, on whatever the date is
   lapseRange = lapse?.what === 'hours' ? middayToSunset(seasonDay) : null;
   // the seasons flyby cuts between its scenes in a new order each time (never the same one twice running)
@@ -351,6 +354,9 @@ function leaveTour() {
   if (mode !== 'tour') return;
   const r = tourReturn;
   tourReturn = null;
+  const lapsedNow = playingLapse;
+  playingLapse = null;
+  tour.lapseOver = null;
   $('bar-clock').hidden = true;
   if (forcedWeather) {
     forcedWeather = null;
@@ -359,7 +365,7 @@ function leaveTour() {
   }
   if (r) {
     // the time and the date as they were before a time-lapse flyby
-    const lapsed = flybyId && FLYBYS[flybyId].lapse;
+    const lapsed = flybyId && lapsedNow;
     if (lapsed) {
       $('time').value = String(r.clock.hours);
       seasonDay = r.clock.day;
@@ -384,6 +390,7 @@ function leaveTour() {
   } else setMode('orbit');
 }
 let lapseRange = null;
+let playingLapse = null; // the time-lapse the running flyby plays (its own, or the seasons laid over it)
 let sceneOrder = null;
 let sceneShown = -1;
 /** Midday to just after sunset on a day (the lamps come on as it ends). */
@@ -1213,6 +1220,7 @@ const videoApp = {
     quality.setFixedSize(f.w, f.h);
     camera.aspect = f.w / f.h;
     startTour(this.flyby);
+    this._lapsed = !!playingLapse;
     camera.fov = f.fov; // a portrait frame needs a taller lens to see as much
     camera.updateProjectionMatrix();
     videoDoorEvents = [];
@@ -1241,7 +1249,7 @@ const videoApp = {
     quality.setFixedSize(null);
     camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
-    if (!FLYBYS[this.flyby].lapse) liveClock = this._saved.live;
+    if (!this._lapsed) liveClock = this._saved.live;
     if (this._saved.sound) sound.enable();
     exporting = false;
   },

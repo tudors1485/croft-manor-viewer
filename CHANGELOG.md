@@ -8,6 +8,10 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.18.0, 6 November 2026
+
+- *With seasons and weathers*, a tick box under the flybys: any flyby (and a video of it) cuts to another season, time and weather every three seconds, in a different order each time, as the *Seasons and weathers* flyby does. Over the estate with it ticked gives that flyby's motion with the cuts. Leaving puts the date, time and weather back.
+
 ## 0.17.0, 6 November 2026
 
 - Flybys:
