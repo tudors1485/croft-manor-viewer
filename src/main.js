@@ -11,6 +11,8 @@ import { Landscape, makeTerrain, makeHillHeight } from './landscape.js';
 import { installGrade } from './look.js';
 import { Quality } from './quality.js';
 import { tuneMaterials, GRASS_TINT } from './materials.js';
+import { Tour } from './tour.js';
+import { Soundscape } from './sound.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('view');
@@ -60,6 +62,14 @@ const keys = new Set();
 let mode = 'orbit';
 
 let walker = null; // set once the collision tree is ready
+const sound = new Soundscape();
+const tour = new Tour(camera, (text) => {
+  const el = $('caption');
+  el.classList.remove('show');
+  if (!text) return;
+  el.textContent = text;
+  requestAnimationFrame(() => el.classList.add('show'));
+});
 // where Walk mode starts if you switch to it from high up: the drive, facing the front door
 const SPAWN = { eye: new THREE.Vector3(-3, 1.7, 17), look: new THREE.Vector3(2.5, 1.8, -12) };
 
@@ -72,13 +82,24 @@ function setMode(next) {
   const prev = mode;
   mode = next;
   for (const m of ['orbit', 'walk', 'fly']) $(`mode-${m}`).classList.toggle('on', mode === m);
+  $('tour').classList.toggle('on', mode === 'tour');
+  $('tour').textContent = mode === 'tour' ? 'Stop the tour' : 'Take the tour';
+  document.body.classList.toggle('touring', mode === 'tour');
+  $('tour-stop').hidden = mode !== 'tour';
   $('help-orbit').hidden = mode !== 'orbit';
   $('help-walk').hidden = mode !== 'walk';
   $('help-fly').hidden = mode !== 'fly';
   orbit.enabled = mode === 'orbit';
   flight = null;
+  if (mode === 'tour') {
+    look.unlock();
+    tour.start();
+  } else if (prev === 'tour') {
+    tour.stop();
+  }
   if (mode === 'orbit') {
     look.unlock();
+    camera.up.set(0, 1, 0);
     // put the orbit target a few metres in front of the camera so it carries on from here
     const fwd = new THREE.Vector3();
     camera.getWorldDirection(fwd);
@@ -104,11 +125,25 @@ for (const m of ['orbit', 'walk', 'fly']) {
   };
 }
 function updateLockHint() {
-  $('lock-hint').hidden = !(mode !== 'orbit' && !look.isLocked);
-  $('crosshair').hidden = !(mode !== 'orbit' && look.isLocked);
+  const free = mode === 'walk' || mode === 'fly';
+  $('lock-hint').hidden = !(free && !look.isLocked);
+  $('crosshair').hidden = !(free && look.isLocked);
 }
+$('tour').onclick = (e) => {
+  setMode(mode === 'tour' ? 'orbit' : 'tour');
+  e.currentTarget.blur();
+};
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Escape' && mode === 'tour') setMode('orbit');
+});
+$('tour-stop').onclick = () => setMode('orbit');
+$('sound').addEventListener('change', async (e) => {
+  if (e.target.checked) await sound.enable();
+  else sound.disable();
+  e.target.blur();
+});
 canvas.addEventListener('click', () => {
-  if (mode !== 'orbit' && !look.isLocked) look.lock();
+  if ((mode === 'walk' || mode === 'fly') && !look.isLocked) look.lock();
 });
 $('lock-hint').addEventListener('click', () => look.lock());
 window.addEventListener('keydown', (e) => {
@@ -338,7 +373,18 @@ async function prepareWalking(ground) {
     console.info(`landscape: ${st.trees} trees, ${st.bushes} bushes, ${st.billboards} far trees, ${Math.round(st.triangles / 1000)}k triangles, ${st.ms} ms`);
     $('stats-base').textContent = `${Math.round((modelTris + st.triangles) / 1000).toLocaleString('en-GB')}k triangles`;
   });
-  walker.onFootstep = (speed) => window.dispatchEvent(new CustomEvent('footstep', { detail: { speed } }));
+  const surfaceRay = new THREE.Raycaster();
+  const surfaces = [];
+  model.traverse((o) => o.isMesh && surfaces.push(o));
+  walker.onFootstep = (speed) => {
+    if (!sound.on) return;
+    surfaceRay.set(new THREE.Vector3(walker.feet.x, walker.feet.y + 0.3, walker.feet.z), new THREE.Vector3(0, -1, 0));
+    surfaceRay.far = 0.6;
+    const hit = surfaceRay.intersectObjects(surfaces, false)[0];
+    const name = hit?.object.material.name ?? 'cm_grass';
+    const surface = /grass|sand/.test(name) ? 'grass' : /gravel/.test(name) ? 'gravel' : 'stone';
+    sound.footstep(surface, speed);
+  };
   const secs = ((performance.now() - t0) / 1000).toFixed(1);
   console.info(`collision tree ready in ${secs} s`);
   $('walk-status').textContent = '';
@@ -388,6 +434,11 @@ timer.connect(document);
 let frames = 0;
 let fpsTime = 0;
 let elapsed = 0;
+let wantPicture = false;
+$('picture').onclick = (e) => {
+  wantPicture = true;
+  e.currentTarget.blur();
+};
 renderer.setAnimationLoop((time) => {
   timer.update(time);
   const dt = Math.min(timer.getDelta(), 0.1);
@@ -408,7 +459,10 @@ renderer.setAnimationLoop((time) => {
     tod.applyAmbient();
   }
   if (landscape) landscape.update(dt, tod);
-  if (mode === 'orbit') {
+  sound.update(dt, camera, { night: tod.night, inside: tod.inside });
+  if (mode === 'tour') {
+    if (!tour.update(dt)) setMode('orbit');
+  } else if (mode === 'orbit') {
     stepFlight(dt);
     orbit.update();
   } else if (mode === 'walk') {
@@ -422,6 +476,18 @@ renderer.setAnimationLoop((time) => {
     if (water.jet) water.jet.material.map.offset.y -= dt * 1.4;
   }
   quality.render(dt);
+  if (wantPicture) {
+    // read the canvas in the same task as the render, before the browser clears it
+    wantPicture = false;
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `croft-manor-${tod.label().replace(':', '')}.png`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    }, 'image/png');
+  }
   frames++;
   fpsTime += dt;
   if (fpsTime > 0.5) {
@@ -458,6 +524,8 @@ window.manor = {
   tod,
   LOOK,
   quality,
+  tour,
+  sound,
   dev: {
     measureTrees: () => import('./dev/measure-trees.js').then((m) => m.measure()),
   },

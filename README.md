@@ -55,6 +55,13 @@ The result is about 83 MB: 36 MB of textures and 47 MB of geometry, with 763k tr
   - *Fast* switches it off.
   - Resolution steps down when the frame rate drops below 38 fps and back up above 57.
   - N8AO 2.0.1 needs a small patch for three r187, which `patchN8AO` applies. If the post-processing ever throws an error, the page falls back to drawing directly rather than going blank.
+- **Take the tour**: a 112-second camera flight with captions, from above the estate through the gate, past the fountain, into the great hall, up to the landing, to the pool and the assault course, then back out (`src/tour.js`). Esc stops it.
+- **Sound** (`src/sound.js`) is all synthesised with Web Audio, with no files. It starts off, because browsers only allow sound after a click.
+  - By day there's birdsong; at night, crickets and the odd owl.
+  - Outdoors there's a breeze, and the fountain gets louder as you get near it.
+  - The grandfather clock ticks in the hall.
+  - In Walk mode, footsteps change with the surface: stone, gravel or grass.
+- **Save a picture** downloads the current view as a PNG, without the panel.
 - **Place** jumps to a saved view. To add one, use "Copy this view" and paste the line into `public/viewpoints.json`.
 - **Time**: the sun follows its real path over Surrey in late May, with the front of the house facing south. The ▶ button runs a day in two minutes, and Compass turns the sun's path. From about 9° above the horizon the lamps come on (`src/lamps.js`):
   - every chandelier candle, wall sconce and kitchen tube gets a flame or glow, found by splitting the merged fitting meshes into pieces (one draw call for all the flames);
