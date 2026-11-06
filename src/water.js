@@ -3,6 +3,7 @@
 // Mirror maths after three.js's Reflector (oblique near-plane clipping).
 
 import * as THREE from 'three';
+import { seasonUniforms } from './season.js';
 
 const RIPPLE_GLSL = /* glsl */ `
 uniform sampler2D uMirror;
@@ -10,6 +11,8 @@ uniform float uMirrorOn;
 uniform float uTime;
 uniform float uRipple;
 uniform float uDepthTint;
+uniform float uIce;
+uniform float uSnowOnIce;
 varying vec4 vMirrorCoord;
 varying vec3 vWaterWorld;
 
@@ -54,7 +57,11 @@ export class WaterSurface {
       uTime: { value: 0 },
       uRipple: { value: opts.ripple ?? 1 },
       uDepthTint: { value: opts.depthTint ?? 0.35 },
+      // outdoor water freezes in deep winter (the indoor pool never does)
+      uIce: opts.outdoor ? seasonUniforms.uIce : { value: 0 },
+      uSnowOnIce: opts.outdoor ? seasonUniforms.uSnow : { value: 0 },
     };
+    this.outdoor = !!opts.outdoor;
     const uniforms = this.uniforms;
     mat.onBeforeCompile = (shader) => {
       Object.assign(shader.uniforms, uniforms);
@@ -73,11 +80,35 @@ export class WaterSurface {
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <common>', '#include <common>\n' + RIPPLE_GLSL)
         .replace(
+          '#include <map_fragment>',
+          `#include <map_fragment>
+           // ice: a cloudy blue-white sheet, frosted and snowed on in patches, with faint cracks
+           float iceN = 0.0;
+           if (uIce > 0.001) {
+             vec2 ip = vWaterWorld.xz;
+             float cell = fract(sin(dot(floor(ip * 1.7), vec2(12.9898, 78.233))) * 43758.5453);
+             vec2 f = fract(ip * 1.7) - 0.5;
+             float crack = smoothstep(0.47, 0.5, max(abs(f.x), abs(f.y)));
+             float frost = fract(sin(dot(floor(ip * 6.3), vec2(39.3, 11.1))) * 7351.7);
+             vec3 ice = vec3(0.5, 0.62, 0.7) * (0.85 + 0.25 * cell) + vec3(0.12) * crack;
+             float snowed = uSnowOnIce * smoothstep(0.35, 0.75, cell * 0.6 + frost * 0.4);
+             ice = mix(ice, vec3(0.8, 0.83, 0.88), snowed);
+             diffuseColor.rgb = mix(diffuseColor.rgb, ice, uIce);
+             iceN = snowed;
+           }`,
+        )
+        .replace(
+          '#include <roughnessmap_fragment>',
+          `#include <roughnessmap_fragment>
+           roughnessFactor = mix(roughnessFactor, mix(0.35, 0.8, iceN), uIce);`,
+        )
+        .replace(
           '#include <opaque_fragment>',
           `#include <opaque_fragment>
+           vec3 ice_lit = gl_FragColor.rgb + 0.06 * texture2D(uMirror, vMirrorCoord.xy / vMirrorCoord.w).rgb;
            {
              vec3 V = normalize(cameraPosition - vWaterWorld);
-             vec2 slope = waterSlope(vWaterWorld.xz, uTime) * uRipple;
+             vec2 slope = waterSlope(vWaterWorld.xz, uTime) * uRipple * (1.0 - uIce);
              vec3 N = normalize(vec3(-slope.x, 1.0, -slope.y));
              float cosT = clamp(dot(N, V), 0.0, 1.0);
              float fresnel = 0.03 + 0.97 * pow(1.0 - cosT, 5.0);
@@ -96,6 +127,11 @@ export class WaterSurface {
              // never fully clear: even straight down you can tell there is water
              // (blended in linear light behind the post effects, so it needs to be fairly opaque to read)
              gl_FragColor.a = clamp(mix(max(gl_FragColor.a, 0.74), 1.0, fresnel * 0.9), 0.0, 1.0);
+             // frozen: the lit ice itself, with only a faint sheen of the sky
+             if (uIce > 0.001) {
+               gl_FragColor.rgb = mix(gl_FragColor.rgb, ice_lit, uIce);
+               gl_FragColor.a = mix(gl_FragColor.a, 0.97, uIce);
+             }
            }`,
         );
     };
@@ -235,7 +271,7 @@ export function setupWater(renderer, scene, model) {
       const b = new THREE.Box3().setFromObject(o);
       if (b.max.y - b.min.y < 0.05) {
         const small = b.max.x - b.min.x < 8;
-        surfaces.push(new WaterSurface(o, { ripple: small ? 0.7 : 1.0, opacity: 0.55 }));
+        surfaces.push(new WaterSurface(o, { ripple: small ? 0.7 : 1.0, opacity: 0.55, outdoor: b.max.y < 2 }));
       }
     } else if (name === 'cm_fishstatue_waterjet') {
       jet = o;

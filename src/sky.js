@@ -176,6 +176,9 @@ export class TimeOfDay {
     this.inside = 0; // 0 outdoors .. 1 inside the house (set by the caller each frame)
     this.lamps = 0; // 0 off .. 1 on (lamps come on before sunset)
     this.dusk = 0; // 1 around sunrise and sunset
+    // the weather (weather.js): sky cover and thickness, grey overcast, rain, fog, snow falling
+    this.weather = { clouds: 0.35, density: 0.45, overcast: 0, rain: 0, fog: 0, snowing: 0 };
+    this.windy = 0;
 
     this.sky = new Sky();
     this.sky.scale.setScalar(3000);
@@ -193,6 +196,17 @@ export class TimeOfDay {
     this.envSky.material.uniforms.showSunDisc.value = 0;
     this.envSky.material.uniforms.cloudCoverage.value = 0;
     this.envScene.add(this.envSky);
+    // fog and heavy weather close in the horizon: a dome inside the sky in the fog's colour
+    this.haze = new THREE.Mesh(
+      new THREE.SphereGeometry(2600, 32, 16),
+      new THREE.MeshBasicMaterial({ color: 0xc9d6e2, transparent: true, opacity: 0, side: THREE.BackSide, depthWrite: false, fog: false }),
+    );
+    this.haze.renderOrder = -1;
+    this.haze.visible = false;
+    scene.add(this.haze);
+    // the same veil in the sky that lights the scene, so overcast light is grey, not blue
+    this.envHaze = new THREE.Mesh(new THREE.SphereGeometry(900, 32, 16), this.haze.material.clone());
+    this.envScene.add(this.envHaze);
     this.pmrem = new THREE.PMREMGenerator(renderer);
     this.envTarget = null;
     this.lastEnvHours = null;
@@ -251,6 +265,21 @@ export class TimeOfDay {
     this.dusk = Math.max(0, 1 - Math.abs(deg - 2) / 12);
 
     for (const s of [this.sky, this.envSky]) s.material.uniforms.sunPosition.value.copy(this.sunDir);
+    // the weather in the sky: cloud cover, and a grey, hazy sky when it is overcast
+    const w = this.weather;
+    const oc = w.overcast;
+    for (const [s, cover] of [
+      [this.sky, w.clouds],
+      [this.envSky, w.clouds * 0.85],
+    ]) {
+      const su = s.material.uniforms;
+      su.cloudCoverage.value = cover;
+      su.cloudDensity.value = w.density;
+      su.turbidity.value = THREE.MathUtils.lerp(4, 6, oc);
+      su.rayleigh.value = THREE.MathUtils.lerp(1.2, 0.35, oc);
+      su.mieCoefficient.value = THREE.MathUtils.lerp(0.004, 0.014, oc);
+      su.cloudSpeed.value = 0.00002 * (1 + 2.5 * this.windy);
+    }
 
     const t = Math.max(0, Math.sin(elevation));
     const sunUp = THREE.MathUtils.smoothstep(deg, -1.5, 4);
@@ -262,37 +291,51 @@ export class TimeOfDay {
       this.light.color.set(0x9db4ff);
       this.light.intensity = 0.9 * this.night;
     } else {
-      this.light.color.setHSL(0.08, 0.75 - 0.45 * t, 0.58 + 0.32 * t);
-      this.light.intensity = (1.3 + 2.2 * Math.min(1, t * 1.6)) * sunUp;
+      this.light.color.setHSL(0.08, (0.75 - 0.45 * t) * (1 - 0.6 * oc), 0.58 + 0.32 * t);
+      // under cloud the sun is dimmed and its shadows go soft and faint
+      this.light.intensity = (1.3 + 2.2 * Math.min(1, t * 1.6)) * sunUp * (1 - 0.8 * oc);
     }
+    this.light.shadow.intensity = 1 - 0.72 * oc;
     this._sunIntensity = this.light.intensity;
     this._moonLight = useMoon;
 
     // twilight: the sky keeps lighting the ground for a while after sunset
     const twilight = THREE.MathUtils.smoothstep(deg, -10, 0);
-    this._hemiBase = THREE.MathUtils.lerp(0.14, 0.7, twilight) * (1 - 0.2 * this.dusk);
+    this._hemiBase = THREE.MathUtils.lerp(0.14, 0.7, twilight) * (1 - 0.2 * this.dusk) * (1 + 0.45 * oc);
     this.applyAmbient(t);
 
-    this.stars.material.uniforms.uFade.value = this.night;
+    this.stars.material.uniforms.uFade.value = this.night * (1 - w.clouds * 0.95);
     this.nightDome.material.uniforms.uFade.value = this.night;
     const blueHour = THREE.MathUtils.smoothstep(-deg, 0.5, 3.5) * (1 - THREE.MathUtils.smoothstep(-deg, 7, 13));
     this.nightDome.material.uniforms.uTwilight.value = blueHour;
     this.nightDome.visible = this.night > 0.001 || blueHour > 0.001;
     this.moon.position.copy(this.moonDir).multiplyScalar(1250);
-    this.moon.material.opacity = this.night;
+    this.moon.material.opacity = this.night * (1 - oc * 0.9);
     this.moon.visible = this.night > 0.01;
 
     // fog follows the sky: blue-grey by day, warm at dusk, deep blue at night
-    const day = new THREE.Color(0xc9d6e2);
+    const day = new THREE.Color(0xc9d6e2).lerp(new THREE.Color(0xb9bfc6), oc).lerp(new THREE.Color(0xd0d4d8), w.fog);
     const duskC = new THREE.Color(0xd9a77f);
     const nightC = new THREE.Color(0x0b1224);
-    this.fog.color.copy(day).lerp(duskC, this.dusk * 0.6).lerp(nightC, this.night);
+    this.fog.color.copy(day).lerp(duskC, this.dusk * 0.6 * (1 - oc)).lerp(nightC, this.night);
+    // fog, rain and falling snow thicken the air
+    this.fog.density = 0.00085 + 0.019 * w.fog + 0.004 * w.rain + 0.007 * w.snowing;
+    // an overcast sky is a grey lid (with only a little of the cloud shapes showing through)
+    this.haze.material.color.copy(this.fog.color);
+    this.haze.material.opacity = THREE.MathUtils.clamp(w.fog * 0.97 + w.rain * 0.35 + w.snowing * 0.5 + oc * 0.72, 0, 0.97);
+    this.haze.visible = this.haze.material.opacity > 0.01;
+    this.envHaze.material.color.copy(this.fog.color);
+    this.envHaze.material.opacity = THREE.MathUtils.clamp(this.haze.material.opacity * 1.1, 0, 0.98);
+    this.envHaze.visible = this.haze.visible;
 
     // the environment map is the costly part: refresh it every 10 minutes of sky time
     const dayMoved = Math.abs(this.day - (this.lastEnvDay ?? -99)) > 3;
-    if (force || dayMoved || this.lastEnvHours === null || Math.abs(this.hours - this.lastEnvHours) > 1 / 6) {
+    const skyChanged = Math.abs(w.clouds - (this.lastEnvClouds ?? -1)) > 0.08 || Math.abs(oc - (this.lastEnvOvercast ?? -1)) > 0.08;
+    if (force || dayMoved || skyChanged || this.lastEnvHours === null || Math.abs(this.hours - this.lastEnvHours) > 1 / 6) {
       this.lastEnvHours = this.hours;
       this.lastEnvDay = this.day;
+      this.lastEnvClouds = w.clouds;
+      this.lastEnvOvercast = oc;
       if (this.envTarget) this.envTarget.dispose();
       this.envTarget = this.pmrem.fromScene(this.envScene, 0, 0.1, 1000);
       this.scene.environment = this.envTarget.texture;
@@ -304,7 +347,7 @@ export class TimeOfDay {
     this._t = t;
     this._hemiBase = this._hemiBase ?? 0.7;
     const outdoor = this._hemiOut ?? (this._hemiOut = new THREE.Color());
-    outdoor.set(this.night > 0.5 ? 0x5a6a9a : 0xcfe0ff);
+    outdoor.set(this.night > 0.5 ? 0x5a6a9a : 0xcfe0ff).lerp(this._greySky ?? (this._greySky = new THREE.Color(0xd2d7dd)), this.weather.overcast * (1 - this.night));
     const indoor = this._hemiIn ?? (this._hemiIn = new THREE.Color(0xffe6c8));
     this.hemi.color.copy(outdoor).lerp(indoor, this.inside * (1 - this.night));
     this.hemi.groundColor.set(0x5a5040).lerp(this._groundIn ?? (this._groundIn = new THREE.Color(0x7a5a40)), this.inside);

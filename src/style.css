@@ -264,3 +264,9 @@ body.flyby .film-bar {
 #tour-stop {
   z-index: 7;
 }
+
+#panel .weather-now {
+  font-weight: 500;
+  color: #d9b45a;
+  margin-left: 6px;
+}

@@ -11,10 +11,12 @@ import { Lamps } from './lamps.js';
 import { Landscape, makeTerrain, makeHillHeight } from './landscape.js';
 import { installGrade } from './look.js';
 import { Quality } from './quality.js';
-import { tuneMaterials, GRASS_TINT, grassShader, TINTS } from './materials.js';
+import { tuneMaterials, GRASS_TINT, grassShader, TINTS, buildSkyMap } from './materials.js';
 import { Tour, FLYBYS, checkPath } from './tour.js';
 import { Soundscape } from './sound.js';
 import { seasonAt, seasonUniforms, dateLabel, Snowfall } from './season.js';
+import { weatherAt, WEATHERS, Rainfall } from './weather.js';
+import { Snowman } from './snowman.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('view');
@@ -42,6 +44,7 @@ let playing = false;
 function updateSun() {
   tod.hours = Number($('time').value);
   tod.compass = THREE.MathUtils.degToRad(Number($('sun-azim').value));
+  refreshWeather();
   tod.update(true);
   $('time-label').textContent = tod.label();
 }
@@ -50,6 +53,7 @@ function updateSun() {
 let season = seasonAt(145);
 let seasonDay = 145; // fractional while the year runs (the slider snaps to whole days)
 let camSpeed = 0; // how fast the camera moves (m/s), for the rush of air
+let weatherTicker = 0;
 const lastCam = new THREE.Vector3();
 let playingYear = false;
 const snowfall = new Snowfall(scene);
@@ -58,12 +62,29 @@ function updateSeason(force = true) {
   tod.day = day;
   season = seasonAt(day);
   seasonUniforms.uDay.value = day;
-  seasonUniforms.uSnow.value = season.snow;
   seasonUniforms.uGrassTint.value.setRGB(...season.grass);
+  seasonUniforms.uIce.value = season.ice;
+  snowman?.update(day);
   $('season-label').textContent = dateLabel(day);
   $('season-label').title = season.name;
+  refreshWeather();
   tod.update(force);
   $('time-label').textContent = tod.label();
+}
+
+// The weather: worked out for the date and hour (or chosen in the panel)
+let weather = weatherAt(145, 15, 0);
+let wet = 0; // the ground stays wet for a while after the rain stops
+const rainfall = new Rainfall(scene);
+let snowman = null;
+function refreshWeather() {
+  const choice = $('weather').value || 'auto';
+  const snowLies = choice === 'snow' ? 1 : season.snow;
+  weather = weatherAt(seasonDay, tod.hours, snowLies, choice);
+  seasonUniforms.uSnow.value = snowLies;
+  tod.weather = weather;
+  tod.windy = season.windy;
+  $('weather-label').textContent = weather.label;
 }
 
 const LOOK = { exposure: 0.66 };
@@ -419,6 +440,10 @@ loader.load(
     ground.material.color.copy(GRASS_TINT);
     grassShader(ground.material);
     scene.add(ground);
+    // where the sky reaches, for snow and rain (not on floors under a roof)
+    const skyMeshes = [];
+    model.traverse((o) => o.isMesh && !/water/i.test(o.material.name || '') && skyMeshes.push(o));
+    buildSkyMap(renderer, scene, skyMeshes, lawn.clone().expandByVector(new THREE.Vector3(10, 0, 10)));
 
     const overviewPos = modelCentre.clone().add(new THREE.Vector3(size.x * 0.75, size.y * 3.5 + 25, size.z * 0.65));
     viewpoints[0][1] = overviewPos;
@@ -480,6 +505,18 @@ async function prepareWalking(ground) {
   landscape = new Landscape({ scene, renderer, model, lawn, bvh: geo.boundsTree, hillHeight });
   landscape.build().then(async (st) => {
     walker.obstacles = landscape.obstacles;
+    // the snowman: on the front lawn, west of the fountain, looking towards the gate
+    const spot = [
+      [-5.5, 5.5],
+      [-6.5, 7],
+      [-4.5, 8],
+      [11, 5],
+    ].find(([x, z]) => landscape._grassAt(x, z));
+    if (spot) {
+      snowman = new Snowman(scene, new THREE.Vector3(spot[0], lawn.min.y, spot[1]), 0.5);
+      landscape.obstacles.push(snowman.obstacle);
+      snowman.update(seasonDay);
+    }
     // the tour and the flybys must not pass through walls or trees (doors that open are fine)
     const opens = (t) => doors.triDoor[t] > 0;
     const moves = [...tour.tourMoves, ...Object.values(tour.flybyMoves)];
@@ -560,6 +597,12 @@ $('play').onclick = (e) => {
   setPlaying(!playing);
   e.currentTarget.blur();
 };
+for (const [id, label] of Object.entries(WEATHERS)) $('weather').add(new Option(label, id));
+$('weather').addEventListener('change', (e) => {
+  refreshWeather();
+  tod.update(true);
+  e.target.blur();
+});
 $('season').addEventListener('input', () => {
   setPlayingYear(false);
   liveClock = false;
@@ -648,7 +691,19 @@ renderer.setAnimationLoop((time) => {
     $('season').value = String(Math.floor(seasonDay));
     updateSeason(false);
   }
-  snowfall.update(dt, camera, THREE.MathUtils.smoothstep(season.snow, 0.55, 0.9) * (1 - tod.inside), renderer.getPixelRatio());
+  weatherTicker += dt;
+  if (weatherTicker > 0.5) {
+    weatherTicker = 0;
+    const before = weather.label;
+    refreshWeather();
+    if (weather.label !== before) tod.update();
+  }
+  // wet ground: soaked quickly in the rain, drying slowly after
+  const wantWet = Math.min(1, weather.rain * 3);
+  wet += (wantWet - wet) * (1 - Math.exp(-dt * (wantWet > wet ? 0.8 : 0.05)));
+  seasonUniforms.uWet.value = wet;
+  snowfall.update(dt, camera, weather.snowing * (1 - tod.inside), renderer.getPixelRatio());
+  rainfall.update(dt, camera, weather.rain * (1 - tod.inside));
   updateExposure();
   if (lamps) {
     lamps.update(camera, tod.lamps, dt, renderer);
@@ -669,8 +724,8 @@ renderer.setAnimationLoop((time) => {
     crickets: season.crickets,
     snow: season.snow,
     windy: season.windy,
-    rain: 0,
-    frozen: 0,
+    rain: weather.rain,
+    frozen: seasonUniforms.uIce.value,
     speed: camSpeed,
     flyby: mode === 'tour' && !!flybyId,
   });
@@ -694,7 +749,10 @@ renderer.setAnimationLoop((time) => {
   elapsed += dt;
   if (water) {
     water.update(camera, elapsed);
-    if (water.jet) water.jet.material.map.offset.y -= dt * 1.4;
+    if (water.jet) {
+      water.jet.material.map.offset.y -= dt * 1.4;
+      water.jet.visible = seasonUniforms.uIce.value < 0.5; // the fountain is turned off when it freezes
+    }
   }
   quality.fisheye = mode === 'tour' ? tour.fisheye : 0;
   // sunbeams indoors by day: they fade in as you go inside and with the sun's height
@@ -759,6 +817,12 @@ window.manor = {
   TINTS,
   get season() {
     return season;
+  },
+  get weather() {
+    return weather;
+  },
+  get snowman() {
+    return snowman;
   },
   /** Jump to a day of the year (0 = 1 January). */
   setDay(day) {

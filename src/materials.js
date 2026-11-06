@@ -39,7 +39,8 @@ export function tuneMaterials(model) {
     if (name === 'cm_grass') grassShader(o.material);
     if (name === 'cm_gravel') gravelShader(o.material);
     if (/^cm_brickwall|^cm_assault_bricks_red/.test(name)) brickShader(o.material);
-    if (/^(cm_gravel|cm_roof|cm_roofpattern|cm_assault_gripfloor|cm_assault_sand)$/.test(name)) snowShader(o.material);
+    // snow and rain on everything outdoors that faces the sky (the sky map keeps it off floors indoors)
+    if (!/^cm_(grass|water|glass)/.test(name) && !o.material.transparent) weatherShader(o.material);
   });
 }
 
@@ -47,6 +48,7 @@ const GRASS_GLSL = /* glsl */ `
   varying vec3 vGrassWorld;
   uniform vec3 uGrassTint;
   uniform float uSnow;
+  uniform float uWet;
   float gHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   float gNoise(vec2 p) {
     vec2 i = floor(p), f = fract(p);
@@ -62,6 +64,7 @@ export function grassShader(material) {
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uGrassTint = seasonUniforms.uGrassTint;
     shader.uniforms.uSnow = seasonUniforms.uSnow;
+    shader.uniforms.uWet = seasonUniforms.uWet;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vGrassWorld;')
       .replace(
@@ -95,7 +98,7 @@ export function grassShader(material) {
          vec3 dry = vec3(1.18, 1.06, 0.7);
          diffuseColor.rgb *= mix(lush, dry, smoothstep(0.2, 0.8, big)) * (0.82 + 0.36 * mid);
          // the season's colour, then snow: patchy as it comes and goes, a blanket at its deepest
-         diffuseColor.rgb *= uGrassTint;
+         diffuseColor.rgb *= uGrassTint * (1.0 - 0.22 * uWet);
          float cover = smoothstep(0.35, 0.55, gFbm(gw * 0.33) * 0.6 + uSnow * 0.75 - 0.15) * step(0.001, uSnow);
          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.78, 0.81, 0.86) * (0.94 + 0.12 * mid), cover);
        }`,
@@ -176,28 +179,94 @@ export function brickShader(material) {
 }
 
 /**
- * Snow on surfaces that face the sky (roofs, gravel, the assault course floor): white
- * where the surface is near level, less on steep roof slopes, none on walls.
+ * Where the sky reaches: renders the estate once from straight above, keeping the height
+ * of the highest surface at each point (2048 x 2048, a few centimetres a texel). A surface
+ * is out in the open when it is that highest surface, so snow and rain land on roofs, wall
+ * caps, the gate and the ground, but not on floors under a roof, in the porch or under the
+ * pool's glass.
  */
-export function snowShader(material) {
+export function buildSkyMap(renderer, scene, meshes, box) {
+  const S = 2048;
+  const rt = new THREE.WebGLRenderTarget(S, S, { type: THREE.HalfFloatType, format: THREE.RedFormat, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
+  const cam = new THREE.OrthographicCamera(box.min.x, box.max.x, -box.min.z, -box.max.z, 0.1, 400);
+  cam.position.set(0, 200, 0);
+  cam.up.set(0, 0, -1);
+  cam.lookAt(0, 0, 0);
+  const LAYER = 7;
+  cam.layers.set(LAYER);
+  for (const m of meshes) m.layers.enable(LAYER);
+  const height = new THREE.ShaderMaterial({
+    vertexShader: 'varying float vY; void main() { vec4 w = modelMatrix * vec4(position, 1.0); vY = w.y; gl_Position = projectionMatrix * viewMatrix * w; }',
+    fragmentShader: 'varying float vY; void main() { gl_FragColor = vec4(vY, 0.0, 0.0, 1.0); }',
+    side: THREE.DoubleSide,
+  });
+  const prev = { target: renderer.getRenderTarget(), clear: renderer.getClearColor(new THREE.Color()), alpha: renderer.getClearAlpha(), shadow: renderer.shadowMap.autoUpdate, override: scene.overrideMaterial, bg: scene.background, fog: scene.fog };
+  renderer.shadowMap.autoUpdate = false;
+  scene.overrideMaterial = height;
+  scene.background = null;
+  scene.fog = null;
+  renderer.setRenderTarget(rt);
+  renderer.setClearColor(new THREE.Color(-1000, 0, 0), 1);
+  renderer.clear();
+  renderer.render(scene, cam);
+  renderer.setRenderTarget(prev.target);
+  renderer.setClearColor(prev.clear, prev.alpha);
+  renderer.shadowMap.autoUpdate = prev.shadow;
+  scene.overrideMaterial = prev.override;
+  scene.background = prev.bg;
+  scene.fog = prev.fog;
+  for (const m of meshes) m.layers.disable(LAYER);
+  height.dispose();
+  seasonUniforms.uSkyMap.value = rt.texture;
+  seasonUniforms.uSkyBox.value.set(box.min.x, box.max.z, box.max.x - box.min.x, box.max.z - box.min.z);
+  return rt;
+}
+
+const WEATHER_GLSL = /* glsl */ `
+  uniform float uSnow;
+  uniform float uWet;
+  uniform sampler2D uSkyMap;
+  uniform vec4 uSkyBox;
+  varying vec3 vWxWorld;
+  /** 1 where this point is open to the sky (no roof, porch or glass above it). */
+  float skyOpen(vec3 p) {
+    vec2 suv = vec2((p.x - uSkyBox.x) / uSkyBox.z, (uSkyBox.y - p.z) / uSkyBox.w);
+    if (suv.x < 0.0 || suv.x > 1.0 || suv.y < 0.0 || suv.y > 1.0) return 1.0;
+    return smoothstep(-0.35, -0.08, p.y - texture2D(uSkyMap, suv).r);
+  }
+`;
+
+/**
+ * Weather on a surface: snow where it faces up and the sky reaches it (none on walls,
+ * less on steep roof slopes), and in the rain, darker and glossier where it is wet.
+ */
+export function weatherShader(material) {
   const before = material.onBeforeCompile;
   material.onBeforeCompile = (shader, renderer) => {
     before?.call(material, shader, renderer);
-    shader.uniforms.uSnow = seasonUniforms.uSnow;
-    shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform float uSnow;')
-      .replace(
-        '#include <normal_fragment_maps>',
-        `#include <normal_fragment_maps>
-         {
-           vec3 wn = normalize((vec4(normal, 0.0) * viewMatrix).xyz);
-           float cover = uSnow * smoothstep(0.45, 0.8, wn.y);
-           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.8, 0.83, 0.88), cover);
-           roughnessFactor = mix(roughnessFactor, 0.7, cover);
-         }`,
-      );
+    for (const k of ['uSnow', 'uWet', 'uSkyMap', 'uSkyBox']) shader.uniforms[k] = seasonUniforms[k];
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vWxWorld;')
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWxWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\n' + WEATHER_GLSL).replace(
+      '#include <normal_fragment_maps>',
+      `#include <normal_fragment_maps>
+       if (uSnow + uWet > 0.001) {
+         vec3 wn = normalize((vec4(normal, 0.0) * viewMatrix).xyz);
+         float open = skyOpen(vWxWorld);
+         float wet = uWet * open * smoothstep(-0.2, 0.5, wn.y);
+         diffuseColor.rgb *= 1.0 - 0.32 * wet;
+         roughnessFactor = mix(roughnessFactor, roughnessFactor * 0.3, wet);
+         float cover = uSnow * open * smoothstep(0.45, 0.8, wn.y);
+         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.8, 0.83, 0.88), cover);
+         roughnessFactor = mix(roughnessFactor, 0.75, cover);
+       }`,
+    );
   };
   const key = material.customProgramCacheKey?.call(material) ?? '';
-  material.customProgramCacheKey = () => `${key}+snow`;
+  material.customProgramCacheKey = () => `${key}+weather`;
   material.needsUpdate = true;
 }
+
+// (the name it had when it only did snow)
+export const snowShader = weatherShader;

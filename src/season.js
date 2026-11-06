@@ -12,6 +12,11 @@ export const seasonUniforms = {
   uDay: { value: 145 },
   uSnow: { value: 0 },
   uGrassTint: { value: new THREE.Color(1, 1, 1) },
+  uWet: { value: 0 }, // rain on the ground (weather.js)
+  uIce: { value: 0 }, // the fountain and the assault-course pond frozen over
+  // where the sky reaches: the height of the highest surface at each point (materials.js)
+  uSkyMap: { value: null },
+  uSkyBox: { value: new THREE.Vector4(0, 0, 1, 1) }, // min x, max z, size x, size z
 };
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -64,6 +69,8 @@ export function seasonAt(day) {
   const ss = THREE.MathUtils.smoothstep;
   // snow lies from about 21 December to early February, deepest in mid-January
   const snow = 1 - ss(apart(day, 12), 22, 34);
+  // ponds freeze over in the coldest weeks, from about 20 December to early February
+  const ice = 1 - ss(apart(day, 14), 24, 40);
   // birds: the dawn chorus is a spring thing; few sing in winter
   // birds sing from March to late August (the dawn chorus is a spring thing), none in autumn or winter
   const birds = ss(day, 55, 90) * (1 - ss(day, 236, 262)) * (1 + 0.35 * (1 - ss(day, 120, 170)));
@@ -73,26 +80,30 @@ export function seasonAt(day) {
   const warm = ss(day, 105, 140) * (1 - ss(day, 268, 300));
   const crickets = warm * (0.6 + 0.4 * ss(day, 150, 195));
   const name = day < 59 || day >= 334 ? 'winter' : day < 151 ? 'spring' : day < 243 ? 'summer' : 'autumn';
-  return { day, snow, grass: grassOn(day), birds, crickets, windy, name };
+  return { day, snow, ice, grass: grassOn(day), birds, crickets, windy, name };
 }
 
-/** Light snow falling round the camera while snow lies (drawn only outdoors). */
+/** Snow falling round the camera: big soft flakes of mixed sizes, drifting as they fall (outdoors). */
 export class Snowfall {
-  constructor(scene, count = 5000) {
-    const box = new THREE.Vector3(60, 30, 60);
+  constructor(scene, count = 6500) {
+    const box = new THREE.Vector3(56, 28, 56);
     const off = new Float32Array(count * 3);
     const speed = new Float32Array(count);
+    const size = new Float32Array(count);
     for (let i = 0; i < count; i++) {
       off.set([Math.random() * box.x, Math.random() * box.y, Math.random() * box.z], i * 3);
-      speed[i] = 0.8 + Math.random() * 0.9;
+      speed[i] = 0.45 + Math.random() * 0.55;
+      size[i] = 0.5 + Math.pow(Math.random(), 2) * 1.4; // mostly small, a few big clumps
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(off, 3));
     geo.setAttribute('speed', new THREE.BufferAttribute(speed, 1));
+    geo.setAttribute('size', new THREE.BufferAttribute(size, 1));
     this.material = new THREE.ShaderMaterial({
       uniforms: { uTime: { value: 0 }, uCam: { value: new THREE.Vector3() }, uBox: { value: box }, uAmount: { value: 0 }, uScale: { value: 1 } },
       vertexShader: /* glsl */ `
         attribute float speed;
+        attribute float size;
         uniform float uTime;
         uniform vec3 uCam;
         uniform vec3 uBox;
@@ -100,25 +111,27 @@ export class Snowfall {
         varying float vFade;
         void main() {
           vec3 p = position;
-          p.y -= uTime * speed;
-          p.x += uTime * 0.5 + sin(uTime * 0.7 + position.z) * 0.8;
-          p.z += cos(uTime * 0.5 + position.x) * 0.6;
-          // wrap the flakes in a box that travels with the camera
+          // flakes fall slowly and flutter: the big ones slowest
+          p.y -= uTime * speed / (0.7 + size * 0.3);
+          p.x += uTime * 0.35 + sin(uTime * 0.6 + position.z * 0.7) * 1.2 + sin(uTime * 1.7 + position.y) * 0.25;
+          p.z += cos(uTime * 0.45 + position.x * 0.6) * 1.0;
           p = mod(p - uCam + uBox * 0.5, uBox) + uCam - uBox * 0.5;
           vec4 mv = modelViewMatrix * vec4(p, 1.0);
           gl_Position = projectionMatrix * mv;
           float d = -mv.z;
-          vFade = smoothstep(0.3, 1.5, d) * (1.0 - smoothstep(18.0, 30.0, d));
-          gl_PointSize = uScale * 70.0 / max(d, 0.1);
+          vFade = smoothstep(0.25, 1.4, d) * (1.0 - smoothstep(16.0, 28.0, d));
+          gl_PointSize = uScale * size * 110.0 / max(d, 0.1);
         }`,
       fragmentShader: /* glsl */ `
         uniform float uAmount;
         varying float vFade;
         void main() {
           vec2 c = gl_PointCoord - 0.5;
-          float a = smoothstep(0.5, 0.15, length(c)) * vFade * uAmount;
+          float r = length(c);
+          // a soft, fuzzy flake: a bright middle fading out, not a hard disc
+          float a = (smoothstep(0.5, 0.0, r) * 0.75 + smoothstep(0.22, 0.0, r) * 0.25) * vFade * uAmount;
           if (a < 0.01) discard;
-          gl_FragColor = vec4(vec3(0.95), a * 0.85);
+          gl_FragColor = vec4(vec3(0.96, 0.97, 1.0), a);
         }`,
       transparent: true,
       depthWrite: false,

@@ -8,6 +8,18 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.13.0, 6 November 2026
+
+- Weather, worked out for each day and hour (so a date always has the same weather), or chosen in the new Weather menu:
+  - Spring has fluffy clouds and summer clear or nearly clear skies.
+  - Winter is grey overcast: the sun dims, shadows go soft, the stars and moon hide.
+  - On about half the autumn days it rains on and off: rain falls round you outdoors, the ground goes dark and glossy and dries slowly after, and you hear it.
+  - Some late-autumn mornings are foggy, and the fog lifts by late morning.
+- Winter on everything that faces the sky. A height map of the estate, rendered once from above, says where the sky reaches. Snow lies on the gate, the wall caps, the roofs, the fountain, the assault course and the ground round the pond, but not under a roof, in the porch or under the pool's glass. The shrubs are snow-capped and the bare branches carry snow.
+- The fountain and the assault-course pond freeze over from about 20 December to early February: cloudy blue-white ice, cracked and snowed on. The fountain is turned off and falls silent. (The indoor pool stays liquid.)
+- Fluffier snow: big soft flakes of mixed sizes, falling slowly and drifting.
+- A snowman on the front lawn, with a carrot nose, coal eyes and buttons, stick arms and a red scarf. It goes up around 21 December. It melts through the first half of February (it sags, its head tips, the nose and arms fall), and its carrot, coal and sticks lie on the grass for a few days after.
+
 ## 0.12.0, 6 November 2026
 
 - Every lamp is lit, wherever you are. Before, a pool of eight lights followed you to the nearest fittings, so rooms lit up as you came near. Now fittings within a few metres of each other share a light (30 lights for the 36 fittings), and all of them are on together. At night it still runs at 54–60 frames a second on Balanced.

@@ -219,13 +219,15 @@ const SEASON_COLOUR = /* glsl */ `
  * leaves the year (above). Works on the shadow-depth material too, so bare trees cast
  * bare shadows and the shadows sway with the leaves.
  */
-function addTreeShader(material, uniforms, { stiff = 1, season = false } = {}) {
+function addTreeShader(material, uniforms, { stiff = 1, season = false, snow = null, height = 1 } = {}) {
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uWindTime = uniforms.time;
     shader.uniforms.uWindAmp = uniforms.amp;
     if (season) shader.uniforms.uDay = seasonUniforms.uDay;
+    if (snow) shader.uniforms.uSnow = seasonUniforms.uSnow;
+    const snowVertex = snow === 'cap' ? 'attribute float aLeaf;\nvarying float vSnowH;\nvarying float vSnowSeed;\n' : '';
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\n' + WIND_GLSL + (season ? SEASON_VERTEX : ''))
+      .replace('#include <common>', '#include <common>\n' + WIND_GLSL + (season ? SEASON_VERTEX : '') + snowVertex)
       .replace(
         '#include <begin_vertex>',
         `#include <begin_vertex>
@@ -241,15 +243,32 @@ function addTreeShader(material, uniforms, { stiff = 1, season = false } = {}) {
            transformed.x += (w * h * h * 0.0009 + flutter) * uWindAmp / ${stiff.toFixed(1)};
            transformed.z += (w * h * h * 0.0006 + flutter) * uWindAmp / ${stiff.toFixed(1)};
          }
-         ${season ? SEASON_BEGIN : ''}`,
+         ${season ? SEASON_BEGIN : ''}
+         ${snow === 'cap' ? `vSnowH = transformed.y / ${height.toFixed(2)}; vSnowSeed = aLeaf;` : ''}`,
       );
+    // snow: on a shrub, over the top of the bush, leaf by leaf; on bark, wherever it faces up
+    if (snow === 'cap') {
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', '#include <common>\nuniform float uSnow;\nvarying float vSnowH;\nvarying float vSnowSeed;')
+        .replace(
+          '#include <map_fragment>',
+          `#include <map_fragment>
+           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.8, 0.83, 0.88), uSnow * smoothstep(0.3, 0.75, vSnowH + (vSnowSeed - 0.5) * 0.5) * 0.92);`,
+        );
+    } else if (snow === 'bark') {
+      shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uSnow;').replace(
+        '#include <normal_fragment_maps>',
+        `#include <normal_fragment_maps>
+         { vec3 wn = normalize((vec4(normal, 0.0) * viewMatrix).xyz); diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.8, 0.83, 0.88), uSnow * smoothstep(0.45, 0.8, wn.y) * 0.9); }`,
+      );
+    }
     if (season) {
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <common>', '#include <common>\n' + SEASON_FRAGMENT)
         .replace('#include <map_fragment>', '#include <map_fragment>\n' + SEASON_COLOUR);
     }
   };
-  material.customProgramCacheKey = () => `tree-${stiff}-${season}-${material.type}`;
+  material.customProgramCacheKey = () => `tree-${stiff}-${season}-${snow}-${height.toFixed(1)}-${material.type}`;
 }
 
 /** A random number per leaf (each leaf is two crossed quads of four vertices, in order). */
@@ -298,9 +317,9 @@ export function makeVariant(preset, seed, height, wind, { tint, leafCount, leafS
     metalness: 0,
   });
   const season = !evergreen;
-  if (season) addLeafSeeds(lGeo, tree.options.leaves.billboard === 'double' ? 8 : 4);
-  addTreeShader(leaves, wind, { stiff: 1, season });
-  addTreeShader(bark, wind, { stiff: 3 });
+  addLeafSeeds(lGeo, tree.options.leaves.billboard === 'double' ? 8 : 4);
+  addTreeShader(leaves, wind, { stiff: 1, season, snow: evergreen ? 'cap' : null, height });
+  addTreeShader(bark, wind, { stiff: 3, snow: 'bark' });
   // the shadow of the leaves: same sway, same leaves (none in winter)
   const leavesDepth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: ol.map, alphaTest: ol.alphaTest, side: THREE.DoubleSide });
   addTreeShader(leavesDepth, wind, { stiff: 1, season });
