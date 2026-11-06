@@ -4,6 +4,8 @@
 
 import * as THREE from 'three';
 import { Tree } from '@dgreenheck/ez-tree';
+import { seasonUniforms } from './season.js';
+import { snowShader } from './materials.js';
 
 function rng(seed) {
   let a = seed >>> 0;
@@ -165,17 +167,69 @@ const WIND_GLSL = /* glsl */ `
   uniform float uWindAmp;
 `;
 
-function addWind(material, uniforms, stiff = 1) {
+// The year in a tree: each tree runs a few days early or late (from a hash of where it
+// stands), comes into leaf over April and May, turns in October and drops its leaves
+// through November. Each leaf has its own random number (aLeaf), so the crown thins leaf
+// by leaf rather than all at once, and some leaves turn before others.
+const SEASON_VERTEX = /* glsl */ `
+  attribute float aLeaf;
+  uniform float uDay;
+  varying float vLeaf;
+  varying vec4 vSeason; // leaves on the tree, autumn colour, spring freshness, this tree's autumn hue
+`;
+const SEASON_BEGIN = /* glsl */ `
+  {
+    #ifdef USE_INSTANCING
+      vec2 sp = instanceMatrix[3].xz;
+    #else
+      vec2 sp = vec2(0.0);
+    #endif
+    float early = fract(sin(dot(sp, vec2(12.9898, 78.233))) * 43758.5453) - 0.5;
+    float d = uDay + early * 18.0;
+    float grow = smoothstep(98.0, 136.0, d);
+    float fall = smoothstep(292.0, 330.0, d);
+    vSeason = vec4(grow * (1.0 - fall), smoothstep(262.0, 304.0, d), 1.0 - smoothstep(128.0, 172.0, d), fract(early * 31.7 + 0.5));
+    vLeaf = aLeaf;
+  }
+`;
+const SEASON_FRAGMENT = /* glsl */ `
+  varying float vLeaf;
+  varying vec4 vSeason;
+`;
+const SEASON_COLOUR = /* glsl */ `
+  if (vLeaf > vSeason.x) discard;
+  {
+    // autumn: yellow, orange and a few russet leaves (linear albedo), keeping the
+    // texture's light and shade but not its dark green
+    float lum = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11));
+    float shade = mix(0.45, 1.1, clamp(lum * 7.0, 0.0, 1.0));
+    float turn = clamp(vSeason.y * 1.7 - vLeaf * 0.7, 0.0, 1.0);
+    // some trees turn butter yellow, some orange-brown; their leaves vary around that
+    float hue = clamp(vSeason.w * 0.85 + fract(vLeaf * 7.31) * 0.5 - 0.15, 0.0, 1.0);
+    vec3 autumn = mix(vec3(0.62, 0.36, 0.03), vec3(0.5, 0.13, 0.02), hue);
+    autumn = mix(autumn, vec3(0.24, 0.08, 0.02), step(0.82, fract(vLeaf * 3.7)));
+    diffuseColor.rgb = mix(diffuseColor.rgb, autumn * shade, turn);
+    // fresh, yellowish green as the leaves first open
+    diffuseColor.rgb *= mix(vec3(1.0), vec3(1.18, 1.22, 0.7), vSeason.z * 0.7);
+  }
+`;
+
+/**
+ * Sway in the wind (more with height, each instance in its own phase), and for deciduous
+ * leaves the year (above). Works on the shadow-depth material too, so bare trees cast
+ * bare shadows and the shadows sway with the leaves.
+ */
+function addTreeShader(material, uniforms, { stiff = 1, season = false } = {}) {
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uWindTime = uniforms.time;
     shader.uniforms.uWindAmp = uniforms.amp;
+    if (season) shader.uniforms.uDay = seasonUniforms.uDay;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\n' + WIND_GLSL)
+      .replace('#include <common>', '#include <common>\n' + WIND_GLSL + (season ? SEASON_VERTEX : ''))
       .replace(
         '#include <begin_vertex>',
         `#include <begin_vertex>
          {
-           // sway grows with height; each instance gets its own phase
            float h = max(transformed.y, 0.0);
            #ifdef USE_INSTANCING
              float ph = instanceMatrix[3].x * 0.37 + instanceMatrix[3].z * 0.23;
@@ -186,14 +240,32 @@ function addWind(material, uniforms, stiff = 1) {
            float flutter = sin(uWindTime * 7.0 + transformed.x * 3.1 + transformed.y * 2.3 + ph) * 0.015;
            transformed.x += (w * h * h * 0.0009 + flutter) * uWindAmp / ${stiff.toFixed(1)};
            transformed.z += (w * h * h * 0.0006 + flutter) * uWindAmp / ${stiff.toFixed(1)};
-         }`,
+         }
+         ${season ? SEASON_BEGIN : ''}`,
       );
+    if (season) {
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', '#include <common>\n' + SEASON_FRAGMENT)
+        .replace('#include <map_fragment>', '#include <map_fragment>\n' + SEASON_COLOUR);
+    }
   };
-  material.customProgramCacheKey = () => `wind-${stiff}`;
+  material.customProgramCacheKey = () => `tree-${stiff}-${season}-${material.type}`;
+}
+
+/** A random number per leaf (each leaf is two crossed quads of four vertices, in order). */
+function addLeafSeeds(geo, perLeaf) {
+  const n = geo.attributes.position.count;
+  const seeds = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const leaf = Math.floor(i / perLeaf);
+    const x = Math.sin(leaf * 12.9898 + 4.1) * 43758.5453;
+    seeds[i] = x - Math.floor(x);
+  }
+  geo.setAttribute('aLeaf', new THREE.BufferAttribute(seeds, 1));
 }
 
 /** One ez-tree, scaled to `height` metres with its base at y = 0, with PBR materials. */
-export function makeVariant(preset, seed, height, wind, { tint, leafCount, leafSize } = {}) {
+export function makeVariant(preset, seed, height, wind, { tint, leafCount, leafSize, evergreen = false } = {}) {
   const tree = new Tree();
   tree.loadPreset(preset);
   tree.options.seed = seed;
@@ -225,14 +297,19 @@ export function makeVariant(preset, seed, height, wind, { tint, leafCount, leafS
     roughness: 0.75,
     metalness: 0,
   });
-  addWind(leaves, wind, 1);
-  addWind(bark, wind, 3);
+  const season = !evergreen;
+  if (season) addLeafSeeds(lGeo, tree.options.leaves.billboard === 'double' ? 8 : 4);
+  addTreeShader(leaves, wind, { stiff: 1, season });
+  addTreeShader(bark, wind, { stiff: 3 });
+  // the shadow of the leaves: same sway, same leaves (none in winter)
+  const leavesDepth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: ol.map, alphaTest: ol.alphaTest, side: THREE.DoubleSide });
+  addTreeShader(leavesDepth, wind, { stiff: 1, season });
   const size = new THREE.Box3().setFromBufferAttribute(lGeo.attributes.position).getSize(new THREE.Vector3());
-  return { preset, height, bGeo, lGeo, bark, leaves, width: Math.max(size.x, size.z), tree };
+  return { preset, height, bGeo, lGeo, bark, leaves, leavesDepth, width: Math.max(size.x, size.z), tree, season };
 }
 
-/** Renders a variant from the side into a texture, for distant billboards. */
-function makeImpostor(renderer, v) {
+/** Renders a variant from the side into a texture, for distant billboards (bare: branches only). */
+function makeImpostor(renderer, v, bare = false) {
   const W = 256;
   const H = Math.round((W * v.height) / v.width);
   const target = new THREE.WebGLRenderTarget(W, Math.min(512, H), { samples: 4 });
@@ -244,7 +321,8 @@ function makeImpostor(renderer, v) {
   scene.add(sun);
   const b = new THREE.Mesh(v.bGeo, v.bark);
   const l = new THREE.Mesh(v.lGeo, v.leaves);
-  scene.add(b, l);
+  scene.add(b);
+  if (!bare) scene.add(l);
   const half = v.width / 2;
   const cam = new THREE.OrthographicCamera(-half, half, v.height, 0, -100, 100);
   cam.position.set(0, 0, 10);
@@ -263,16 +341,23 @@ function makeImpostor(renderer, v) {
   return target.texture;
 }
 
-function billboardMaterial(map) {
+/**
+ * Far trees: camera-facing quads with a picture of the tree, in leaf (uMap) or bare
+ * (uMapBare). They follow the year like the near trees: each one a few days early or late,
+ * green leaves turning, and bare from late autumn to spring.
+ */
+function billboardMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: THREE.UniformsUtils.merge([
       THREE.UniformsLib.fog,
-      { uMap: { value: null }, uLight: { value: new THREE.Color(1, 1, 1) } },
+      { uMap: { value: null }, uMapBare: { value: null }, uLight: { value: new THREE.Color(1, 1, 1) } },
     ]),
     vertexShader: /* glsl */ `
       #include <common>
       #include <fog_pars_vertex>
+      uniform float uDay;
       varying vec2 vUv;
+      varying vec3 vSeason; // in leaf, autumn colour, this tree's own random number
       void main() {
         vUv = uv;
         vec3 base = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
@@ -282,6 +367,9 @@ function billboardMaterial(map) {
         toCam.y = 0.0;
         vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), normalize(toCam + vec3(1e-4))));
         vec3 world = base + right * position.x * sx + vec3(0.0, position.y * sy, 0.0);
+        float r = fract(sin(dot(base.xz, vec2(12.9898, 78.233))) * 43758.5453);
+        float d = uDay + (r - 0.5) * 18.0;
+        vSeason = vec3(smoothstep(98.0, 136.0, d) * (1.0 - smoothstep(292.0, 330.0, d)), smoothstep(262.0, 304.0, d), fract(r * 17.13));
         vec4 mvPosition = viewMatrix * vec4(world, 1.0);
         gl_Position = projectionMatrix * mvPosition;
         #include <fog_vertex>
@@ -290,11 +378,21 @@ function billboardMaterial(map) {
       #include <common>
       #include <fog_pars_fragment>
       uniform sampler2D uMap;
+      uniform sampler2D uMapBare;
       uniform vec3 uLight;
       varying vec2 vUv;
+      varying vec3 vSeason;
       void main() {
-        vec4 t = texture2D(uMap, vUv);
+        bool inLeaf = vSeason.z < vSeason.x;
+        vec4 t = inLeaf ? texture2D(uMap, vUv) : texture2D(uMapBare, vUv);
         if (t.a < 0.5) discard;
+        if (inLeaf) {
+          // green pixels are leaves: turn them with the season
+          float leafy = smoothstep(0.0, 0.05, t.g - t.r);
+          float lum = dot(t.rgb, vec3(0.3, 0.59, 0.11));
+          vec3 autumn = mix(vec3(0.62, 0.36, 0.03), vec3(0.5, 0.15, 0.02), vSeason.z) * mix(0.45, 1.1, clamp(lum * 4.0, 0.0, 1.0));
+          t.rgb = mix(t.rgb, autumn, vSeason.y * leafy);
+        }
         gl_FragColor = vec4(t.rgb * uLight, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -376,8 +474,8 @@ export class Landscape {
     // shrubs: ez-tree's bush with twice its leaves, and bigger ones, so they read as dense,
     // round shrubs (they are the costly part of the planting, so not more than that)
     const bushes = [
-      makeVariant('Bush 1', 61, 1.8, this.wind, { tint: 0x8aa463, leafCount: 20, leafSize: 2.3 }),
-      makeVariant('Bush 1', 71, 1.2, this.wind, { tint: 0x7d9a58, leafCount: 22, leafSize: 2.6 }),
+      makeVariant('Bush 1', 61, 1.8, this.wind, { tint: 0x8aa463, leafCount: 20, leafSize: 2.3, evergreen: true }),
+      makeVariant('Bush 1', 71, 1.2, this.wind, { tint: 0x7d9a58, leafCount: 22, leafSize: 2.6, evergreen: true }),
     ];
     // the two trees inside the gate in TRJTA's renders: full, round oaks
     const entrance = [makeVariant('Oak Medium', 91, 10.5, this.wind, { tint: 0x9fb478, leafCount: 32, leafSize: 1.45 })];
@@ -456,11 +554,12 @@ export class Landscape {
       vList.forEach((v, vi) => {
         const mine = list.filter((s) => s[0] === vi);
         if (!mine.length) return;
-        for (const [geo, mat] of [
-          [v.bGeo, v.bark],
-          [v.lGeo, v.leaves],
+        for (const [geo, mat, depth] of [
+          [v.bGeo, v.bark, null],
+          [v.lGeo, v.leaves, v.leavesDepth],
         ]) {
           const im = new THREE.InstancedMesh(geo, mat, mine.length);
+          if (depth) im.customDepthMaterial = depth;
           mine.forEach(([, x, z, s, rot], i) => {
             q.setFromAxisAngle(up, rot);
             m.compose(new THREE.Vector3(x, 0, z), q, new THREE.Vector3(s, s, s));
@@ -532,7 +631,12 @@ export class Landscape {
 
     // --- distant forest: billboards of the same trees, once their textures have loaded ---
     await texturesReady(variants.flatMap((v) => [v.leaves.map, v.bark.map]));
+    // baked in full leaf, whatever the season slider says right now
+    const day = seasonUniforms.uDay.value;
+    seasonUniforms.uDay.value = 190;
     const impostors = variants.map((v) => makeImpostor(this.renderer, v));
+    const bareImpostors = variants.map((v) => makeImpostor(this.renderer, v, true));
+    seasonUniforms.uDay.value = day;
     const bbSpots = variants.map(() => []);
     let bb = 0;
     tries = 0;
@@ -556,6 +660,8 @@ export class Landscape {
       if (!list.length) return;
       const mat = billboardMaterial();
       mat.uniforms.uMap.value = impostors[vi];
+      mat.uniforms.uMapBare.value = bareImpostors[vi];
+      mat.uniforms.uDay = seasonUniforms.uDay;
       const im = new THREE.InstancedMesh(quad, mat, list.length);
       list.forEach(([x, y, z, s], i) => {
         m.compose(new THREE.Vector3(x, y, z), new THREE.Quaternion(), new THREE.Vector3(v.width * s, v.height * s, 1));
@@ -623,6 +729,7 @@ export class Landscape {
     mat.normalMap = null;
     mat.polygonOffset = true;
     mat.polygonOffsetFactor = -1;
+    snowShader(mat); // (a clone doesn't keep the gravel's shader patch)
     const mesh = new THREE.Mesh(geo, mat);
     mesh.receiveShadow = true;
     mesh.name = 'Drive';

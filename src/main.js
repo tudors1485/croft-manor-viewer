@@ -14,6 +14,7 @@ import { Quality } from './quality.js';
 import { tuneMaterials, GRASS_TINT, grassShader, TINTS } from './materials.js';
 import { Tour, FLYBYS, checkPath } from './tour.js';
 import { Soundscape } from './sound.js';
+import { seasonAt, seasonUniforms, dateLabel, Snowfall } from './season.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('view');
@@ -40,6 +41,24 @@ function updateSun() {
   tod.hours = Number($('time').value);
   tod.compass = THREE.MathUtils.degToRad(Number($('sun-azim').value));
   tod.update(true);
+  $('time-label').textContent = tod.label();
+}
+
+// The season: the sun's path for the day, and the trees, grass, snow and wildlife
+let season = seasonAt(145);
+let seasonDay = 145; // fractional while the year runs (the slider snaps to whole days)
+let playingYear = false;
+const snowfall = new Snowfall(scene);
+function updateSeason(force = true) {
+  const day = seasonDay;
+  tod.day = day;
+  season = seasonAt(day);
+  seasonUniforms.uDay.value = day;
+  seasonUniforms.uSnow.value = season.snow;
+  seasonUniforms.uGrassTint.value.setRGB(...season.grass);
+  $('season-label').textContent = dateLabel(day);
+  $('season-label').title = season.name;
+  tod.update(force);
   $('time-label').textContent = tod.label();
 }
 
@@ -460,6 +479,20 @@ $('play').onclick = (e) => {
   setPlaying(!playing);
   e.currentTarget.blur();
 };
+$('season').addEventListener('input', () => {
+  setPlayingYear(false);
+  seasonDay = Number($('season').value);
+  updateSeason();
+});
+function setPlayingYear(on) {
+  playingYear = on;
+  $('play-year').textContent = on ? '❚❚' : '▶';
+  $('play-year').title = on ? 'Stop the year' : 'Run the year: a year in a minute';
+}
+$('play-year').onclick = (e) => {
+  setPlayingYear(!playingYear);
+  e.currentTarget.blur();
+};
 $('exposure').addEventListener('input', updateExposure);
 $('ivy').addEventListener('change', (e) => {
   const ivy = model?.getObjectByName('Ivy');
@@ -509,6 +542,13 @@ renderer.setAnimationLoop((time) => {
     tod.update();
     $('time-label').textContent = tod.label();
   }
+  if (playingYear) {
+    seasonDay += dt * (365 / 60);
+    if (seasonDay >= 365) seasonDay -= 365;
+    $('season').value = String(Math.floor(seasonDay));
+    updateSeason(false);
+  }
+  snowfall.update(dt, camera, THREE.MathUtils.smoothstep(season.snow, 0.55, 0.9) * (1 - tod.inside), renderer.getPixelRatio());
   updateExposure();
   if (lamps) {
     lamps.update(camera, tod.lamps, dt, renderer);
@@ -518,7 +558,7 @@ renderer.setAnimationLoop((time) => {
   }
   if (landscape) landscape.update(dt, tod);
   if (doors) doors.update(camera, dt);
-  sound.update(dt, camera, { night: tod.night, inside: tod.inside });
+  sound.update(dt, camera, { night: tod.night, inside: tod.inside, birds: season.birds, crickets: season.crickets, snow: season.snow });
   if (mode === 'tour') {
     if (!tour.update(dt)) setMode('orbit');
   } else if (mode === 'orbit') {
@@ -595,6 +635,15 @@ window.manor = {
   tod,
   LOOK,
   TINTS,
+  get season() {
+    return season;
+  },
+  /** Jump to a day of the year (0 = 1 January). */
+  setDay(day) {
+    seasonDay = day;
+    $('season').value = String(Math.floor(day));
+    updateSeason();
+  },
   quality,
   tour,
   sound,

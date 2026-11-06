@@ -1,20 +1,34 @@
 // Time of day: sun and moon, sky, stars, fog and the environment light.
-// The sun follows its real path for Surrey (51.3° N) in late May, with north at -z
-// (so the front of the house, facing +z, faces south).
+// The sun follows its real path for Surrey (51.3° N, 0.3° W) on the chosen day of the
+// year, with north at -z (so the front of the house, facing +z, faces south). Clock times
+// are local: British Summer Time from late March to late October, GMT otherwise.
 
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 
 const LAT = THREE.MathUtils.degToRad(51.3);
-const DECL = THREE.MathUtils.degToRad(21); // late May
-const SOLAR_NOON = 13.1; // British Summer Time
+const LON = -0.3;
 
-/** Sun elevation and azimuth (radians, azimuth clockwise from north) at `hours`. */
-export function sunAt(hours) {
-  const H = THREE.MathUtils.degToRad((hours - SOLAR_NOON) * 15);
-  const sinE = Math.sin(LAT) * Math.sin(DECL) + Math.cos(LAT) * Math.cos(DECL) * Math.cos(H);
+/** British Summer Time, roughly: the last Sunday of March to the last Sunday of October. */
+export const isSummerTime = (day) => day >= 87 && day < 300;
+
+/** The sun's declination (radians) and local clock time of solar noon on day 0..364. */
+export function sunDay(day) {
+  const decl = THREE.MathUtils.degToRad(23.44) * Math.sin((2 * Math.PI * (284 + day + 1)) / 365);
+  // the equation of time: the sun runs up to 16 minutes fast or slow of the clock over the year
+  const B = (2 * Math.PI * (day + 1 - 81)) / 364;
+  const eot = 9.87 * Math.sin(2 * B) - 7.53 * Math.cos(B) - 1.5 * Math.sin(B); // minutes
+  const noon = 12 - LON / 15 - eot / 60 + (isSummerTime(day) ? 1 : 0);
+  return { decl, noon };
+}
+
+/** Sun elevation and azimuth (radians, azimuth clockwise from north) at `hours` on `day`. */
+export function sunAt(hours, day = 145) {
+  const { decl, noon } = sunDay(day);
+  const H = THREE.MathUtils.degToRad((hours - noon) * 15);
+  const sinE = Math.sin(LAT) * Math.sin(decl) + Math.cos(LAT) * Math.cos(decl) * Math.cos(H);
   const e = Math.asin(sinE);
-  const az = Math.atan2(Math.sin(H), Math.cos(H) * Math.sin(LAT) - Math.tan(DECL) * Math.cos(LAT)) + Math.PI;
+  const az = Math.atan2(Math.sin(H), Math.cos(H) * Math.sin(LAT) - Math.tan(decl) * Math.cos(LAT)) + Math.PI;
   return { elevation: e, azimuth: az };
 }
 
@@ -154,6 +168,7 @@ export class TimeOfDay {
     this.renderer = renderer;
     this.scene = scene;
     this.hours = 15;
+    this.day = 145; // day of the year, 0 = 1 January (145 = 26 May)
     this.compass = 0;
     this.centre = new THREE.Vector3();
     this.radius = 100;
@@ -225,7 +240,7 @@ export class TimeOfDay {
   }
 
   update(force = false) {
-    const { elevation, azimuth } = sunAt(this.hours);
+    const { elevation, azimuth } = sunAt(this.hours, this.day);
     dirFrom(elevation, azimuth, this.compass, this.sunDir);
     // the moon: opposite side of the sky, fairly high
     dirFrom(THREE.MathUtils.degToRad(32), azimuth + Math.PI + 0.4, this.compass, this.moonDir);
@@ -272,8 +287,10 @@ export class TimeOfDay {
     this.fog.color.copy(day).lerp(duskC, this.dusk * 0.6).lerp(nightC, this.night);
 
     // the environment map is the costly part: refresh it every 10 minutes of sky time
-    if (force || this.lastEnvHours === null || Math.abs(this.hours - this.lastEnvHours) > 1 / 6) {
+    const dayMoved = Math.abs(this.day - (this.lastEnvDay ?? -99)) > 3;
+    if (force || dayMoved || this.lastEnvHours === null || Math.abs(this.hours - this.lastEnvHours) > 1 / 6) {
       this.lastEnvHours = this.hours;
+      this.lastEnvDay = this.day;
       if (this.envTarget) this.envTarget.dispose();
       this.envTarget = this.pmrem.fromScene(this.envScene, 0, 0.1, 1000);
       this.scene.environment = this.envTarget.texture;

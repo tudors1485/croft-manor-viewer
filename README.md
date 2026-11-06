@@ -67,7 +67,13 @@ The result is about 83 MB: 36 MB of textures and 47 MB of geometry, with 763k tr
   - In Walk mode, footsteps change with the surface: stone, gravel or grass.
 - **Save a picture** downloads the current view as a PNG, without the panel.
 - **Place** jumps to a saved view: from above (over the gate, as in the renders, and straight down), the front of the house, the fountain, and the rooms. To add one, use "Copy this view" and paste the line into `public/viewpoints.json`.
-- **Time**: the sun follows its real path over Surrey in late May, with the front of the house facing south. The ▶ button runs a day in two minutes, and Compass turns the sun's path. From about 9° above the horizon the lamps come on (`src/lamps.js`):
+- **Season** (`src/season.js`): a slider for the day of the year, with ▶ to run a year in a minute.
+  - The sun takes its real path for that date: its declination, the equation of time, and British Summer Time from late March to late October. Midwinter noon sun is 15° up, midsummer 62°; sunrise and sunset match London's.
+  - The trees come into leaf over April and May, in a fresh yellowish green. They turn in October, some butter-yellow and some orange-brown, and drop their leaves through November, bare until spring. Each tree runs a few days early or late. Each leaf has its own random number, so the crowns thin leaf by leaf, and their shadows thin with them (the shadow pass uses the same shader). The far trees follow too, swapping to a bare picture of the same tree.
+  - The grass is lush in spring and a little parched by late August, then dull in winter (late May is the calibrated colour).
+  - Snow lies from about 21 December to early February, on the lawns, fields, drive, gravel and roofs, patchy as it comes and goes, with snow falling around you outdoors. Footsteps crunch in it. The shrubs and the ivy stay green.
+  - Birds are busiest in spring and few sing in winter; crickets only sing on summer nights.
+- **Time**: the sun follows its real path over Surrey on the chosen day, with the front of the house facing south. The ▶ button runs a day in two minutes, and Compass turns the sun's path. From about 9° above the horizon the lamps come on (`src/lamps.js`):
   - every chandelier candle, wall sconce and kitchen tube gets a flame or glow, found by splitting the merged fitting meshes into pieces (one draw call for all the flames);
   - eight point lights follow you to the nearest fittings, outdoor ones first when you're outside;
   - outside there's a porch lantern, and floodlights at the foot of the front facade;

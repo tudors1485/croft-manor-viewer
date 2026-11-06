@@ -9,6 +9,7 @@
 // other, blend them by noise, and drift between lusher and drier greens over tens of metres.
 
 import * as THREE from 'three';
+import { seasonUniforms } from './season.js';
 
 // Calibrated by rendering the view over the gate at 14:00, sampling the lawn, the walls
 // and the gravel, and nudging each tint (in linear light) until they matched the render.
@@ -37,11 +38,14 @@ export function tuneMaterials(model) {
     }
     if (name === 'cm_grass') grassShader(o.material);
     if (/^cm_brickwall|^cm_assault_bricks_red/.test(name)) brickShader(o.material);
+    if (/^(cm_gravel|cm_roof|cm_roofpattern|cm_assault_gripfloor|cm_assault_sand)$/.test(name)) snowShader(o.material);
   });
 }
 
 const GRASS_GLSL = /* glsl */ `
   varying vec3 vGrassWorld;
+  uniform vec3 uGrassTint;
+  uniform float uSnow;
   float gHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   float gNoise(vec2 p) {
     vec2 i = floor(p), f = fract(p);
@@ -55,6 +59,8 @@ const GRASS_GLSL = /* glsl */ `
 export function grassShader(material) {
   material.roughness = 0.96; // grass is matt: no sky sheen from above
   material.onBeforeCompile = (shader) => {
+    shader.uniforms.uGrassTint = seasonUniforms.uGrassTint;
+    shader.uniforms.uSnow = seasonUniforms.uSnow;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vGrassWorld;')
       .replace(
@@ -87,6 +93,10 @@ export function grassShader(material) {
          vec3 lush = vec3(0.86, 1.04, 0.86);
          vec3 dry = vec3(1.18, 1.06, 0.7);
          diffuseColor.rgb *= mix(lush, dry, smoothstep(0.2, 0.8, big)) * (0.82 + 0.36 * mid);
+         // the season's colour, then snow: patchy as it comes and goes, a blanket at its deepest
+         diffuseColor.rgb *= uGrassTint;
+         float cover = smoothstep(0.35, 0.55, gFbm(gw * 0.33) * 0.6 + uSnow * 0.75 - 0.15) * step(0.001, uSnow);
+         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.78, 0.81, 0.86) * (0.94 + 0.12 * mid), cover);
        }`,
     );
   };
@@ -114,5 +124,32 @@ export function brickShader(material) {
     );
   };
   material.customProgramCacheKey = () => 'brick';
+  material.needsUpdate = true;
+}
+
+/**
+ * Snow on surfaces that face the sky (roofs, gravel, the assault course floor): white
+ * where the surface is near level, less on steep roof slopes, none on walls.
+ */
+export function snowShader(material) {
+  const before = material.onBeforeCompile;
+  material.onBeforeCompile = (shader, renderer) => {
+    before?.call(material, shader, renderer);
+    shader.uniforms.uSnow = seasonUniforms.uSnow;
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float uSnow;')
+      .replace(
+        '#include <normal_fragment_maps>',
+        `#include <normal_fragment_maps>
+         {
+           vec3 wn = normalize((vec4(normal, 0.0) * viewMatrix).xyz);
+           float cover = uSnow * smoothstep(0.45, 0.8, wn.y);
+           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.8, 0.83, 0.88), cover);
+           roughnessFactor = mix(roughnessFactor, 0.7, cover);
+         }`,
+      );
+  };
+  const key = material.customProgramCacheKey?.call(material) ?? '';
+  material.customProgramCacheKey = () => `${key}+snow`;
   material.needsUpdate = true;
 }

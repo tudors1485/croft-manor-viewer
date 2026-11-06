@@ -1,0 +1,136 @@
+// The seasons: one slider for the day of the year. The sun takes its path for that day
+// (sky.js); this is the rest of the year: the trees come into leaf in April and May, turn
+// in October and are bare by the end of November (each tree a little early or late, see
+// the leaf shader in landscape.js); the grass is lush in spring and a little parched by
+// late summer; snow lies in the depth of winter; the birds are busiest in spring and the
+// crickets only sing in summer.
+
+import * as THREE from 'three';
+
+/** Shared by every shader that changes with the season. */
+export const seasonUniforms = {
+  uDay: { value: 145 },
+  uSnow: { value: 0 },
+  uGrassTint: { value: new THREE.Color(1, 1, 1) },
+};
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const LENGTHS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+/** Day of the year (0 = 1 January) as "26 May". */
+export function dateLabel(day) {
+  let d = Math.floor(day) % 365;
+  let m = 0;
+  while (d >= LENGTHS[m]) d -= LENGTHS[m++];
+  return `${d + 1} ${MONTHS[m]}`;
+}
+
+/** Days between two days of the year, going round the year either way. */
+const apart = (a, b) => {
+  const d = Math.abs(a - b) % 365;
+  return Math.min(d, 365 - d);
+};
+
+// the grass through the year: [day, colour multiplier]. Late May is 1, the colour the
+// lawn was calibrated to against TRJTA's renders.
+const GRASS = [
+  [15, [0.82, 0.82, 0.86]],
+  [80, [0.9, 0.92, 0.9]],
+  [120, [0.97, 1.03, 0.93]],
+  [145, [1, 1, 1]],
+  [205, [1.02, 0.97, 0.98]],
+  [240, [1.1, 0.96, 0.86]],
+  [290, [1.0, 0.92, 0.88]],
+  [335, [0.88, 0.85, 0.86]],
+];
+
+function grassOn(day) {
+  const n = GRASS.length;
+  for (let i = 0; i < n; i++) {
+    const [a, ca] = GRASS[i];
+    const [b0, cb] = GRASS[(i + 1) % n];
+    const b = b0 <= a ? b0 + 365 : b0; // the last stretch runs across the new year
+    const d = day < a ? day + 365 : day;
+    if (d >= a && d < b) {
+      const t = THREE.MathUtils.smoothstep(d, a, b);
+      return ca.map((v, k) => THREE.MathUtils.lerp(v, cb[k], t));
+    }
+  }
+  return GRASS[0][1];
+}
+
+/** Everything the year changes, on day 0..364. */
+export function seasonAt(day) {
+  const ss = THREE.MathUtils.smoothstep;
+  // snow lies from about 21 December to early February, deepest in mid-January
+  const snow = 1 - ss(apart(day, 12), 22, 34);
+  // birds: the dawn chorus is a spring thing; few sing in winter
+  const birds = 0.3 + 0.9 * ss(day, 60, 100) * (1 - ss(day, 170, 230)) + 0.35 * ss(day, 170, 200) * (1 - ss(day, 260, 320));
+  const crickets = ss(day, 150, 180) * (1 - ss(day, 245, 275));
+  const name = day < 59 || day >= 334 ? 'winter' : day < 151 ? 'spring' : day < 243 ? 'summer' : 'autumn';
+  return { day, snow, grass: grassOn(day), birds, crickets, name };
+}
+
+/** Light snow falling round the camera while snow lies (drawn only outdoors). */
+export class Snowfall {
+  constructor(scene, count = 5000) {
+    const box = new THREE.Vector3(60, 30, 60);
+    const off = new Float32Array(count * 3);
+    const speed = new Float32Array(count);
+    for (let i = 0; i < count; i++) {
+      off.set([Math.random() * box.x, Math.random() * box.y, Math.random() * box.z], i * 3);
+      speed[i] = 0.8 + Math.random() * 0.9;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(off, 3));
+    geo.setAttribute('speed', new THREE.BufferAttribute(speed, 1));
+    this.material = new THREE.ShaderMaterial({
+      uniforms: { uTime: { value: 0 }, uCam: { value: new THREE.Vector3() }, uBox: { value: box }, uAmount: { value: 0 }, uScale: { value: 1 } },
+      vertexShader: /* glsl */ `
+        attribute float speed;
+        uniform float uTime;
+        uniform vec3 uCam;
+        uniform vec3 uBox;
+        uniform float uScale;
+        varying float vFade;
+        void main() {
+          vec3 p = position;
+          p.y -= uTime * speed;
+          p.x += uTime * 0.5 + sin(uTime * 0.7 + position.z) * 0.8;
+          p.z += cos(uTime * 0.5 + position.x) * 0.6;
+          // wrap the flakes in a box that travels with the camera
+          p = mod(p - uCam + uBox * 0.5, uBox) + uCam - uBox * 0.5;
+          vec4 mv = modelViewMatrix * vec4(p, 1.0);
+          gl_Position = projectionMatrix * mv;
+          float d = -mv.z;
+          vFade = smoothstep(0.3, 1.5, d) * (1.0 - smoothstep(18.0, 30.0, d));
+          gl_PointSize = uScale * 70.0 / max(d, 0.1);
+        }`,
+      fragmentShader: /* glsl */ `
+        uniform float uAmount;
+        varying float vFade;
+        void main() {
+          vec2 c = gl_PointCoord - 0.5;
+          float a = smoothstep(0.5, 0.15, length(c)) * vFade * uAmount;
+          if (a < 0.01) discard;
+          gl_FragColor = vec4(vec3(0.95), a * 0.85);
+        }`,
+      transparent: true,
+      depthWrite: false,
+    });
+    this.points = new THREE.Points(geo, this.material);
+    this.points.frustumCulled = false;
+    this.points.visible = false;
+    this.points.renderOrder = 11;
+    scene.add(this.points);
+  }
+
+  update(dt, camera, amount, pixelRatio) {
+    const u = this.material.uniforms;
+    u.uTime.value += dt;
+    u.uCam.value.copy(camera.position);
+    u.uAmount.value = amount;
+    u.uScale.value = pixelRatio;
+    this.points.visible = amount > 0.01;
+  }
+}

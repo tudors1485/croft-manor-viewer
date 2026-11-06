@@ -184,13 +184,15 @@ export class Soundscape {
     const t = ctx.currentTime;
     const src = ctx.createBufferSource();
     src.buffer = this.white;
+    // snow on the ground: a soft, squeaky crunch outdoors
+    if (this.snow > 0.5 && surface !== 'stone') surface = 'snow';
     const f = ctx.createBiquadFilter();
     f.type = surface === 'grass' ? 'lowpass' : 'bandpass';
-    f.frequency.value = surface === 'grass' ? 900 : surface === 'gravel' ? 2400 : 1200;
-    f.Q.value = surface === 'stone' ? 2 : 0.7;
+    f.frequency.value = surface === 'grass' ? 900 : surface === 'gravel' ? 2400 : surface === 'snow' ? 3200 : 1200;
+    f.Q.value = surface === 'stone' ? 2 : surface === 'snow' ? 1.4 : 0.7;
     const e = ctx.createGain();
-    const level = (surface === 'gravel' ? 0.16 : surface === 'grass' ? 0.08 : 0.12) * Math.min(1.4, speed / 3);
-    const len = surface === 'gravel' ? 0.16 : surface === 'grass' ? 0.12 : 0.07;
+    const level = (surface === 'gravel' ? 0.16 : surface === 'grass' ? 0.08 : surface === 'snow' ? 0.11 : 0.12) * Math.min(1.4, speed / 3);
+    const len = surface === 'gravel' ? 0.16 : surface === 'grass' ? 0.12 : surface === 'snow' ? 0.22 : 0.07;
     e.gain.setValueAtTime(0, t);
     e.gain.linearRampToValueAtTime(level, t + 0.008);
     e.gain.exponentialRampToValueAtTime(0.0001, t + len);
@@ -241,7 +243,8 @@ export class Soundscape {
   }
 
   /** Call once a frame. */
-  update(dt, camera, { night, inside }) {
+  update(dt, camera, { night, inside, birds = 1, crickets = 1, snow = 0 }) {
+    this.snow = snow;
     if (!this.on || !this.ctx) return;
     const t = this.ctx.currentTime;
     this.listener.copy(camera.position);
@@ -255,11 +258,11 @@ export class Soundscape {
     const water = Math.max(0, 1 - df / 28) ** 2;
     this.waterGain.gain.setTargetAtTime(0.18 * water * (0.4 + 0.6 * outdoors), t, 0.3);
 
-    this.cricketGain.gain.setTargetAtTime(0.008 * night * outdoors, t, 1.0);
+    this.cricketGain.gain.setTargetAtTime(0.008 * night * outdoors * crickets, t, 1.0);
 
     if (t > this._nextBird) {
       if (day > 0.3) this._bird(t + 0.05);
-      this._nextBird = t + (0.8 + Math.random() * 3.5) / Math.max(0.2, day * (0.35 + 0.65 * outdoors));
+      this._nextBird = t + (0.8 + Math.random() * 3.5) / Math.max(0.12, day * birds * (0.35 + 0.65 * outdoors));
     }
     if (t > this._nextOwl) {
       if (night > 0.7 && outdoors > 0.5) this._owl(t + 0.05);
