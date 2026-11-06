@@ -265,6 +265,8 @@ export class TimeOfDay {
       this.light.color.setHSL(0.08, 0.75 - 0.45 * t, 0.58 + 0.32 * t);
       this.light.intensity = (1.3 + 2.2 * Math.min(1, t * 1.6)) * sunUp;
     }
+    this._sunIntensity = this.light.intensity;
+    this._moonLight = useMoon;
 
     // twilight: the sky keeps lighting the ground for a while after sunset
     const twilight = THREE.MathUtils.smoothstep(deg, -10, 0);
@@ -312,7 +314,9 @@ export class TimeOfDay {
     // (there is no real bounce light here), so they keep more of it than at night
     const day = 1 - this.night;
     this.scene.environmentIntensity = env * THREE.MathUtils.lerp(1, THREE.MathUtils.lerp(0.22, 0.34, day), this.inside);
-    this.hemi.intensity = this._hemiBase * THREE.MathUtils.lerp(1, 1.35 + 0.45 * t, this.inside * day);
+    this.hemi.intensity = this._hemiBase * THREE.MathUtils.lerp(1, 1.25 + 0.3 * t, this.inside * day);
+    // and the sun that does come in lands harder, so its patches show against the room
+    if (this._sunIntensity !== undefined) this.light.intensity = this._sunIntensity * (this._moonLight ? 1 : THREE.MathUtils.lerp(1, 1.45, this.inside));
   }
 
   tick(dt) {

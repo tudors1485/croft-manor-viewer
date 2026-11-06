@@ -89,9 +89,8 @@ export const FLYBYS = {
   estate: {
     label: 'Over the estate',
     keys: [
-      k([4.5, 3.5, 92], [4.5, 3.5, 40], { speed: 4 }),
-      k([4.6, 3.2, 58], [4.6, 2.4, 20], { speed: 9 }),
-      k([4.6, 2.2, 31], [4.6, 2.0, 12], { speed: 9 }),
+      k([4.6, 2.6, 36], [4.6, 2.2, 12], { speed: 5 }),
+      k([4.6, 2.2, 28], [4.6, 2.0, 12], { speed: 8 }),
       k([4.6, 2.0, 21], [4.6, 2.2, 8.4], { speed: 8 }),
       k([4.6, 3.0, 13.5], [8, 2.2, 6], { speed: 8 }),
       k([12.5, 4.4, 6], [4.6, 2, 8.4], { speed: 8 }),
@@ -124,6 +123,43 @@ export const FLYBYS = {
       k([10.5, 1.8, -26.4], [-6, 2.2, -28], { speed: 1 }),
     ],
   },
+  round: {
+    label: 'Round the manor',
+    keys: [
+      k([-24, 17, 14], [6, 6, -20], { speed: 5 }),
+      k([-35, 18, -12], [6, 6, -21], { speed: 11 }),
+      k([-31, 19, -44], [6, 6, -21], { speed: 11 }),
+      k([-6, 20, -60], [6, 6, -21], { speed: 11 }),
+      k([24, 20, -58], [8, 6, -21], { speed: 11 }),
+      k([44, 19, -38], [8, 6, -21], { speed: 11 }),
+      k([47, 20, -10], [8, 5, -20], { speed: 11 }),
+      k([32, 19.5, 14], [6, 5, -18], { speed: 10 }),
+      k([8, 14, 24], [2, 6, -14], { speed: 6 }),
+      k([-1.85, 17, 8], [-1.85, 9, -16], { speed: 2 }),
+    ],
+  },
+  grounds: {
+    label: 'The grounds',
+    keys: [
+      k([-38, 2.8, 36], [-10, 2.2, 26], { speed: 4 }),
+      k([-14, 2.4, 27], [10, 2.2, 25], { speed: 9 }),
+      k([8, 2.4, 25.5], [24, 2.6, 22], { speed: 9 }),
+      k([21, 2.8, 25], [32, 3, 10], { speed: 9 }),
+      k([30, 4.2, 18], [30, 2.6, -4], { speed: 9 }),
+      k([27, 3, 2], [40, 3, -22], { speed: 9 }),
+      k([40, 3.2, -18], [42, 3, -46], { speed: 9 }),
+      k([42, 3.4, -46], [30, 4, -62], { speed: 9 }),
+      k([30, 7, -60], [0, 3, -75], { speed: 9 }),
+      k([2, 7.5, -92], [-20, 3, -70], { speed: 9 }),
+      k([-30, 6, -66], [-34, 3, -40], { speed: 9 }),
+      k([-36, 4, -46], [-36, 3, -20], { speed: 9 }),
+      k([-37, 3.2, -24], [-30, 3, 0], { speed: 9 }),
+      k([-37, 3.2, -6], [-10, 3, 6], { speed: 9 }),
+      k([-16, 3.2, 2], [4.6, 2, 8.4], { speed: 8 }),
+      k([-3, 4.5, 9], [-1.85, 5, -11], { speed: 6 }),
+      k([-1.85, 13, 3], [-1.85, 9, -16], { speed: 2 }),
+    ],
+  },
   assault: {
     label: 'The assault course',
     keys: [
@@ -141,6 +177,7 @@ export const FLYBYS = {
 };
 
 const FADE = 0.4; // seconds to black and back at a cut
+const FLYBY_FOV = 68; // the flyby lens (the fisheye magnifies the middle a little)
 
 /** One continuous camera move along keys, with a smoothly changing speed. */
 class Move {
@@ -254,6 +291,12 @@ export class Tour {
     this._fovBase = this.camera.fov;
     this.onFade?.(0);
     this.onCaption?.('');
+    // a flyby starts with its lens on: the fisheye and the wider view from the first frame
+    this.fisheye = this.flyby ? 1 : 0;
+    if (this.flyby) {
+      this.camera.fov = FLYBY_FOV;
+      this.camera.updateProjectionMatrix();
+    }
   }
 
   stop() {
@@ -332,12 +375,7 @@ export class Tour {
     // the roll is a rotation about the camera's own view axis, composed onto its orientation
     this._qRoll.setFromAxisAngle(this._axis, this._roll);
     this.camera.quaternion.multiply(this._qRoll);
-    // fisheye and a wider lens, eased in at the start and out at the end
-    const total = move.duration;
-    const edge = Math.min(1, this.t / 1.2, (total - this.t) / 1.2);
-    this.fisheye = THREE.MathUtils.clamp(edge, 0, 1);
-    this.camera.fov = THREE.MathUtils.lerp(this._fovBase, 68, this.fisheye);
-    this.camera.updateProjectionMatrix();
+    this.fisheye = 1;
   }
 
   /** Where the camera is looking right now (for handing over to orbit). */

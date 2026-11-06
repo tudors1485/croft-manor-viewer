@@ -1,11 +1,12 @@
 // Evening and night: the manor's chandeliers, wall sconces and kitchen tubes light up.
 // The fittings are found by splitting the merged light-fitting meshes into connected
 // pieces. Every fitting gets a glowing flame (one Points draw call for all of them);
-// a small pool of real point lights follows the camera to the nearest fittings.
+// every fitting casts real light: fittings within a few metres of each other share one
+// point light, so the whole house is lit at once, wherever you are.
 
 import * as THREE from 'three';
 
-const POOL_SIZE = 8;
+const JOIN = 3.2; // fittings closer than this (and at about the same height) share a light
 
 /** Bounding boxes of the connected pieces of a merged mesh (world space). */
 function partsIn(mesh) {
@@ -206,15 +207,38 @@ export class Lamps {
     this.glow.renderOrder = 10;
     scene.add(this.glow);
 
-    this.pool = [];
-    for (let i = 0; i < POOL_SIZE; i++) {
-      const l = new THREE.PointLight(0xffb870, 0, 18, 2);
-      l.castShadow = false;
-      l.visible = false;
-      this.pool.push(l);
-      scene.add(l);
+    this.lights = [];
+    this._buildLights();
+  }
+
+  /** One point light per group of nearby fittings; all of them on together. */
+  _buildLights() {
+    for (const l of this.lights) this.scene.remove(l.light);
+    const groups = [];
+    for (const f of [...this.fixtures].sort((a, b) => b.power - a.power)) {
+      const g = groups.find(
+        (g) => !!g.outdoor === !!f.outdoor && g.kind === f.kind && Math.hypot(g.pos.x - f.pos.x, g.pos.z - f.pos.z) < JOIN && Math.abs(g.pos.y - f.pos.y) < 1.5,
+      );
+      if (g) {
+        g.pos.multiplyScalar(g.power).addScaledVector(f.pos, f.power).divideScalar(g.power + f.power);
+        g.power += f.power;
+      } else groups.push({ pos: f.pos.clone(), power: f.power, kind: f.kind, outdoor: f.outdoor });
     }
-    this._order = this.fixtures.map((_, i) => i);
+    this.lights = groups.map((g) => {
+      const colour = g.kind === 'tube' ? 0xe8f0ff : g.kind === 'flood' || g.kind === 'lantern' ? 0xffc890 : 0xffb870;
+      // a shared light is stronger, but less than the sum (the fittings were close together)
+      const power = g.power * 0.85;
+      const light = new THREE.PointLight(colour, 0, g.outdoor ? 26 : 9 + Math.sqrt(power) * 1.6, 2);
+      light.position.copy(g.pos);
+      light.castShadow = false;
+      light.visible = false;
+      this.scene.add(light);
+      return { light, power };
+    });
+  }
+
+  get lightCount() {
+    return this.lights.length;
   }
 
   /**
@@ -245,7 +269,7 @@ export class Lamps {
     this.outdoorGlow.frustumCulled = false;
     this.outdoorGlow.renderOrder = 10;
     this.scene.add(this.outdoorGlow);
-    this._order = this.fixtures.map((_, i) => i);
+    this._buildLights();
   }
 
   get count() {
@@ -272,27 +296,11 @@ export class Lamps {
     this.windowsGlow += (target - this.windowsGlow) * (1 - Math.exp(-dt * 4));
     for (const m of this.glass) m.emissiveIntensity = 0.9 * this.windowsGlow;
 
-    // the point lights go to the nearest fittings, outdoor ones first when you are outside
-    const cp = camera.position;
-    const d = this.fixtures.map((f) => f.pos.distanceToSquared(cp));
-    const key = this.fixtures.map((f, i) => d[i] * (!!f.outdoor === outside ? 1 : 9));
-    this._order.sort((a, b) => key[a] - key[b]);
-    // switching lights on or off recompiles every shader, so the pool goes on and off together
+    // every light on together (switching lights on or off recompiles every shader)
     const on = level > 0.001;
-    for (let i = 0; i < this.pool.length; i++) {
-      const l = this.pool[i];
-      l.visible = on;
-      const fi = this._order[i];
-      const f = fi === undefined ? null : this.fixtures[fi];
-      if (!f || !on) {
-        l.intensity = 0;
-        continue;
-      }
-      const dist = Math.sqrt(d[fi]);
-      const fade = f.outdoor ? 1 - THREE.MathUtils.smoothstep(dist, 45, 80) : 1 - THREE.MathUtils.smoothstep(dist, 18, 30);
-      l.position.copy(f.pos);
-      l.color.set(f.kind === 'tube' ? 0xe8f0ff : f.kind === 'flood' ? 0xffc890 : 0xffb870);
-      l.intensity = f.power * level * fade;
+    for (const { light, power } of this.lights) {
+      light.visible = on;
+      light.intensity = on ? power * level : 0;
     }
   }
 }

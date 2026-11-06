@@ -29,6 +29,8 @@ const marchShader = {
     uFrame: { value: 0 },
     uMaxDist: { value: 30 },
     uBias: { value: -0.0004 },
+    uBoxMin: { value: new THREE.Vector3(-1e5, -1e5, -1e5) },
+    uBoxMax: { value: new THREE.Vector3(1e5, 1e5, 1e5) },
   },
   vertexShader,
   fragmentShader: /* glsl */ `
@@ -42,6 +44,8 @@ const marchShader = {
     uniform float uFrame;
     uniform float uMaxDist;
     uniform float uBias;
+    uniform vec3 uBoxMin;
+    uniform vec3 uBoxMax;
     varying vec2 vUv;
     // interleaved gradient noise: a different start along the ray for neighbouring pixels
     float ign(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
@@ -60,12 +64,14 @@ const marchShader = {
         vec3 p = uCamPos + dir * ((float(i) + j) * stepLen);
         vec4 sc = uShadowMatrix * vec4(p, 1.0);
         sc.xyz /= sc.w;
-        if (all(greaterThan(sc.xyz, vec3(0.0))) && all(lessThan(sc.xyz, vec3(1.0)))) {
+        // only the air in the house: sunlit air outside, seen through a window, made it glow
+        bool indoors = all(greaterThan(p, uBoxMin)) && all(lessThan(p, uBoxMax));
+        if (indoors && all(greaterThan(sc.xyz, vec3(0.0))) && all(lessThan(sc.xyz, vec3(1.0)))) {
           lit += texture(tShadow, vec3(sc.xy, sc.z + uBias));
         }
       }
       float mu = dot(dir, uSunDir);
-      const float g = 0.55;
+      const float g = 0.45;
       float phase = (1.0 - g * g) / (12.566 * pow(1.0 + g * g - 2.0 * g * mu, 1.5));
       gl_FragColor = vec4(lit / float(${STEPS}) * len * phase, 0.0, 0.0, 1.0);
     }`,
@@ -96,7 +102,9 @@ const compositeShader = {
     varying vec2 vUv;
     void main() {
       vec4 c = texture2D(tDiffuse, vUv);
-      gl_FragColor = vec4(c.rgb + uLight * texture2D(tBeams, vUv).r, c.a);
+      // a soft ceiling, so a room full of sunlit air (the pool under its glass roof) doesn't fog over
+      float s = texture2D(tBeams, vUv).r;
+      gl_FragColor = vec4(c.rgb + uLight * s / (1.0 + s * 2.5), c.a);
     }`,
 };
 
@@ -107,6 +115,7 @@ export class SunbeamsPass extends Pass {
     this.light = null; // the sun, a DirectionalLight with a shadow map
     this.depthTexture = null; // the scene depth (set by Quality from the ambient-occlusion pass)
     this.strength = 0; // set each frame: 0 outdoors or at night
+    this.box = null; // the house: only air inside it scatters
     const rt = () => new THREE.WebGLRenderTarget(16, 16, { type: THREE.HalfFloatType, format: THREE.RedFormat, depthBuffer: false });
     this.a = rt();
     this.b = rt();
@@ -139,6 +148,10 @@ export class SunbeamsPass extends Pass {
     m.uSunDir.value.copy(this.light.position).sub(this.light.target.position).normalize();
     m.uBias.value = this.light.shadow.bias;
     m.uFrame.value = this._frame++ % 64;
+    if (this.box) {
+      m.uBoxMin.value.copy(this.box.min);
+      m.uBoxMax.value.copy(this.box.max);
+    }
     renderer.setRenderTarget(this.a);
     this.march.render(renderer);
 

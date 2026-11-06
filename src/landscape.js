@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { Tree } from '@dgreenheck/ez-tree';
 import { seasonUniforms } from './season.js';
-import { snowShader } from './materials.js';
+import { snowShader, gravelShader } from './materials.js';
 
 function rng(seed) {
   let a = seed >>> 0;
@@ -729,7 +729,9 @@ export class Landscape {
     mat.normalMap = null;
     mat.polygonOffset = true;
     mat.polygonOffsetFactor = -1;
-    snowShader(mat); // (a clone doesn't keep the gravel's shader patch)
+    // (a clone doesn't keep the gravel's shader patches)
+    gravelShader(mat);
+    snowShader(mat);
     const mesh = new THREE.Mesh(geo, mat);
     mesh.receiveShadow = true;
     mesh.name = 'Drive';

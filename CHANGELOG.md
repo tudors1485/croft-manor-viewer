@@ -8,6 +8,22 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.12.0, 6 November 2026
+
+- Every lamp is lit, wherever you are. Before, a pool of eight lights followed you to the nearest fittings, so rooms lit up as you came near. Now fittings within a few metres of each other share a light (30 lights for the 36 fittings), and all of them are on together. At night it still runs at 54–60 frames a second on Balanced.
+- Indoors, less haze and more sun shapes. Only the air inside the house scatters sunlight, so the windows no longer glow with outdoor haze. The sun that does come in lands harder on the floors and walls, and a room full of sunlit air (the pool under its glass roof) no longer fogs over. (The ballroom's windows face north: the sun only reaches it early and late on summer days.)
+- The gravel is no longer a grid from above. It gets the same treatment as the lawn: sampled in world space at two scales, its tile pattern flattened, and warmer, greyer, lighter and darker patches over a few metres.
+- Flybys:
+  - Black film bars at the top and bottom, as in the old Tomb Raider cutscenes. The fisheye and wider lens are on from the first frame.
+  - Esc, a click or W A S D leaves a flyby (or the tour), and a line in the top bar says so when it starts.
+  - Over the estate now starts just outside the gate.
+  - The rush of air past your ears, with your speed (in Fly mode too).
+  - Two more: Round the manor (a banking circuit above the treetops, ending over the front door) and The grounds (low along the front wall, round the east lawn, over the assault course, back down the west side and up the facade). Both are checked against walls and trees.
+- Sound you can place: the grandfather clock, the fountain and the doors are positioned in 3D around you, so you can tell where the clock is as you fly round the house. The walls muffle the clock from outside and the fountain from inside.
+- A proper door sound: the latch, then the creak of a dry hinge as the door swings, and a thud and the latch as it shuts.
+- No birds in autumn or winter, and more wind then, with gusts and a whistle on the windiest days.
+- It opens on today's date and the time now, and keeps time with the real clock until you move either slider. Now goes back to it.
+
 ## 0.11.0, 6 November 2026
 
 - Sunlight indoors. Shafts of sunlight show in the air where the sun comes in through the windows, with the window bars in them. For each pixel a shader steps along the view ray through the sun's shadow map, so they appear wherever sunlight really crosses a room: through the kitchen windows in the late afternoon, the bedroom's, the ballroom's in the morning, and down through the pool's glass roof. There is a switch for them (Sunbeams indoors).

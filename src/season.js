@@ -65,12 +65,15 @@ export function seasonAt(day) {
   // snow lies from about 21 December to early February, deepest in mid-January
   const snow = 1 - ss(apart(day, 12), 22, 34);
   // birds: the dawn chorus is a spring thing; few sing in winter
-  const birds = 0.3 + 0.9 * ss(day, 60, 100) * (1 - ss(day, 170, 230)) + 0.35 * ss(day, 170, 200) * (1 - ss(day, 260, 320));
+  // birds sing from March to late August (the dawn chorus is a spring thing), none in autumn or winter
+  const birds = ss(day, 55, 90) * (1 - ss(day, 236, 262)) * (1 + 0.35 * (1 - ss(day, 120, 170)));
+  // wind: gusty from autumn through winter, calm in summer
+  const windy = 1 - ss(apart(day, 15), 50, 140);
   // crickets: from late April, loudest in high summer, quiet again by late October
   const warm = ss(day, 105, 140) * (1 - ss(day, 268, 300));
   const crickets = warm * (0.6 + 0.4 * ss(day, 150, 195));
   const name = day < 59 || day >= 334 ? 'winter' : day < 151 ? 'spring' : day < 243 ? 'summer' : 'autumn';
-  return { day, snow, grass: grassOn(day), birds, crickets, name };
+  return { day, snow, grass: grassOn(day), birds, crickets, windy, name };
 }
 
 /** Light snow falling round the camera while snow lies (drawn only outdoors). */

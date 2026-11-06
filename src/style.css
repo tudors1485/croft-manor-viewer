@@ -225,3 +225,42 @@ body.touring #panel {
 #panel .tours select {
   width: 100%;
 }
+
+/* the black film bars of a flyby, like the old Tomb Raider cutscenes */
+.film-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  height: 0;
+  background: #000;
+  pointer-events: none;
+  z-index: 5;
+}
+#bar-top {
+  top: 0;
+}
+#bar-bottom {
+  bottom: 0;
+}
+body.flyby .film-bar {
+  height: 10.5vh;
+}
+#leave-hint {
+  position: fixed;
+  top: 3.2vh;
+  left: 50%;
+  transform: translateX(-50%);
+  font: 500 13px/1 system-ui, -apple-system, sans-serif;
+  letter-spacing: 0.04em;
+  color: rgba(255, 248, 232, 0.85);
+  opacity: 0;
+  transition: opacity 0.8s;
+  pointer-events: none;
+  z-index: 6;
+}
+#leave-hint.show {
+  opacity: 1;
+}
+#tour-stop {
+  z-index: 7;
+}

@@ -37,6 +37,7 @@ export function tuneMaterials(model) {
       if (extra) Object.assign(o.material, extra);
     }
     if (name === 'cm_grass') grassShader(o.material);
+    if (name === 'cm_gravel') gravelShader(o.material);
     if (/^cm_brickwall|^cm_assault_bricks_red/.test(name)) brickShader(o.material);
     if (/^(cm_gravel|cm_roof|cm_roofpattern|cm_assault_gripfloor|cm_assault_sand)$/.test(name)) snowShader(o.material);
   });
@@ -101,6 +102,53 @@ export function grassShader(material) {
     );
   };
   material.customProgramCacheKey = () => 'grass';
+  material.needsUpdate = true;
+}
+
+/**
+ * Gravel, like the grass: on level ground it is sampled in world space at two scales
+ * turned against each other, with each tile's own light and dark patches flattened out,
+ * and drifts between warmer and greyer, lighter and darker over a few metres, so the drive
+ * doesn't read as a grid from above. Kerbs and edges keep their own mapping.
+ */
+export function gravelShader(material) {
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vGravelWorld;\nvarying vec3 vGravelN;')
+      .replace(
+        '#include <worldpos_vertex>',
+        `#include <worldpos_vertex>
+         vGravelWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;
+         vGravelN = normalize(mat3(modelMatrix) * objectNormal);`,
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vGravelWorld;\nvarying vec3 vGravelN;\n' + GRASS_GLSL.replace(/uniform[^;]*;|varying[^;]*;/g, ''))
+      .replace(
+        '#include <map_fragment>',
+        `#ifdef USE_MAP
+           vec4 gt;
+           if (vGravelN.y > 0.6) {
+             vec2 gw = vGravelWorld.xz;
+             vec2 ua = gw / 3.3;
+             vec2 ub = mat2(0.8, -0.6, 0.6, 0.8) * gw / 2.2 + vec2(0.29, 0.61);
+             vec3 avg = textureLod(map, ua, 12.0).rgb;
+             vec4 ga = texture2D(map, ua);
+             vec4 gb = texture2D(map, ub);
+             ga.rgb *= avg / max(textureLod(map, ua, 6.0).rgb, vec3(0.02));
+             gb.rgb *= avg / max(textureLod(map, ub, 6.0).rgb, vec3(0.02));
+             gt = mix(ga, gb, smoothstep(0.3, 0.7, gFbm(gw * 0.17)));
+             // warmer and greyer patches, lighter and darker ones (raked, trodden, damp)
+             float warm = gFbm(gw * 0.045 + 3.7);
+             float tone = gFbm(gw * 0.23 - 8.1);
+             gt.rgb *= mix(vec3(0.94, 0.95, 1.0), vec3(1.06, 1.02, 0.94), smoothstep(0.25, 0.75, warm)) * (0.86 + 0.28 * tone);
+           } else {
+             gt = texture2D(map, vMapUv);
+           }
+           diffuseColor *= gt;
+         #endif`,
+      );
+  };
+  material.customProgramCacheKey = () => 'gravel';
   material.needsUpdate = true;
 }
 

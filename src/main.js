@@ -49,6 +49,8 @@ function updateSun() {
 // The season: the sun's path for the day, and the trees, grass, snow and wildlife
 let season = seasonAt(145);
 let seasonDay = 145; // fractional while the year runs (the slider snaps to whole days)
+let camSpeed = 0; // how fast the camera moves (m/s), for the rush of air
+const lastCam = new THREE.Vector3();
 let playingYear = false;
 const snowfall = new Snowfall(scene);
 function updateSeason(force = true) {
@@ -65,7 +67,7 @@ function updateSeason(force = true) {
 }
 
 const LOOK = { exposure: 0.66 };
-const BEAMS = { strength: 0.8 }; // dust in the air indoors: how strongly it scatters sunlight
+const BEAMS = { strength: 0.55 }; // dust in the air indoors: how strongly it scatters sunlight
 const ADAPT = { indoors: 1.75 }; // how far the eye opens up when you go in by day
 function updateExposure() {
   // the eye adapts: a little at night, and indoors by day, where the light is far dimmer
@@ -125,7 +127,10 @@ function setMode(next) {
   $('tour').classList.toggle('on', mode === 'tour' && !flybyId);
   $('tour').textContent = mode === 'tour' && !flybyId ? 'Stop the tour' : 'Take the tour';
   document.body.classList.toggle('touring', mode === 'tour');
+  document.body.classList.toggle('flyby', mode === 'tour' && !!flybyId);
   $('tour-stop').hidden = mode !== 'tour';
+  $('tour-stop').textContent = flybyId ? 'Leave the flyby (Esc)' : 'Stop the tour (Esc)';
+  if (mode === 'tour') showLeaveHint(flybyId ? 'Esc, a click or W A S D leaves the flyby' : 'Esc, a click or W A S D stops the tour');
   $('help-orbit').hidden = mode !== 'orbit';
   $('help-walk').hidden = mode !== 'walk';
   $('help-fly').hidden = mode !== 'fly';
@@ -188,9 +193,19 @@ $('flyby').onchange = (e) => {
   flybyId = id;
   setMode('tour');
 };
+// leaving a tour or a flyby: Esc, a click on the picture, or a move key (you take over)
+const LEAVE_KEYS = new Set(['Escape', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 window.addEventListener('keydown', (e) => {
-  if (e.code === 'Escape' && mode === 'tour') setMode('orbit');
+  if (mode === 'tour' && LEAVE_KEYS.has(e.code)) setMode('orbit');
 });
+let hintTimer = 0;
+function showLeaveHint(text) {
+  const el = $('leave-hint');
+  el.textContent = text;
+  el.classList.add('show');
+  clearTimeout(hintTimer);
+  hintTimer = setTimeout(() => el.classList.remove('show'), 5000);
+}
 $('tour-stop').onclick = () => setMode('orbit');
 $('sound').addEventListener('change', async (e) => {
   if (e.target.checked) await sound.enable();
@@ -198,6 +213,7 @@ $('sound').addEventListener('change', async (e) => {
   e.target.blur();
 });
 canvas.addEventListener('click', () => {
+  if (mode === 'tour') return setMode('orbit');
   if ((mode === 'walk' || mode === 'fly') && !look.isLocked) look.lock();
 });
 $('lock-hint').addEventListener('click', () => look.lock());
@@ -414,6 +430,7 @@ loader.load(
 
     water = setupWater(renderer, scene, model);
     lamps = new Lamps(scene, model);
+    quality.beams.box = lamps.houseBox;
     console.info(`light fittings: ${lamps.count}`);
     resizeWater();
     updateSun();
@@ -455,10 +472,11 @@ async function prepareWalking(ground) {
   doors = new Doors(scene, model, geo);
   walker.skipTriangle = passDoor;
   walker.ghost = throughWalls;
-  doors.onSound = (opening, d, dist) => sound.door(opening, dist);
+  doors.onSound = (opening, d) => sound.door(opening, d.centre);
   console.info(`doors: ${doors.summary}`);
 
   lamps?.addOutdoor(geo.boundsTree);
+  console.info(`lights: ${lamps?.lightCount} point lights for ${lamps?.count} fittings`);
   landscape = new Landscape({ scene, renderer, model, lawn, bvh: geo.boundsTree, hillHeight });
   landscape.build().then(async (st) => {
     walker.obstacles = landscape.obstacles;
@@ -507,7 +525,32 @@ fetch('/version.json')
 // Panel wiring
 $('stats').innerHTML = '<span id="stats-base"></span> · <span id="stats-fps"></span>';
 for (const id of ['time', 'sun-azim']) $(id).addEventListener('input', updateSun);
-$('time').addEventListener('input', () => setPlaying(false));
+$('time').addEventListener('input', () => {
+  setPlaying(false);
+  liveClock = false;
+});
+// It opens on today's date and the time now, and keeps time with the real clock until you
+// move the time or the season; "Now" goes back to it.
+let liveClock = true;
+let liveTicker = 0;
+function dayOfYear(d) {
+  return Math.min(364, Math.floor((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - Date.UTC(d.getFullYear(), 0, 1)) / 864e5));
+}
+function goToNow() {
+  const now = new Date();
+  liveClock = true;
+  setPlaying(false);
+  setPlayingYear(false);
+  $('time').value = String(now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600);
+  seasonDay = dayOfYear(now);
+  $('season').value = String(seasonDay);
+  updateSeason();
+  updateSun();
+}
+$('now').onclick = (e) => {
+  goToNow();
+  e.currentTarget.blur();
+};
 function setPlaying(on) {
   playing = on;
   $('play').textContent = on ? '❚❚' : '▶';
@@ -519,6 +562,7 @@ $('play').onclick = (e) => {
 };
 $('season').addEventListener('input', () => {
   setPlayingYear(false);
+  liveClock = false;
   seasonDay = Number($('season').value);
   updateSeason();
 });
@@ -550,6 +594,7 @@ $('shadows').addEventListener('change', (e) => {
 });
 updateExposure();
 loadViewpoints();
+goToNow();
 
 window.addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
@@ -580,6 +625,23 @@ renderer.setAnimationLoop((time) => {
     tod.update();
     $('time-label').textContent = tod.label();
   }
+  if (liveClock && !playing && !playingYear) {
+    // the real clock: refresh the sun every few seconds (the date rolls over at midnight)
+    liveTicker += dt;
+    if (liveTicker > 5) {
+      liveTicker = 0;
+      const now = new Date();
+      $('time').value = String(now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600);
+      if (dayOfYear(now) !== Math.floor(seasonDay)) {
+        seasonDay = dayOfYear(now);
+        $('season').value = String(seasonDay);
+        updateSeason(false);
+      }
+      tod.hours = Number($('time').value);
+      tod.update();
+      $('time-label').textContent = tod.label();
+    }
+  }
   if (playingYear) {
     seasonDay += dt * (365 / 60);
     if (seasonDay >= 365) seasonDay -= 365;
@@ -596,7 +658,22 @@ renderer.setAnimationLoop((time) => {
   }
   if (landscape) landscape.update(dt, tod);
   if (doors) doors.update(camera, dt);
-  sound.update(dt, camera, { night: tod.night, inside: tod.inside, birds: season.birds, crickets: season.crickets, snow: season.snow, dusk: tod.lamps });
+  camSpeed += ((dt > 0 ? camera.position.distanceTo(lastCam) / dt : 0) - camSpeed) * (1 - Math.exp(-dt * 6));
+  if (camSpeed > 60) camSpeed = 0; // a jump to a place, not flight
+  lastCam.copy(camera.position);
+  sound.update(dt, camera, {
+    night: tod.night,
+    inside: tod.inside,
+    dusk: tod.lamps,
+    birds: season.birds,
+    crickets: season.crickets,
+    snow: season.snow,
+    windy: season.windy,
+    rain: 0,
+    frozen: 0,
+    speed: camSpeed,
+    flyby: mode === 'tour' && !!flybyId,
+  });
   if (mode === 'tour') {
     if (!tour.update(dt)) setMode('orbit');
   } else if (mode === 'orbit') {
