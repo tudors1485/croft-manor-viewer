@@ -28,7 +28,11 @@ function softDot(inner = 0.15) {
 
 /** A pool of particles drawn as one Points call: position, colour, size and alpha per particle. */
 class Particles {
-  constructor(count, { additive = true, map = softDot(), sizeScale = 1 } = {}) {
+  /**
+   * near: closer than this (metres) a particle fades out, so a spark flying past the camera doesn't
+   * fill the screen; max: the biggest a particle is drawn (pixels on a screen 800 high, scaled with it)
+   */
+  constructor(count, { additive = true, map = softDot(), sizeScale = 1, near = 0, max = 160 } = {}) {
     this.count = count;
     this.pos = new Float32Array(count * 3);
     this.col = new Float32Array(count * 3);
@@ -46,20 +50,22 @@ class Particles {
     geo.setAttribute('psize', new THREE.BufferAttribute(this.size, 1).setUsage(THREE.DynamicDrawUsage));
     geo.setAttribute('alpha', new THREE.BufferAttribute(this.alpha, 1).setUsage(THREE.DynamicDrawUsage));
     this.material = new THREE.ShaderMaterial({
-      uniforms: { uMap: { value: map }, uScale: { value: 800 * sizeScale } },
+      uniforms: { uMap: { value: map }, uScale: { value: 800 * sizeScale }, uNear: { value: near }, uMax: { value: max } },
       vertexShader: /* glsl */ `
         attribute vec3 colour;
         attribute float psize;
         attribute float alpha;
         uniform float uScale;
+        uniform float uNear;
+        uniform float uMax;
         varying vec3 vColour;
         varying float vAlpha;
         void main() {
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
           gl_Position = projectionMatrix * mv;
           vColour = colour;
-          vAlpha = alpha;
-          gl_PointSize = alpha > 0.001 ? clamp(psize * uScale / -mv.z, 1.0, 160.0) : 0.0;
+          vAlpha = alpha * (uNear > 0.0 ? smoothstep(uNear * 0.3, uNear, -mv.z) : 1.0);
+          gl_PointSize = vAlpha > 0.001 ? clamp(psize * uScale / -mv.z, 1.0, uMax * uScale / 800.0) : 0.0;
         }`,
       fragmentShader: /* glsl */ `
         uniform sampler2D uMap;
@@ -152,12 +158,37 @@ export class Bonfire {
     this.group.add(this.fireLight, this.flash);
 
     // fireworks: rockets rise from the field behind the house and burst over it
-    this.sparks = new Particles(4000, { map: softDot(0.08) });
+    this.sparks = new Particles(4000, { map: softDot(0.08), near: 7, max: 42 });
     this.group.add(this.sparks.points);
     this.rockets = [];
     this.nextRocket = 0;
     this.flashLevel = 0;
     this.fire = 0;
+    this.boost = 1; // a holiday flyby's show: more rockets, more salvos
+    this.autoYear = true; // the year written every half-minute (the New Year flyby writes it on cue)
+    this._lastDay = null;
+  }
+
+  /** A fresh start for a flyby: no rockets in the air, the year written just after midnight. */
+  reset() {
+    this.rockets.length = 0;
+    this.nextRocket = 0;
+    this.nextYear = 1.8;
+    this._lastDay = null;
+  }
+
+  /** The fire already going, and its smoke already up (a flyby starts at the height of the evening). */
+  prime(opts) {
+    if (!Bonfire.on(opts.day)) return;
+    const sound = this.sound;
+    this.sound = null;
+    this._priming = true;
+    this.fire = 1;
+    for (let i = 0; i < 90; i++) this.update(0.125, opts);
+    this._priming = false;
+    this.sound = sound;
+    this.rockets.length = 0;
+    this.nextRocket = 0;
   }
 
   /** Bonfire Night (the fire from dusk to midnight, fireworks 18:30 to 22:00). */
@@ -249,7 +280,7 @@ export class Bonfire {
       sm.vel.set([0.4 + wind * 2.2 + (Math.random() - 0.5) * 0.3, 1.1 + Math.random() * 0.5, (Math.random() - 0.5) * 0.4], i * 3);
       sm.life[i] = sm.data[i * 4] = 9 + Math.random() * 5;
     }
-    const lit = 0.25 + 0.75 * (1 - level); // by day the smoke is pale grey; at night it catches the fire
+    const lit = 0.45 + 0.55 * (1 - level); // by day the smoke is pale grey; at night it catches the fire from below
     for (let i = 0; i < sm.count; i++) {
       if (sm.life[i] <= 0) {
         sm.alpha[i] = 0;
@@ -259,27 +290,35 @@ export class Bonfire {
       const u = 1 - Math.max(0, sm.life[i]) / sm.data[i * 4];
       for (let k = 0; k < 3; k++) sm.pos[i * 3 + k] += sm.vel[i * 3 + k] * dt;
       sm.vel[i * 3 + 1] *= 1 - 0.05 * dt;
-      const glow = Math.max(0, 1 - u * 3) * f * level;
-      sm.col.set([0.42 * lit + 0.5 * glow, 0.4 * lit + 0.22 * glow, 0.39 * lit + 0.08 * glow], i * 3);
+      const above = sm.pos[i * 3 + 1] - this.at.y - 2;
+      const glow = Math.exp(-Math.max(0, above) / 10) * f * level;
+      sm.col.set([0.42 * lit + 0.9 * glow, 0.4 * lit + 0.42 * glow, 0.44 * lit + 0.15 * glow], i * 3);
       sm.size[i] = 1.6 + u * 7;
-      sm.alpha[i] = Math.min(1, u * 5) * (1 - u) * 0.38;
+      sm.alpha[i] = Math.min(1, u * 5) * (1 - u) * 0.62;
     }
     sm.flush();
 
-    // fireworks: 18:30 to 22:00 on Bonfire Night; at New Year from two minutes to midnight, faster
-    const showtime = bonfireNight ? hours > 18.5 && hours < 22 && level > 0.5 : newYear && (Math.floor(day) === 364 ? hours > 23.966 : hours < 0.67);
+    // fireworks: 18:30 to 22:00 on Bonfire Night; at New Year a few in the last two minutes of the
+    // old year, then from midnight a lot
+    const d = Math.floor(day);
+    const beforeMidnight = newYear && d === 364;
+    const showtime = this._priming ? false : bonfireNight ? hours > 18.5 && hours < 22 && level > 0.5 : newYear && (beforeMidnight ? hours > 23.966 : hours < 0.67);
+    const b = this.boost;
     this.nextRocket -= dt;
     if (showtime && this.nextRocket <= 0) {
-      const salvo = Math.random() < (newYear ? 0.35 : 0.15) ? 3 : 1;
+      const salvo = beforeMidnight ? 1 : Math.random() < (newYear ? 0.35 : 0.15) * b ? 3 + Math.floor(Math.random() * (b > 1 ? 3 : 1)) : 1;
       for (let s = 0; s < salvo; s++) this._launch(s * 0.25);
-      this.nextRocket = newYear ? 0.4 + Math.random() * 1.1 : 0.9 + Math.random() * 2.2;
+      this.nextRocket = (beforeMidnight ? 2.5 + Math.random() * 2.5 : newYear ? 0.4 + Math.random() * 1.1 : 0.9 + Math.random() * 2.2) / (beforeMidnight ? 1 : b);
     }
-    // the new year in gold across the sky, every half-minute after midnight
-    if (newYear && Math.floor(day) === 0 && hours < 0.67) {
+    // the stroke of midnight: a dozen at once
+    if (newYear && d === 0 && this._lastDay === 364 && !this._priming) for (let s = 0; s < 12; s++) this._launch(s * 0.12 + Math.random() * 0.1);
+    this._lastDay = d;
+    // the new year in gold across the sky, every half-minute after midnight (more often in its flyby)
+    if (newYear && d === 0 && hours < 0.67 && !this._priming && this.autoYear) {
       this.nextYear = (this.nextYear ?? 0) - dt;
       if (this.nextYear <= 0) {
         this._writeYear();
-        this.nextYear = 30;
+        this.nextYear = b > 1 ? 14 : 30;
       }
     }
     this._updateFireworks(dt, camera);
@@ -320,7 +359,7 @@ export class Bonfire {
         this._burst(p.clone(), r.kind, r.colour);
         this.flash.position.copy(p);
         this.flashLevel = 1;
-        this.flash.color.setRGB(...r.colour);
+        this.flash.color.setRGB(...r.colour.map((c) => 0.5 + 0.5 * c));
         this.sound?.bang?.(p.clone(), p.distanceTo(camera.position));
       }
     }
@@ -346,10 +385,14 @@ export class Bonfire {
     }
     sp.flush();
     this.flashLevel *= Math.exp(-dt * 5);
-    this.flash.intensity = 25000 * this.flashLevel;
+    this.flash.intensity = 2600 * this.flashLevel;
   }
 
   /** The coming year (2027 in 2026), written in gold sparks high over the house, facing the drive. */
+  writeYear() {
+    this._writeYear();
+  }
+
   _writeYear() {
     const now = new Date();
     const year = now.getMonth() === 0 && now.getDate() <= 6 ? now.getFullYear() : now.getFullYear() + 1;

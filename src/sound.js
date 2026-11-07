@@ -96,7 +96,14 @@ export class Soundscape {
     const ctx = (this.ctx = this._context ?? new (window.AudioContext || window.webkitAudioContext)());
     this.master = ctx.createGain();
     this.master.gain.value = this._context ? 0.9 : 0;
-    this.master.connect(ctx.destination);
+    // a limiter last of all: fireworks bursting together (and thunder) would clip without it
+    this.limiter = ctx.createDynamicsCompressor();
+    this.limiter.threshold.value = -6;
+    this.limiter.knee.value = 4;
+    this.limiter.ratio.value = 16;
+    this.limiter.attack.value = 0.002;
+    this.limiter.release.value = 0.25;
+    this.master.connect(this.limiter).connect(ctx.destination);
 
     const brown = (this.brown = this._noiseBuffer(4, true));
     const white = (this.white = this._noiseBuffer(3));

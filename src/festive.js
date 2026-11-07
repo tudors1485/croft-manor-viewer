@@ -151,7 +151,7 @@ function bulbs(list, size, kind = 'twinkle') {
   geo.setAttribute('along', new THREE.Float32BufferAttribute(list.map((b) => b.along ?? 0), 1));
   const mat = new THREE.ShaderMaterial({
     defines: { KIND: kind === 'chase' ? 1 : kind === 'icicle' ? 2 : 0 },
-    uniforms: { uMap: { value: glowSprite() }, uOn: { value: 0 }, uTime: { value: 0 }, uScale: { value: 800 }, uSize: { value: size } },
+    uniforms: { uMap: { value: glowSprite() }, uOn: { value: 0 }, uTime: { value: 0 }, uScale: { value: 800 }, uSize: { value: size }, uShow: { value: 0 } },
     vertexShader: /* glsl */ `
       attribute vec3 colour;
       attribute float phase;
@@ -159,6 +159,7 @@ function bulbs(list, size, kind = 'twinkle') {
       uniform float uTime;
       uniform float uScale;
       uniform float uSize;
+      uniform float uShow;
       varying vec3 vColour;
       void main() {
         vec4 mv = modelViewMatrix * vec4(position, 1.0);
@@ -168,7 +169,8 @@ function bulbs(list, size, kind = 'twinkle') {
         vec3 c = colour * tw;
         #if KIND == 1
           // every 16 seconds the warm white gives way to red, green and gold running along the roof
-          float mode = smoothstep(0.42, 0.5, fract(uTime / 32.0)) * (1.0 - smoothstep(0.92, 1.0, fract(uTime / 32.0)));
+          // (and all the time in the Christmas flyby)
+          float mode = max(uShow, smoothstep(0.42, 0.5, fract(uTime / 32.0)) * (1.0 - smoothstep(0.92, 1.0, fract(uTime / 32.0))));
           float k = mod(floor(along / 3.0 - uTime * 3.0), 3.0);
           vec3 chase = k < 0.5 ? vec3(1.0, 0.12, 0.08) : k < 1.5 ? vec3(0.12, 0.95, 0.25) : vec3(1.0, 0.72, 0.18);
           c = mix(c, chase * (0.75 + 0.25 * sin(uTime * 6.0 + along)), mode);
@@ -317,6 +319,7 @@ export class Festive {
     }
     this.treeLights = bulbs(tree, 0.15);
     this.christmas.add(this.treeLights);
+    this.show = 0; // 1 in the Christmas flyby: the roofline chases red, green and gold all the way
     this.update(0, 0, 145, 12, true);
   }
 
@@ -355,6 +358,7 @@ export class Festive {
       for (const p of [this.outline, this.icicles, this.treeLights]) {
         p.material.uniforms.uOn.value = on;
         p.material.uniforms.uTime.value = t;
+        p.material.uniforms.uShow.value = this.show;
         p.visible = on > 0.01;
       }
     }

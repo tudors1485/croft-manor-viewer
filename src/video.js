@@ -5,7 +5,8 @@
 // It renders frame by frame at a steady 30 a second, however long each frame takes to draw,
 // so the video is smooth on any computer: every frame goes through the browser's own video
 // encoder (WebCodecs). The sound is rendered afterwards on an offline audio context, from
-// the same camera path frame by frame (the doors that opened included), so it is in step
+// the same camera path frame by frame (the doors that opened, and the festivals' ghosts,
+// bonfire and fireworks, included), so it is in step
 // with the picture, then encoded and put in the same file (mp4-muxer).
 
 import * as THREE from 'three';
@@ -55,7 +56,7 @@ function fitText(g, text, x, y, maxW) {
 }
 
 /** Text in the film bars, the title at the start, the end card at the end. */
-function drawOverlay(g, W, H, f, frame, flyFrames, label, clock = '') {
+function drawOverlay(g, W, H, f, frame, flyFrames, label, clock = '', countdown = '') {
   const bar = Math.round(H * f.bar);
   const portrait = H > W;
   const t = frame / FPS;
@@ -89,6 +90,18 @@ function drawOverlay(g, W, H, f, frame, flyFrames, label, clock = '') {
       g.textAlign = 'right';
       g.fillText(clock, W - bar * 0.6, bar / 2);
     }
+  }
+
+  // the New Year flyby's last ten seconds of the old year, big in the middle
+  if (countdown && frame < flyFrames) {
+    g.save();
+    g.textAlign = 'center';
+    g.font = `600 ${Math.round(260 * u)}px ${serif}`;
+    g.fillStyle = 'rgba(255, 243, 214, 0.92)';
+    g.shadowColor = 'rgba(255, 200, 110, 0.6)';
+    g.shadowBlur = 50 * u;
+    g.fillText(countdown, W / 2, H / 2);
+    g.restore();
   }
 
   // the site, as a watermark over the picture (in a reel, high enough to clear Instagram's
@@ -203,6 +216,7 @@ export async function makeVideo(app, formatId, { onProgress, preview, signal } =
   const frames = []; // what the sound needs, frame by frame
   let last = null;
   let clock = '';
+  let countdown = '';
   try {
     // 1. the picture
     for (let i = 0; i < total; i++) {
@@ -212,13 +226,14 @@ export async function makeVideo(app, formatId, { onProgress, preview, signal } =
         // draw the frame and copy it in the same moment (the WebGL canvas is cleared after)
         app.step(1 / FPS);
         g.drawImage(app.canvas, 0, 0, W, H);
-        frames.push({ pos: app.camera.position.clone(), quat: app.camera.quaternion.clone(), inside: app.inside(), speed: app.speed(), doors: app.takeDoorEvents(), env: app.soundEnv() });
+        frames.push({ pos: app.camera.position.clone(), quat: app.camera.quaternion.clone(), inside: app.inside(), speed: app.speed(), doors: app.takeDoorEvents(), sounds: app.takeSoundEvents?.() ?? [], env: app.soundEnv() });
         clock = app.clock?.() ?? '';
+        countdown = app.countdown?.() ?? '';
         if (i === flyFrames - 1) last = g.getImageData(0, 0, W, H); // the end card fades from this
       } else {
         g.putImageData(last, 0, 0);
       }
-      drawOverlay(g, W, H, f, i, flyFrames, label, clock);
+      drawOverlay(g, W, H, f, i, flyFrames, label, clock, i < flyFrames ? countdown : '');
       const frame = new VideoFrame(out, { timestamp: Math.round((i * 1e6) / FPS), duration: Math.round(1e6 / FPS) });
       venc.encode(frame, { keyFrame: i % (FPS * 2) === 0 });
       frame.close();
@@ -249,6 +264,8 @@ export async function makeVideo(app, formatId, { onProgress, preview, signal } =
     cam.updateMatrixWorld();
     sound.update(1 / FPS, cam, { ...(fr.env ?? env), inside: fr.inside, speed: fr.speed, flyby: true });
     for (const d of fr.doors) sound.door(d.opening, d.at);
+    // the festivals': moans, the bonfire, rockets and bangs, as they were heard while the frame was drawn
+    for (const [what, ...args] of fr.sounds ?? []) if (typeof sound[what] === 'function') sound[what](...args);
   };
   apply(0);
   for (let i = 1; i < frames.length; i++) {

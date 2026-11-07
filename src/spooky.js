@@ -161,6 +161,7 @@ export class Spooky {
       return { s, mat, home: new THREE.Vector3(x, 0, z), r: 1.2 + Math.random() * 2, a: Math.random() * 6.28, speed: (0.12 + Math.random() * 0.15) * (Math.random() < 0.5 ? -1 : 1), show: 0, next: Math.random() * 6, on: false, phase: Math.random() * 6.28 };
     });
     this.windowCount = this.figures.length;
+    this.boost = 1; // the Halloween flyby: figures and ghosts come back sooner
   }
 
   /** Halloween night: 31 October, after dark (a Halloween flyby sets that). */
@@ -179,7 +180,7 @@ export class Spooky {
       f.next -= dt;
       if (f.next <= 0) {
         f.on = !f.on;
-        f.next = f.on ? 3 + Math.random() * 4 : 5 + Math.random() * 10;
+        f.next = f.on ? 3 + Math.random() * 4 : (5 + Math.random() * 10) / this.boost;
       }
       f.show += ((f.on && outside ? 1 : 0) - f.show) * (1 - Math.exp(-dt * 5));
       const flicker = 0.8 + 0.2 * Math.sin(this.t * 9 + f.next * 3);
@@ -191,7 +192,7 @@ export class Spooky {
       g.next -= dt;
       if (g.next <= 0) {
         g.on = !g.on;
-        g.next = g.on ? 5 + Math.random() * 5 : 3 + Math.random() * 8;
+        g.next = g.on ? 5 + Math.random() * 5 : (3 + Math.random() * 8) / this.boost;
         if (g.on && g.s.position.distanceTo(camera.position) < 30) this.sound?.moan?.(g.s.position);
       }
       g.show += ((g.on ? 1 : 0) - g.show) * (1 - Math.exp(-dt * 1.2));

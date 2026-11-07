@@ -8,6 +8,18 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.20.0, 7 November 2026
+
+- Every holiday has its flyby now, in a *Holidays* group of the flyby list and in the *Holidays…* menu, each putting on a show:
+  - *Bonfire Night*: low past the bonfire, up through its smoke and over the roof into the fireworks, round among them, and back out in front to see the house under them, with more rockets and salvos than a normal evening.
+  - *Christmas Eve*: snowy dusk, in over the lit gate, down the drive under the oaks' lights, up to the roofline and along the front with the lights chasing red, green and gold all the way, and away to see the house in the snow.
+  - *New Year*: ten seconds to midnight on the drive with the clock running and the countdown big on screen, then up into a dozen rockets on the stroke of midnight as 2027 is written in the sky, and straight through the numbers.
+  - *Halloween night*, as before, with the figures and ghosts coming back sooner.
+- Videos now have the festivals' sounds: the ghosts' moans, the bonfire's roar and crackle, the rockets' whistles and the bangs. The New Year countdown is in the picture too.
+- The bonfire's smoke catches its light from below and shows against the night sky.
+- Fireworks: sparks flying past the camera fade out instead of filling the screen, and the bursts light the ground more gently (they made snow look like day).
+- A limiter on the sound, so a dozen bursts at once don't clip.
+
 ## 0.19.0, 6 November 2026
 
 - You arrive at noon today, with today's real weather at noon; *Now* jumps to the time now.

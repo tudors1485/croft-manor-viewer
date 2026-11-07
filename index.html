@@ -13,6 +13,7 @@
     <div id="crosshair" hidden></div>
     <div id="fade"></div>
     <div id="caption"></div>
+    <div id="countdown"></div>
     <button id="tour-stop" hidden>Stop the tour (Esc)</button>
     <div id="bar-top" class="film-bar"><span id="bar-clock" hidden></span></div>
     <div id="bar-bottom" class="film-bar"></div>
@@ -86,12 +87,14 @@
       </div>
       <div class="row lights">
         <span>Holidays</span>
-        <select id="holiday" title="Jump to a holiday">
+        <select id="holiday" title="Go to a holiday, or watch its flyby">
           <option value="">Holidays…</option>
-          <option value="halloween">Halloween night</option>
-          <option value="bonfire">Bonfire Night</option>
-          <option value="christmas">Christmas Eve</option>
-          <option value="newyear">New Year</option>
+          <optgroup label="Go there">
+            <option value="halloween">Halloween night</option>
+            <option value="bonfire">Bonfire Night</option>
+            <option value="christmas">Christmas Eve</option>
+            <option value="newyear">New Year</option>
+          </optgroup>
         </select>
       </div>
       <label class="row">Compass <input id="sun-azim" type="range" min="-180" max="180" value="0" /></label>

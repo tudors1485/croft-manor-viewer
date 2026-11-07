@@ -365,6 +365,7 @@ function leaveTour() {
   const lapsedNow = playingLapse;
   playingLapse = null;
   tour.lapseOver = null;
+  setShow(0);
   $('bar-clock').hidden = true;
   if (forcedWeather) {
     forcedWeather = null;
@@ -409,13 +410,16 @@ function shuffled(n) {
   }
   return a;
 }
-/** With seasons and weathers: the flyby cuts to another season, time and weather every few seconds. */
+/**
+ * A flyby's scenes: with seasons and weathers, a cut to another season, time and weather every few
+ * seconds; a holiday flyby holds its one evening (and the New Year's runs the clock through midnight).
+ */
 function applyLapse(l) {
-  if (l.what === 'scenes') {
-    // a cut to another season, time and weather every few seconds, all at once: the trees, the
-    // light, the ground soaked or under snow in an instant
-    const k = Math.floor(l.seconds / l.every);
-    if (k === sceneShown) return;
+  if (l.what !== 'scenes') return;
+  // a cut to another season, time and weather every few seconds, all at once: the trees, the
+  // light, the ground soaked or under snow in an instant
+  const k = Math.floor(l.seconds / l.every);
+  if (k !== sceneShown) {
     // (past the end of the order, a fresh one that doesn't start with the scene just shown)
     while (k >= sceneOrder.length) {
       const more = shuffled(l.scenes.length);
@@ -433,7 +437,56 @@ function applyLapse(l) {
     wet = Math.min(1, weather.rain * 3);
     $('time-label').textContent = tod.label();
     $('bar-clock').textContent = `${dateLabel(sc.day)} · ${WEATHERS[sc.weather]}`;
+    // a holiday flyby puts on a show: the bonfire already burning, more fireworks, the lights chasing
+    setShow(sc.boost ?? 0);
+    if (sc.boost && bonfire) {
+      bonfire.reset();
+      bonfire.prime({ day: sc.day, hours: sc.hours, level: tod.lamps, wind, camera });
+      bonfire.autoYear = !sc.years;
+    }
+    lapseSeconds = l.seconds;
   }
+  const sc = l.scenes[sceneOrder[sceneShown]];
+  if (sc.run) runClock(sc, l.seconds);
+  // the year written in the sky on cue (as the flyby comes up to where it is written, or flies through it)
+  for (const at of sc.years ?? []) if (lapseSeconds < at && l.seconds >= at) bonfire?.writeYear();
+  lapseSeconds = l.seconds;
+}
+let lapseSeconds = 0;
+/** A holiday flyby's show (0 for none): more rockets and salvos, the ghosts back sooner, the lights chasing. */
+function setShow(boost) {
+  if (bonfire) {
+    bonfire.boost = Math.max(1, boost);
+    if (!boost) bonfire.autoYear = true;
+  }
+  if (spooky) spooky.boost = Math.max(1, boost);
+  if (festive) festive.show = boost ? 1 : 0;
+  countdown = '';
+}
+let countdown = ''; // the last ten seconds of the old year, in the New Year flyby
+/** The clock running in real time from the scene's hour, over midnight into the next day. */
+function runClock(sc, seconds) {
+  let h = sc.hours + Math.max(0, seconds) / 3600;
+  let day = sc.day;
+  if (h >= 24) {
+    h -= 24;
+    day = (day + 1) % 365;
+  }
+  if (day !== Math.floor(seasonDay)) {
+    seasonDay = day;
+    $('season').value = String(day);
+    updateSeason(true);
+  }
+  tod.hours = h;
+  $('time').value = String(h);
+  tod.update();
+  $('time-label').textContent = tod.label();
+  const left = (24 - h) * 3600;
+  countdown = day === sc.day && left <= 10 ? String(Math.ceil(left)) : '';
+  const hh = Math.floor(h);
+  const mm = Math.floor((h - hh) * 60);
+  const ss = Math.floor(((h - hh) * 60 - mm) * 60);
+  $('bar-clock').textContent = `${dateLabel(day)} · ${[hh, mm, ss].map((n) => String(n).padStart(2, '0')).join(':')}`;
 }
 $('tour').onclick = (e) => {
   wakeSound();
@@ -442,7 +495,14 @@ $('tour').onclick = (e) => {
   if (!touring) startTour(null);
   e.currentTarget.blur();
 };
-for (const [id, f] of Object.entries(FLYBYS)) $('flyby').add(new Option(f.label, id));
+// (the holidays' flybys in a group of their own, after the others)
+function addFlybys(select) {
+  const holidays = document.createElement('optgroup');
+  holidays.label = 'Holidays';
+  for (const [id, f] of Object.entries(FLYBYS)) (f.holiday ? holidays : select).appendChild(new Option(f.label, id));
+  select.appendChild(holidays);
+}
+addFlybys($('flyby'));
 $('flyby').onchange = (e) => {
   const id = e.target.value;
   e.target.value = '';
@@ -844,7 +904,7 @@ async function prepareWalking(ground) {
     const oaks = landscape.gate ? landscape.treeSpots.filter((t) => Math.abs(t.z - (landscape.gate.z - 6.5)) < 1 && Math.abs(Math.abs(t.x - landscape.gate.x) - 5.4) < 1) : [];
     festive = new Festive(scene, { bvh: geo.boundsTree, door: front, oaks, gate: landscape.gate });
     for (const pk of festive.pumpkins) landscape.obstacles.push({ x: pk.position.x, z: pk.position.z, r: 0.3, when: () => festive.halloween.visible });
-    spooky = new Spooky(scene, { bvh: geo.boundsTree, materialAt: (fi) => meshAtFace(geo, fi)?.material.name || '', isLawn: (x, z) => landscape._grassAt(x, z), houseBox: lamps.houseBox, sound });
+    spooky = new Spooky(scene, { bvh: geo.boundsTree, materialAt: (fi) => meshAtFace(geo, fi)?.material.name || '', isLawn: (x, z) => landscape._grassAt(x, z), houseBox: lamps.houseBox, sound: festSound });
     // the bonfire: on open lawn in front of the house, clear of the trees and shrubs
     const fireSpot = [
       [16, 12],
@@ -855,7 +915,7 @@ async function prepareWalking(ground) {
     ].find(([x, z]) => landscape._grassAt(x, z) && landscape.obstacles.every((o) => Math.hypot(o.x - x, o.z - z) > Math.max(4, (o.r ?? 0) + 3.5)));
     if (fireSpot) {
       const [x, z] = fireSpot;
-      bonfire = new Bonfire(scene, new THREE.Vector3(x, landscape.groundHeight(x, z) ?? 0, z), sound);
+      bonfire = new Bonfire(scene, new THREE.Vector3(x, landscape.groundHeight(x, z) ?? 0, z), festSound);
       landscape.obstacles.push({ x, z, r: 1.4, when: () => Bonfire.on(seasonDay) });
     }
     // the fountain's and the pool's reflections leave out the shrubs and the fallen leaves (costly, too small to see there)
@@ -983,10 +1043,24 @@ window.addEventListener('keydown', (e) => {
   toggleRoom();
 });
 document.querySelector('#dock [data-key="KeyL"]')?.addEventListener('pointerdown', () => toggleRoom());
+{
+  // each holiday's flyby, from the same menu
+  const fly = document.createElement('optgroup');
+  fly.label = 'Flybys';
+  for (const [id, f] of Object.entries(FLYBYS)) if (f.holiday) fly.appendChild(new Option(f.label, `fly:${id}`));
+  $('holiday').appendChild(fly);
+}
 $('holiday').onchange = (e) => {
-  const h = Object.hasOwn(HOLIDAYS, e.target.value) ? HOLIDAYS[e.target.value] : null;
+  const value = e.target.value;
+  const h = Object.hasOwn(HOLIDAYS, value) ? HOLIDAYS[value] : null;
   e.target.value = '';
   e.target.blur();
+  const flyby = value.startsWith('fly:') ? value.slice(4) : null;
+  if (flyby && Object.hasOwn(FLYBYS, flyby) && FLYBYS[flyby].holiday) {
+    wakeSound();
+    startTour(flyby);
+    return;
+  }
   if (!h) return;
   wakeSound();
   setDate(h.day);
@@ -1137,6 +1211,7 @@ let frames = 0;
 let fpsTime = 0;
 let elapsed = 0;
 let wantPicture = false;
+let countdownShown = '';
 $('picture').onclick = (e) => {
   wantPicture = true;
   e.currentTarget.blur();
@@ -1257,6 +1332,11 @@ function step(dt, exporting = false) {
     }
   }
   quality.fisheye = mode === 'tour' ? tour.fisheye : 0;
+  if (countdownShown !== countdown) {
+    countdownShown = countdown;
+    $('countdown').textContent = countdown;
+    $('countdown').classList.toggle('show', !!countdown);
+  }
   // sunbeams indoors by day: they fade in as you go inside and with the sun's height
   const sunUp = THREE.MathUtils.smoothstep(tod.sunDir.y, 0.02, 0.2) * (1 - tod.night);
   quality.beams.strength = BEAMS.strength * tod.inside * sunUp * Number($('sunbeams').checked);
@@ -1282,6 +1362,20 @@ function soundEnv() {
 
 let exporting = false;
 let videoDoorEvents = []; // doors that open during a video frame, for its sound
+let videoSoundEvents = []; // the festivals' sounds during a video frame: [what, ...its arguments]
+// The festivals' sounds (ghosts' moans, the bonfire, rockets and bangs): played as they happen, or,
+// while a video is being made, noted down frame by frame for its soundtrack (video.js plays them back)
+const festSound = {
+  moan: (p) => (exporting ? videoSoundEvents.push(['moan', p.clone()]) : sound.moan(p)),
+  rocket: (p, time) => (exporting ? videoSoundEvents.push(['rocket', p.clone(), time]) : sound.rocket(p, time)),
+  bang: (p, distance) => (exporting ? videoSoundEvents.push(['bang', p.clone(), distance]) : sound.bang(p, distance)),
+  setBonfire: (p, level) => {
+    if (!exporting) return sound.setBonfire(p, level);
+    // (once a frame: only the last one counts)
+    videoSoundEvents = videoSoundEvents.filter((e) => e[0] !== 'setBonfire');
+    videoSoundEvents.push(['setBonfire', p?.clone() ?? null, level]);
+  },
+};
 
 // Making a video of a flyby (video.js): the viewer, as the video maker sees it
 const videoApp = {
@@ -1307,6 +1401,7 @@ const videoApp = {
     camera.fov = f.fov; // a portrait frame needs a taller lens to see as much
     camera.updateProjectionMatrix();
     videoDoorEvents = [];
+    videoSoundEvents = [];
     lastCam.copy(camera.position);
     camSpeed = 0;
     return FLYBYS[this.flyby].label;
@@ -1322,6 +1417,13 @@ const videoApp = {
     videoDoorEvents = [];
     return e;
   },
+  takeSoundEvents() {
+    const e = videoSoundEvents;
+    videoSoundEvents = [];
+    return e;
+  },
+  /** The countdown to midnight in the New Year flyby (10 .. 1), or ''. */
+  countdown: () => countdown,
   /** What the top bar says on this frame: the time or the date in a time-lapse flyby. */
   clock() {
     const l = tour.lapse;
@@ -1337,7 +1439,7 @@ const videoApp = {
     exporting = false;
   },
 };
-for (const [id, f] of Object.entries(FLYBYS)) $('video-flyby').add(new Option(f.label, id));
+addFlybys($('video-flyby'));
 let videoFormat = 'youtube';
 for (const b of document.querySelectorAll('#video-format [data-format]')) {
   b.onclick = (e) => {

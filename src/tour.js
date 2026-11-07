@@ -184,10 +184,11 @@ export const FLYBYS = {
   },
   halloween: {
     label: 'Halloween night',
+    holiday: true,
     // 31 October, near midnight, in the fog: through the gate past the ghosts on the lawn, down to
     // the pumpkins at the door, then along the front at the height of the windows, where figures
     // stand for a moment, and away over the garden (the seasons tick box doesn't apply)
-    lapse: { what: 'scenes', every: 1e9, fixed: true, scenes: [{ day: 303, hours: 23.3, weather: 'fog' }] },
+    lapse: { what: 'scenes', every: 1e9, fixed: true, scenes: [{ day: 303, hours: 23.3, weather: 'fog', boost: 1.8 }] },
     keys: [
       k([4.6, 1.8, 30], [4.6, 2.2, 10], { speed: 2.4 }),
       k([4.6, 2.0, 20.7], [0, 1.8, 8], { speed: 3 }),
@@ -202,6 +203,76 @@ export const FLYBYS = {
       k([22, 4.8, -1], [26, 4.2, -9.4], { speed: 2.2 }),
       k([24, 7, 10], [12, 1.5, 8], { speed: 2.6 }),
       k([12, 12, 26], [2, 3, 0], { speed: 1.2 }),
+    ],
+  },
+  bonfire: {
+    label: 'Bonfire Night',
+    holiday: true,
+    // 5 November, a clear evening: low past the bonfire on the lawn, round it, up through its
+    // smoke and on over the roof into the fireworks bursting behind the house, round among them,
+    // and back out in front to see the house under them (boost: more rockets, more salvos)
+    lapse: { what: 'scenes', every: 1e9, fixed: true, scenes: [{ day: 308, hours: 19.75, weather: 'clear', boost: 2.6 }] },
+    keys: [
+      k([23, 1.5, 15.5], [16, 1.6, 12], { speed: 1.4 }),
+      k([20, 1.3, 14.4], [15.6, 1.9, 11.4], { speed: 1.8 }),
+      k([19.6, 1.6, 10.6], [15.8, 2.6, 12.4], { speed: 1.8 }),
+      k([18.6, 4.5, 11.2], [16.5, 12, 11.6], { speed: 2 }),
+      k([18.2, 9.5, 12.2], [12, 26, -14], { speed: 2.6 }),
+      k([16, 17, 10], [6, 40, -48], { speed: 3.6 }),
+      k([12, 27, 3], [5, 42, -54], { speed: 4.5 }),
+      k([8, 36, -16], [4, 48, -56], { speed: 4.5 }),
+      k([-4, 41, -40], [-14, 46, -60], { speed: 4 }),
+      k([-24, 36, -36], [5, 30, -52], { speed: 4 }),
+      k([-26, 28, 0], [5, 18, -36], { speed: 4.5 }),
+      k([-6, 24, 26], [5, 18, -38], { speed: 3.4 }),
+      k([6, 22, 34], [5, 16, -40], { speed: 1 }),
+    ],
+  },
+  christmas: {
+    label: 'Christmas Eve',
+    holiday: true,
+    // 24 December at dusk, snowing: in over the lit gate, down the drive under the two oaks' lights,
+    // round the fountain and up to the roofline, along the whole front with its chasing lights and
+    // icicles, and away to see the house lit up in the snow (boost: the lights chase all the way)
+    lapse: { what: 'scenes', every: 1e9, fixed: true, scenes: [{ day: 357, hours: 16.6, weather: 'snow', boost: 1 }] },
+    keys: [
+      k([4.6, 6, 42], [4.6, 3.5, 12], { speed: 3 }),
+      k([4.6, 2.8, 29], [4.6, 3.4, 12], { speed: 4 }),
+      k([4.6, 2.2, 21.5], [4.6, 3.6, 10], { speed: 3.4 }),
+      k([4.6, 2.0, 15.5], [1.5, 7.5, 12.5], { speed: 2.4 }),
+      k([4.2, 2.4, 11.6], [8.5, 7.5, 13], { speed: 2.4 }),
+      k([1.2, 3.2, 7.5], [-3, 8, -9.5], { speed: 3 }),
+      k([-5, 7.5, -1.5], [-13, 9.5, -10], { speed: 3.4 }),
+      k([-12.5, 9.5, -2], [-15, 10, -10], { speed: 2.4 }),
+      k([-6, 10, -1.5], [2, 9.5, -10], { speed: 3.6 }),
+      k([6, 10, -1.5], [14, 9.5, -10], { speed: 4 }),
+      k([17, 10, -1.5], [25, 9.5, -10], { speed: 4 }),
+      k([26, 10.5, -0.5], [28, 9.5, -9], { speed: 2.6 }),
+      k([24, 13, 12], [8, 6, -10], { speed: 3.4 }),
+      k([10, 18, 34], [5, 6, -10], { speed: 3 }),
+      k([4.6, 22, 52], [4.6, 6, -10], { speed: 1 }),
+    ],
+  },
+  newyear: {
+    label: 'New Year',
+    holiday: true,
+    // 31 December, ten seconds to midnight, the clock running: still on the drive by the fountain
+    // as the last seconds count down, then up into the midnight fireworks as the new year is
+    // written in the sky, on towards it, through it, and among the bursts beyond
+    // (years: the seconds into the flyby at which the year is written: just after midnight, and as
+    // the camera comes up to where it hangs, so it flies through it)
+    lapse: { what: 'scenes', every: 1e9, fixed: true, scenes: [{ day: 364, hours: 24 - 11 / 3600, weather: 'clear', run: true, boost: 2.2, years: [12.8, 27, 42.2] }] },
+    keys: [
+      k([4.6, 1.7, 18], [4.6, 5, -10], { speed: 0.34 }),
+      k([4.6, 1.9, 14], [4.6, 8, -10], { speed: 0.4 }),
+      k([4.6, 6, 11], [4.8, 26, -40], { speed: 3.5 }),
+      k([4.7, 20, 7], [5, 36, -44], { speed: 4.5 }),
+      k([4.9, 31, -2], [5, 36, -44], { speed: 2.2 }),
+      k([5, 34.5, -22], [5, 36, -60], { speed: 1.6 }),
+      k([5, 36, -44], [4, 52, -62], { speed: 2.6 }),
+      k([0, 44, -70], [-6, 50, -50], { speed: 3.2 }),
+      k([-22, 46, -84], [5, 30, -40], { speed: 3 }),
+      k([-34, 38, -62], [5, 18, -28], { speed: 1 }),
     ],
   },
   hall: {
