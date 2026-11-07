@@ -8,6 +8,10 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.27.2, 7 November 2026
+
+- A shorter pause as Bonfire Night or New Year begins: the bonfire's lights now stay in the scene all year (dark), so its arrival no longer recompiles every shader.
+
 ## 0.27.1, 7 November 2026
 
 - Halloween: the ghosts' moans are louder and carry across the lawn; beyond a few metres they had been almost silent, in videos too.

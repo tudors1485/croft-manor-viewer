@@ -155,7 +155,9 @@ export class Bonfire {
     this.fireLight = new THREE.PointLight(0xff7a2a, 0, 18, 2);
     this.fireLight.position.copy(this.at).add(new THREE.Vector3(0, 1.6, 0));
     this.flash = new THREE.PointLight(0xffffff, 0, 160, 1.6);
-    this.group.add(this.fireLight, this.flash);
+    // (in the scene itself, not the group: a hidden group's lights don't count, so showing it would
+    // change the number of lights and recompile every shader, a pause of half a second)
+    scene.add(this.fireLight, this.flash);
 
     // fireworks: rockets rise from the field behind the house and burst over it
     this.sparks = new Particles(4000, { map: softDot(0.08), near: 7, max: 42 });
