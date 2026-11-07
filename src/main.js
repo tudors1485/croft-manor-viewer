@@ -1238,7 +1238,8 @@ async function prepareWalking(ground) {
       const pt = mv.pos.getPointAt(i / 300);
       if (pt.y < 14) low.push(pt);
     }
-    park = new Park(scene, { ground: groundAt, avoid: low, gate: landscape.gate });
+    const fountainBox = (water?.surfaces ?? []).filter((w) => w.outdoor).sort((a, b) => a.box.getCenter(new THREE.Vector3()).distanceTo(new THREE.Vector3(4.6, 0, 5)) - b.box.getCenter(new THREE.Vector3()).distanceTo(new THREE.Vector3(4.6, 0, 5)))[0]?.box ?? null;
+    park = new Park(scene, { ground: groundAt, avoid: low, gate: landscape.gate, fountain: fountainBox, door: frontDoor?.centre ?? null, sound: wildSound });
     wildlife = new Wildlife(scene, {
       ground: groundAt,
       isLawn: (x, z) => landscape._grassAt(x, z),
@@ -1382,14 +1383,60 @@ const HOLIDAYS = {
   // the next night with the northern lights: up over the gate, looking north over the house at
   // them (they hang low; on the ground the gate and the house hide most of them)
   aurora: { day: () => nextAuroraNight(dayOfYear(new Date())), hours: 22, weather: 'clear', pos: [4.5, 24, 64], look: [4, 12, -30], orbit: true },
-  // a May morning when one of the deer wanders up to the gate: from inside the gateway, looking out at her and the herd beyond
-  deer: { day: () => wanderDay(), hours: 6.75, weather: 'clear', pos: [4.6, 1.7, 23.5], look: [2, 1.2, 40] },
+  // a May morning, the herd grazing in the low sun, seen from high above the drive; then the hunt:
+  // a shot, the deer bolt, the hounds come home to the house (park.js), the camera following them
+  deer: { day: () => wanderDay(), hours: 7.0, weather: 'clear', pos: [5, 11, 74], look: [-17, 0.8, 67], orbit: true, then: () => startHunt() },
   // an April evening, the sun out after a shower, looking east, away from it
   rainbow: { day: 118, hours: 18.2, weather: 'clear', wet: 1, pos: [-8, 1.7, 12], look: [50, 9, 10] },
   // an autumn afternoon, the crows going over to roost
   crows: { day: 300, hours: 15.6, weather: 'clear', pos: [4.6, 3, 3.5], look: [5.5, 32, -40], orbit: true, then: () => wildlife?.crowsNow() },
 };
 const bonfireAt = () => bonfire?.at ?? new THREE.Vector3(20, 0, 10);
+
+// A sight's own camera (Deer at dawn): where it is over time, looking at what is happening, until
+// you take over (any drag of the view)
+let sight = null;
+function startHunt() {
+  if (!park) return;
+  park.hunt(seasonDay);
+  // (east of the field, the low sun behind you lighting the herd; then wide of the trees, after
+  // the hounds, to the front of the house)
+  const keys = [
+    [0, [5, 11, 74]],
+    [8, [7, 10.5, 75]],
+    [13, [22, 11, 62]],
+    [19, [22, 8, 34]],
+    [25, [19, 5, 12]],
+    [31, [12, 4, 0]],
+  ];
+  const door = (frontDoor?.centre ?? new THREE.Vector3(-1.85, 0, -11.85)).clone().setY(1);
+  sight = {
+    t: 0,
+    pos: (t) => {
+      let i = 0;
+      while (i < keys.length - 2 && t > keys[i + 1][0]) i++;
+      const [t0, a] = keys[i];
+      const [t1, b] = keys[i + 1];
+      const k = THREE.MathUtils.smoothstep(t, t0, t1);
+      return new THREE.Vector3(...a).lerp(new THREE.Vector3(...b), k);
+    },
+    look: (t) => (t > 26 && park.hounds.every((h) => h.arrived || h.route.length <= 1) ? door : park.huntFocus),
+    end: 40,
+  };
+}
+orbit.addEventListener('start', () => {
+  sight = null; // (you have taken over)
+});
+function stepSight(dt) {
+  if (!sight || mode !== 'orbit' || flight) return;
+  sight.t += dt;
+  if (sight.t > sight.end) {
+    sight = null;
+    return;
+  }
+  camera.position.lerp(sight.pos(sight.t), 1 - Math.exp(-dt * 1.6));
+  orbit.target.lerp(sight.look(sight.t), 1 - Math.exp(-dt * 1.8));
+}
 // L switches the room's lights (and the on-screen L key)
 window.addEventListener('keydown', (e) => {
   if (e.code !== 'KeyL' || e.repeat || mode === 'tour') return;
@@ -1710,6 +1757,7 @@ function step(dt, exporting = false) {
   } else if (mode === 'orbit') {
     const before = camera.position.clone();
     const jumping = stepFlight(dt);
+    stepSight(dt);
     orbit.update();
     // turning and zooming stop at walls (a jump to a place is allowed through)
     if (!jumping && !throughWalls && walker && before.distanceToSquared(camera.position) > 1e-10) {
@@ -2011,6 +2059,12 @@ window.manor = {
   },
   get storm() {
     return storm;
+  },
+  get park() {
+    return park;
+  },
+  get sight() {
+    return sight;
   },
   rainbow,
   footprints,

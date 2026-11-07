@@ -8,6 +8,18 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.37.0, 7 November 2026
+
+Tudor's notes of 7 November, the fourth part: Deer at dawn.
+
+- Better deer: red deer, hinds and stags, with real coats and antlers, grazing, looking round and running. The herd is a dozen now.
+- *Deer at dawn* (Sights) is a little scene:
+  - You arrive high above the field in the low golden sun, with the herd grazing below.
+  - A few seconds later a shot rings out from the woods, and the deer bolt out of the field and are gone.
+  - Then the hounds come home, out of the field, through the gate and up the drive, the view following them. Two wait at the front door, one drinks from the fountain and one noses about the gravel.
+  - A saddled horse stands at the door, waiting for its rider, shifting its weight and snorting now and then.
+  - Drag the view at any time to take over.
+
 ## 0.36.0, 7 November 2026
 
 Tudor's notes of 7 November, the third part: real fireworks, and the cat's adventures.

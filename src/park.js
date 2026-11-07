@@ -1,12 +1,17 @@
 // Wildlife: deer grazing in the park at dawn, and bats over the house and the water at summer dusk.
 //
-// The deer are Quaternius's low-poly Deer and Stag (CC0 1.0, from poly.pizza, trimmed to the
-// animations used here: public/animals/). A small herd grazes in the field south-west of the gate
-// from first light until a couple of hours after sunrise: heads down eating, looking up now and
-// then, walking a few steps to fresh grass. Come within about twenty metres on foot and they lift
-// their heads and bound away, settling again further off. They keep to their field, clear of
-// every camera path; except that some mornings in May one doe wanders off to graze on the verge
-// of the drive just outside the gate, where you can see her through the gateway.
+// The deer are red deer, CDmir's stag and hind (CC0 1.0, from OpenGameArt: public/animals/). A
+// herd of a dozen grazes in the field south-west of the gate from first light until a couple of
+// hours after sunrise: heads down eating, looking round now and then, moving a few steps to fresh
+// grass. Come within about twenty metres on foot and they lift their heads and bound away,
+// settling again further off. They keep to their field, clear of every camera path; except that
+// some mornings in May one hind wanders off to graze on the verge of the drive just outside the
+// gate, where you can see her through the gateway.
+//
+// The hunt (the Deer at dawn sight): a shot from the woods, and the herd bolts away across the
+// field and is gone; then the hounds come back, out of the field, through the gate and up the
+// drive to the house: two wait at the front door, one drinks from the fountain, one noses about.
+// A saddled horse stands at the door, waiting for its rider.
 //
 // The bats are drawn here (a body and two wings, flapping): a dozen from late May to early
 // September, from just after sunset for about an hour, flitting fast and jinking round the front
@@ -18,6 +23,9 @@ import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 
 const ss = THREE.MathUtils.smoothstep;
 const HERD = { x: -18, z: 68, r: 14 }; // the field south-west of the gate, outside the walls
+// the red deer's clips standing in for the ones the herd asks for (they have no walk: a slow run)
+const CLIP = { Eating: ['Eat', 1], Idle_Headlow: ['LookAround', 1], Idle: ['Idle', 1], Gallop: ['Run', 1.05], Walk: ['Run', 0.4] };
+const SHOT = new THREE.Vector3(-75, 3, 40); // where the gun is, in the woods west of the field
 const hash = (n) => {
   const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
   return x - Math.floor(x);
@@ -42,9 +50,14 @@ export class Park {
    * @param {(x: number, z: number) => number} o.ground the ground's height
    * @param {THREE.Vector3[]} o.avoid points the camera paths pass low over (the deer keep clear)
    */
-  constructor(scene, { ground, avoid = [], gate = null }) {
+  constructor(scene, { ground, avoid = [], gate = null, fountain = null, door = null, sound = null }) {
     this.scene = scene;
     this.gate = gate;
+    this.fountain = fountain; // (a box: the hounds drink at its rim)
+    this.door = door ?? new THREE.Vector3(-1.85, 0, -8.5);
+    this.sound = sound;
+    this.huntDay = null; // the morning of the hunt (the Deer at dawn sight)
+    this.huntT = 0;
     this.ground = ground;
     this.avoid = avoid.filter((p) => Math.hypot(p.x - HERD.x, p.z - HERD.z) < HERD.r + 30);
     this.deer = [];
@@ -58,21 +71,27 @@ export class Park {
   /** Loads the deer (the park works without them if they don't load). */
   async load(base = '') {
     const loader = new GLTFLoader();
-    const [doe, stag] = await Promise.all(['deer', 'stag'].map((n) => loader.loadAsync(`${base}animals/${n}.glb`)));
-    const kinds = [doe, doe, stag, doe, doe, doe, stag];
+    const [doe, stag, hound1, hound2, horse] = await Promise.all(['red-hind', 'red-stag', 'hound-1', 'hound-2', 'horse'].map((n) => loader.loadAsync(`${base}animals/${n}.glb`).catch(() => null)));
+    if (!doe || !stag) throw new Error('no deer');
+    const kinds = [doe, doe, stag, doe, doe, doe, doe, stag, doe, doe, doe, doe];
     kinds.forEach((g, i) => {
       const model = cloneSkinned(g.scene);
-      // the models' size: a doe about 1.5 m to the top of her head, a stag 1.9 m to his antlers
+      // the models' size: a hind about 1.55 m to the tips of her ears, a stag 2.05 m to his antlers
       // (measured with the skeleton posed: a skinned mesh's quick bounds are far too big)
       model.updateMatrixWorld(true);
       const box = new THREE.Box3().setFromObject(model, true);
-      const want = g === stag ? 1.9 : 1.45;
+      const want = g === stag ? 2.05 : 1.55;
       model.scale.setScalar(want / Math.max(0.01, box.max.y - box.min.y));
       model.traverse((o) => {
         if (!o.isMesh) return;
         o.castShadow = true;
         o.receiveShadow = true;
         o.frustumCulled = false; // (skinned: the bounds don't follow the animation)
+        // (a little browner: their coats read pink in the low morning sun)
+        if (!o.material.userData.browned) {
+          o.material.color.multiply(new THREE.Color(0.82, 0.74, 0.68));
+          o.material.userData.browned = true;
+        }
       });
       const holder = new THREE.Group();
       holder.add(model);
@@ -93,11 +112,145 @@ export class Park {
         }
       }
       if (holder.position.lengthSq() === 0) holder.position.set(HERD.x + i * 2, this.ground(HERD.x + i * 2, HERD.z), HERD.z);
+      d.home = holder.position.clone();
       holder.rotation.y = d.heading;
       this._play(d, 'Eating', 0);
       d.mixer.update(Math.random() * 3); // (not all in step)
       this.deer.push(d);
     });
+    // the hunt's hounds and the horse (the park works without them)
+    this.hounds = [];
+    this.huntGroup = new THREE.Group();
+    this.huntGroup.name = 'The hunt';
+    this.huntGroup.visible = false;
+    this.scene.add(this.huntGroup);
+    const rig = (g, length) => {
+      const model = cloneSkinned(g.scene);
+      model.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(model, true);
+      const ext = box.getSize(new THREE.Vector3());
+      model.scale.setScalar(length / Math.max(ext.x, ext.z));
+      model.position.y = -box.min.y * model.scale.y;
+      model.traverse((o) => {
+        if (!o.isMesh) return;
+        o.castShadow = true;
+        o.frustumCulled = false;
+      });
+      const holder = new THREE.Group();
+      holder.add(model);
+      this.huntGroup.add(holder);
+      const mixer = new THREE.AnimationMixer(model);
+      const actions = {};
+      for (const clip of g.animations) actions[clip.name.replace(/^.*\|/, '')] = mixer.clipAction(clip);
+      return { holder, model, mixer, actions, current: null };
+    };
+    if (hound1 && hound2) for (const g of [hound1, hound2, hound1, hound2]) this.hounds.push(rig(g, 1.05));
+    if (horse) {
+      this.horse = rig(horse, 2.5);
+      this._saddle(this.horse);
+    }
+  }
+
+  /** A saddle on the horse's back (leather, a cloth under it, the stirrups hanging), on the bone nearest. */
+  _saddle(h) {
+    h.holder.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(h.model, true);
+    // (the seat: the top of the back, a little behind the middle; the horse faces +z)
+    const seat = new THREE.Vector3(0, box.max.y - (box.max.y - box.min.y) * 0.36, (box.min.z + box.max.z) / 2 - (box.max.z - box.min.z) * 0.04);
+    let bone = null;
+    let best = Infinity;
+    const w = new THREE.Vector3();
+    h.model.traverse((o) => {
+      if (!o.isBone) return;
+      o.getWorldPosition(w);
+      const d = w.distanceTo(seat);
+      if (d < best) {
+        best = d;
+        bone = o;
+      }
+    });
+    // (the top of the back there: a ray down from above)
+    const top = new THREE.Raycaster(new THREE.Vector3(seat.x, box.max.y + 1, seat.z), new THREE.Vector3(0, -1, 0)).intersectObject(h.model, true)[0];
+    const y = top ? top.point.y : seat.y;
+    const leather = new THREE.MeshStandardMaterial({ color: 0x3a2214, roughness: 0.55 });
+    const cloth = new THREE.MeshStandardMaterial({ color: 0x1d3527, roughness: 0.9 });
+    const metal = new THREE.MeshStandardMaterial({ color: 0x9a9a92, roughness: 0.35, metalness: 0.9 });
+    const saddle = new THREE.Group();
+    const pad = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.025, 0.72), cloth);
+    pad.position.y = 0.0;
+    const seatMesh = new THREE.Mesh(new THREE.SphereGeometry(0.5, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2).scale(0.5, 0.17, 0.62), leather);
+    seatMesh.position.y = 0.015;
+    const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 6).scale(1.4, 0.8, 0.9), leather);
+    pommel.position.set(0, 0.08, 0.24);
+    saddle.add(pad, seatMesh, pommel);
+    for (const side of [-1, 1]) {
+      const strap = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.42, 0.03), leather);
+      strap.position.set(side * 0.27, -0.2, 0.06);
+      const stirrup = new THREE.Mesh(new THREE.TorusGeometry(0.055, 0.008, 6, 14), metal);
+      stirrup.position.set(side * 0.28, -0.43, 0.06);
+      saddle.add(strap, stirrup);
+    }
+    saddle.traverse((o) => o.isMesh && (o.castShadow = true));
+    saddle.position.set(seat.x, y - 0.005, seat.z);
+    h.holder.add(saddle);
+    if (bone) bone.attach(saddle); // (it moves with the horse's back)
+  }
+
+  /** The hunt, this morning (the Deer at dawn sight): the shot in a few seconds. */
+  hunt(day) {
+    this.huntDay = Math.floor(day);
+    this.huntT = 0;
+    this.shot = false;
+    this.houndsOut = false;
+    // the herd back in its field, grazing, and the hounds and the horse where they start
+    for (const d of this.deer) {
+      d.holder.position.copy(d.home);
+      d.holder.visible = true;
+      d.state = 'graze';
+      d.target = null;
+      d.gone = false;
+      d.timer = Math.random() * 4;
+    }
+    this.hounds.forEach((h, i) => {
+      h.p = new THREE.Vector3(-36 - i * 1.4, 0, 86 + i * 2);
+      h.p.y = this.ground(h.p.x, h.p.z);
+      h.route = this._houndRoute(i);
+      h.arrived = false;
+      h.holder.visible = false;
+    });
+  }
+
+  /** The way home for hound `i`: out of the field, through the gate, up the drive and round the fountain, to the door. */
+  _houndRoute(i) {
+    const g = this.gate ?? { x: 4.6, z: 20.7 };
+    const door = this.door;
+    const jitter = (x, z) => new THREE.Vector3(x + (Math.random() - 0.5) * 1.2, 0, z + (Math.random() - 0.5) * 1.2);
+    const route = [jitter(-30, 80), jitter(-8, 52), jitter(g.x - 0.4, g.z + 9), new THREE.Vector3(g.x + (i % 2 ? 0.5 : -0.5), 0, g.z + 1), jitter(g.x + 4.2, g.z - 8), jitter(g.x + 5, g.z - 16), jitter(g.x + 2, g.z - 24)];
+    // where each ends: two at the door, one at the fountain's rim (drinking), one nosing about
+    const f = this.fountain;
+    if (i === 2 && f) {
+      const c = f.getCenter(new THREE.Vector3());
+      route.push(new THREE.Vector3(c.x + 0.6, 0, f.min.z - 0.45));
+      this.drinkAt = new THREE.Vector3(c.x + 0.6, 0, f.min.z);
+    } else if (i === 3) route.push(new THREE.Vector3(door.x + 3.4, 0, door.z + 2.6));
+    else route.push(new THREE.Vector3(door.x + (i === 0 ? -0.75 : 0.85), 0, door.z + 1.0));
+    return route;
+  }
+
+  /** Where the camera should look while the hunt plays (the herd, then the hounds). */
+  get huntFocus() {
+    if (this.houndsOut && this.hounds.length) {
+      const lead = this.hounds.reduce((a, h) => (h.route.length < a.route.length ? h : a), this.hounds[0]);
+      return lead.p.clone().setY(lead.p.y + 0.5);
+    }
+    const c = new THREE.Vector3();
+    let n = 0;
+    for (const d of this.deer) {
+      if (d.gone) continue;
+      c.add(d.holder.position);
+      n++;
+    }
+    return n ? c.divideScalar(n).setY(c.y + 0.8) : new THREE.Vector3(HERD.x, 1, HERD.z);
   }
 
   /** In the field and at least 14 m from where a camera path passes low. */
@@ -107,8 +260,12 @@ export class Park {
   }
 
   _play(d, name, fade = 0.5) {
-    const next = d.actions[name];
-    if (!next || d.current === next) return;
+    // (the red deer's own clips stand in for the herd's names; the walk is their run, slowed)
+    const [clip, rate] = Object.hasOwn(CLIP, name) ? CLIP[name] : [name, 1];
+    const next = d.actions[clip];
+    if (!next) return;
+    next.timeScale = rate;
+    if (d.current === next) return;
     next.reset().setEffectiveWeight(1).play();
     if (d.current) d.current.crossFadeTo(next, fade, false);
     d.current = next;
@@ -143,6 +300,7 @@ export class Park {
     }
     if (w && !dawn) w.wandered = false;
     if (this.group.visible) this._updateDeer(dt, camera, onFoot);
+    this._updateHunt(dt, day, hours, camera);
     // bats: late May to early September, from just after sunset for about an hour
     const summer = day > 140 && day < 250;
     const dusk = hours > 12 && sunDeg < -0.5 && sunDeg > -11;
@@ -150,10 +308,132 @@ export class Park {
     if (this.bats.visible) this._updateBats(dt, camera);
   }
 
+  _updateHunt(dt, day, hours, camera) {
+    const on = this.huntDay !== null && Math.floor(day) === this.huntDay && hours > 5 && hours < 11.5;
+    if (this.huntGroup) this.huntGroup.visible = on;
+    if (!on) return;
+    this.huntT += dt;
+    // the shot, from the woods; the herd bolts
+    if (!this.shot && this.huntT > 9) {
+      this.shot = true;
+      this.sound?.sample('gunshot', SHOT, { ref: 120, rolloff: 0.6, max: 3000, gain: 1, delay: SHOT.distanceTo(camera.position) / 343 });
+      for (const d of this.deer) {
+        d.state = 'bolt';
+        d.timer = 0.15 + Math.random() * 0.4; // (heads up for a moment, then away)
+        const a = Math.atan2(d.holder.position.x - SHOT.x, d.holder.position.z - SHOT.z) + (Math.random() - 0.5) * 0.5;
+        d.target = new THREE.Vector2(d.holder.position.x + Math.sin(a) * 90, d.holder.position.z + Math.cos(a) * 90);
+      }
+    }
+    // the hounds, out of the field and home
+    if (!this.houndsOut && this.huntT > 11) {
+      this.houndsOut = true;
+      this.sound?.sample('hounds', new THREE.Vector3(-40, 1, 88), { ref: 40, rolloff: 0.8, max: 900, gain: 0.9, lowpass: 2500 });
+      this.barkIn = 4;
+    }
+    const h0 = this.hounds[0];
+    for (const [i, h] of this.hounds.entries()) {
+      h.holder.visible = this.houndsOut;
+      if (!this.houndsOut) continue;
+      if (!h.arrived) {
+        const to = h.route[0];
+        const dx = to.x - h.p.x;
+        const dz = to.z - h.p.z;
+        const dist = Math.hypot(dx, dz);
+        const speed = h.route.length > 2 ? 7 + i * 0.3 : 2.4; // (a trot for the last of it)
+        if (dist < 0.4) {
+          h.route.shift();
+          if (!h.route.length) h.arrived = true;
+        } else {
+          const step = Math.min(dist, speed * dt);
+          h.p.x += (dx / dist) * step;
+          h.p.z += (dz / dist) * step;
+          h.heading = Math.atan2(dx, dz);
+        }
+        h.p.y = this.ground(h.p.x, h.p.z);
+        this._playH(h, h.route.length > 2 ? 'Gallop' : 'Walk', h.route.length > 2 ? 1 : 1.2);
+      } else {
+        // at the door: waiting, heads turning, panting; at the fountain: drinking; the other nosing the gravel
+        if (i === 2 && this.drinkAt) {
+          h.heading = Math.atan2(this.drinkAt.x - h.p.x, this.drinkAt.z - h.p.z);
+          this._playH(h, 'Eating', 1);
+        } else if (i === 3) this._playH(h, Math.sin(this.huntT * 0.4) > 0 ? 'Eating' : 'Idle', 1);
+        else {
+          h.heading = Math.atan2(0, 1) + (i === 0 ? 0.25 : -0.3) + 0.25 * Math.sin(this.huntT * 0.3 + i);
+          this._playH(h, Math.sin(this.huntT * 0.21 + i * 2) > 0.6 ? 'Idle_2_HeadLow' : 'Idle', 1);
+        }
+        if (!this.panted && h === h0) {
+          this.panted = true;
+          this.sound?.sample('panting', h.p.clone().setY(0.5), { ref: 4, rolloff: 1.2, max: 40, gain: 0.7 });
+        }
+      }
+      h.holder.position.copy(h.p);
+      h.holder.rotation.y = h.heading ?? 0;
+      h.mixer.update(dt);
+    }
+    // a bark now and then as they come up the drive
+    if (this.houndsOut && h0 && !h0.arrived) {
+      this.barkIn -= dt;
+      if (this.barkIn <= 0) {
+        this.barkIn = 2.5 + Math.random() * 3;
+        const b = this.hounds[Math.floor(Math.random() * this.hounds.length)];
+        this.sound?.sample('hound-bark', b.p.clone().setY(0.6), { ref: 12, rolloff: 1, max: 300, gain: 0.8, rate: 0.9 + Math.random() * 0.2 });
+      }
+    }
+    // the horse at the door, waiting: shifting its weight, head down now and then, a snort
+    const hr = this.horse;
+    if (hr) {
+      const at = this.door.clone().add(new THREE.Vector3(3.6, 0, 1.6));
+      hr.holder.position.set(at.x, this.ground(at.x, at.z), at.z);
+      hr.holder.rotation.y = -Math.PI / 2 + 0.25;
+      const phase = Math.sin(this.huntT * 0.13);
+      this._playH(hr, phase > 0.55 ? 'Idle_Headlow' : phase < -0.7 ? 'Idle_2' : 'Idle', 1);
+      hr.mixer.update(dt);
+      this.snortIn = (this.snortIn ?? 6) - dt;
+      if (this.snortIn <= 0) {
+        this.snortIn = 9 + Math.random() * 14;
+        this.sound?.sample(Math.random() < 0.2 ? 'horse-neigh' : 'horse-snort', hr.holder.position.clone().setY(1.6), { ref: 8, rolloff: 1.1, max: 200, gain: 0.8 });
+      }
+    }
+  }
+
+  _playH(a, name, rate = 1) {
+    const next = a.actions[name];
+    if (!next) return;
+    next.timeScale = rate;
+    if (a.current === next) return;
+    next.reset().setEffectiveWeight(1).play();
+    if (a.current) a.current.crossFadeTo(next, 0.3, false);
+    a.current = next;
+  }
+
   _updateDeer(dt, camera, onFoot) {
     const cam = camera.position;
     for (const d of this.deer) {
       const p = d.holder.position;
+      if (d.gone) continue;
+      if (d.state === 'bolt') {
+        // the shot: heads up, then away at a full gallop, out of the field and gone
+        d.timer -= dt;
+        if (d.timer > 0) this._play(d, 'Idle', 0.15);
+        else {
+          this._play(d, 'Gallop', 0.2);
+          const want = Math.atan2(d.target.x - p.x, d.target.y - p.z);
+          let turn = want - d.heading;
+          turn = Math.atan2(Math.sin(turn), Math.cos(turn));
+          d.heading += THREE.MathUtils.clamp(turn, -dt * 5, dt * 5);
+          d.speed += (9 - d.speed) * (1 - Math.exp(-dt * 4));
+          p.x += Math.sin(d.heading) * d.speed * dt;
+          p.z += Math.cos(d.heading) * d.speed * dt;
+          p.y = this.ground(p.x, p.z);
+          d.holder.rotation.y = d.heading;
+          if (Math.hypot(d.target.x - p.x, d.target.y - p.z) < 2) {
+            d.gone = true;
+            d.holder.visible = false;
+          }
+        }
+        d.mixer.update(dt);
+        continue;
+      }
       const near = Math.hypot(cam.x - p.x, cam.z - p.z);
       d.timer -= dt;
       // someone on foot close by: heads up, then away at a gallop
