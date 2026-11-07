@@ -8,6 +8,12 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.48.0, 8 November 2026
+
+Christmas lights all round the house.
+
+- **Christmas**: the warm white string and the icicle lights now run along the top of the house all the way round (the front, both ends and the back), and on Christmas Eve the lights round the windows and the candles on their sills are on every side of the house, not only the front.
+
 ## 0.47.0, 8 November 2026
 
 The drone flight, and the view from high up.

@@ -1489,7 +1489,7 @@ async function prepareWalking(ground) {
         [-9, 4],
       ].find(([x, z]) => clear(x, z));
       const treeAt = spot ? new THREE.Vector3(spot[0], landscape.groundHeight(spot[0], spot[1]) ?? 0, spot[1]) : null;
-      festive.decorate({ windows: spooky.windows, crowns, treeAt });
+      festive.decorate({ windows: haunt?.rooms.map((r) => r.w) ?? [], crowns, treeAt });
       if (treeAt) landscape.obstacles.push({ x: treeAt.x, z: treeAt.z, r: 1.8, when: () => !!festive.eve?.visible });
     }
     await part(0.9, 'Building the bonfire');

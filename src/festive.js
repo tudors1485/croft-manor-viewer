@@ -308,24 +308,35 @@ export class Festive {
       this.halloween.parent.add(this.candle);
     }
 
-    // --- Christmas: warm white along the top of the front of the house and over the gate ---
+    // --- Christmas: warm white along the top of the house, all the way round, and over the gate ---
     const outline = [];
     const warm = () => [1, 0.78, 0.45];
     // from the top down, the first height at which a ray from the front meets a wall facing
     // it (not a roof slope), within the given depth: the top edge of the front, battlements and all
-    const traceTop = (x0, x1, zFrom, zNear, zFar, yTop, dz) => {
+    // (any face: rays come in along `dir`, in a line along its x or z; the wall met between `near`
+    // and `far`, along the ray's axis)
+    const FRONT = { dir: new THREE.Vector3(0, 0, -1), axis: 'x' };
+    const traceTop = (x0, x1, zFrom, zNear, zFar, yTop, dz, face = FRONT) => {
+      const lo = Math.min(zNear, zFar);
+      const hi = Math.max(zNear, zFar);
       for (let x = x0; x <= x1; x += 0.24) {
         for (let y = yTop; y > 1.5; y -= 0.08) {
-          ray.set(new THREE.Vector3(x, y, zFrom), new THREE.Vector3(0, 0, -1));
+          ray.set(face.axis === 'x' ? new THREE.Vector3(x, y, zFrom) : new THREE.Vector3(zFrom, y, x), face.dir);
           const hit = bvh.raycastFirst(ray, THREE.DoubleSide, 0, 60);
-          if (!hit || hit.point.z > zNear || hit.point.z < zFar) continue;
-          if (Math.abs(hit.face.normal.z) < 0.6) continue; // a roof, not a wall
-          outline.push({ pos: [x, y - 0.06, hit.point.z + dz], colour: warm(), phase: Math.random(), along: outline.length });
+          const p = hit ? (face.axis === 'x' ? hit.point.z : hit.point.x) : 0;
+          if (!hit || p > hi || p < lo) continue;
+          if (Math.abs(hit.face.normal.dot(face.dir)) < 0.6) continue; // a roof, not a wall
+          const at = hit.point.clone().addScaledVector(face.dir, -dz);
+          outline.push({ pos: [at.x, y - 0.06, at.z], colour: warm(), phase: Math.random(), along: outline.length });
           break;
         }
       }
     };
-    traceTop(-14.4, 29.2, 6, 1, -12.5, 16, 0.14); // the front of the house
+    // the top of the house, all the way round: the front, the east end, the back, the west end
+    traceTop(-14.4, 29.2, 6, 1, -12.5, 16, 0.14); // the front
+    traceTop(-36, -6, 44, 35, 14, 16, 0.14, { dir: new THREE.Vector3(-1, 0, 0), axis: 'z' }); // the east end
+    traceTop(-14.4, 29.2, -44, -36, -19, 16, 0.14, { dir: new THREE.Vector3(0, 0, 1), axis: 'x' }); // the back
+    traceTop(-36, -6, -32, -21, -3, 16, 0.14, { dir: new THREE.Vector3(1, 0, 0), axis: 'z' }); // the west end
     // icicle lights hanging under the house's line: strands of four to nine bulbs, cool white
     const icicles = [];
     for (const b of outline) {
@@ -395,24 +406,26 @@ export class Festive {
       [1, 0.7, 0.15],
       [1, 0.85, 0.6],
     ];
-    // light strings round the front windows, and a candle on each sill
+    // light strings round the windows, all round the house, and a candle on each sill
     const frames = [];
     const candles = [];
+    // (the windows on every side: haunt.js's finder gives each its middle on the glass, which way is
+    // out, which way along, its width and its sill and head)
     for (const w of windows) {
-      const z = w.z + 0.12;
-      const edge = (ax, ay, bx, by) => {
-        const n = Math.max(2, Math.round(Math.hypot(bx - ax, by - ay) / 0.2));
-        for (let k = 0; k < n; k++) frames.push({ pos: [ax + ((bx - ax) * k) / n, ay + ((by - ay) * k) / n, z], colour: warm, phase: Math.random() });
+      const at = (s, y, out) => w.c.clone().addScaledVector(w.u, s).addScaledVector(w.n, out).setY(y);
+      const edge = (as, ay, bs, by) => {
+        const n = Math.max(2, Math.round(Math.hypot(bs - as, by - ay) / 0.2));
+        for (let k = 0; k < n; k++) frames.push({ pos: at(as + ((bs - as) * k) / n, ay + ((by - ay) * k) / n, 0.12).toArray(), colour: warm, phase: Math.random() });
       };
-      const x0 = w.x0 - 0.12;
-      const x1 = w.x1 + 0.12;
+      const s0 = -w.width / 2 - 0.12;
+      const s1 = w.width / 2 + 0.12;
       const y0 = w.bottom - 0.1;
       const y1 = w.top + 0.1;
-      edge(x0, y0, x1, y0);
-      edge(x1, y0, x1, y1);
-      edge(x1, y1, x0, y1);
-      edge(x0, y1, x0, y0);
-      candles.push({ pos: [(w.x0 + w.x1) / 2, w.bottom + 0.16, w.z - 0.12], colour: [1, 0.62, 0.22], phase: Math.random() });
+      edge(s0, y0, s1, y0);
+      edge(s1, y0, s1, y1);
+      edge(s1, y1, s0, y1);
+      edge(s0, y1, s0, y0);
+      if (w.depth > 0.2) candles.push({ pos: at(0, w.bottom + 0.16, -0.12).toArray(), colour: [1, 0.62, 0.22], phase: Math.random() });
     }
     this.extra.push(bulbs(frames, 0.11), bulbs(candles, 0.32));
     // fairy lights in the trees round the lawns (warm white) and the one outside the gate
