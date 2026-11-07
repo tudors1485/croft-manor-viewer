@@ -28,7 +28,7 @@
   {"name": "TRJTA 15", "pos": [21.5, 7.2, -20.5], "target": [16, 6.2, -15.5], "fov": 70, "scene": {"day": 300, "hours": 13, "weather": "clear"}, "group": "pictures"},
   {"name": "TRJTA 16", "pos": [4, 1.7, -64], "target": [6, 5, -30], "fov": 55, "scene": {"day": 172, "hours": 14.5, "weather": "clouds"}, "group": "pictures"},
   {"name": "TRJTA 17", "pos": [-21, 1.5, -5], "target": [-9, 5, -19], "fov": 60, "scene": {"day": 172, "hours": 14.5, "weather": "clouds"}, "group": "pictures"},
-  {"name": "Under the oak", "pos": [-5, 1.7, 16.5], "target": [-1.4, 5.0, -12], "fov": 34, "scene": {"day": 172, "hours": 14.5, "weather": "clouds"}, "group": "pictures"},
+  {"name": "Under the oak", "pos": [-2.4, 1.6, 17.2], "target": [6, 6.2, -12], "fov": 42, "scene": {"day": 172, "hours": 14.5, "weather": "clouds"}, "group": "pictures"},
   {"name": "Through the gate", "pos": [4.6, 1.6, 23.2], "target": [3.2, 2.8, -11], "fov": 50, "scene": {"day": 172, "hours": 14.5, "weather": "clouds"}, "group": "pictures"},
   {"name": "By the fountain", "pos": [9.5, 1.15, 12.5], "target": [0, 3, -9], "fov": 55, "scene": {"day": 172, "hours": 14.5, "weather": "clouds"}, "group": "pictures"}
 ]

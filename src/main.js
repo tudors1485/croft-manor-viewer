@@ -11,7 +11,7 @@ import { Lamps } from './lamps.js';
 import { Landscape, makeTerrain, makeHillHeight } from './landscape.js';
 import { Garden } from './garden.js';
 import { MovingIn } from './movingin.js';
-import { dressInterior } from './interior.js';
+import { dressInterior, hallClock } from './interior.js';
 import { installGrade } from './look.js';
 import { Quality, LOOKS } from './quality.js';
 import { tuneMaterials, GRASS_TINT, grassShader, TINTS, buildSkyMap, weatherShader } from './materials.js';
@@ -105,6 +105,7 @@ let wet = 0; // the ground stays wet for a while after the rain stops
 let wind = 0.2; // eased towards the weather's wind, for the trees and the sound
 let coldness = 0; // 0 a warm day .. 1 a cold one (refreshWeather): smoke from the chimneys
 let haunt = null; // Halloween night: the rooms behind every window, and the candle-bearer (haunt.js)
+let clockHands = null; // the great hall's clock keeping the viewer's time (interior.js)
 let moving = null; // Moving in (Sights): crates in the hall (movingin.js)
 let garden = null; // hedges, shrub borders, long grass, clipped evergreens, chimney smoke (garden.js)
 const rainfall = new Rainfall(scene);
@@ -244,11 +245,11 @@ let flybyId = null; // which flyby the 'tour' mode is playing, or null for the t
 // where you start, and where Walk mode starts if you switch to it from high up: on the drive
 // just inside the gate, between the two oaks, the fountain before you and the front door
 // beyond it (the view Tudor picked, 6 November 2026)
-// Where you start: on the front lawn under the oak, the porch straight ahead and the statue to
-// the right, through a longer lens (the picture of the front Tudor liked); it eases back to the
-// usual lens as soon as you move, still looking at the house
-const SPAWN = { eye: new THREE.Vector3(-5, 1.7, 16.5), look: new THREE.Vector3(-1.4, 5.0, -12) };
-const OPENING_LENS = 34;
+// Where you start: under the tree by the gate, the porch ahead and the great stone horse that stands
+// in the fountain's place in this view on the right, through a longer lens (the picture of the front
+// Tudor liked); it eases back to the usual lens as soon as you move, still looking at the house
+const SPAWN = { eye: new THREE.Vector3(-2.4, 1.6, 17.2), look: new THREE.Vector3(6, 6.2, -12) };
+const OPENING_LENS = 42;
 
 function setMode(next) {
   if (next === 'walk' && !walker) {
@@ -509,6 +510,7 @@ function updateLockHint() {
 // The tour and the flybys: they remember where you were (and the clock), and put you back
 let tourReturn = null;
 function startTour(id = null) {
+  setOakScene(false);
   if (lens) {
     // (a flyby has its own lens)
     lens = null;
@@ -937,6 +939,7 @@ function goToPlace(i, named = false) {
   {
     placeAt = i;
     const [name, pos, target, v] = viewpoints[i];
+    setOakScene(name === 'Under the oak');
     if (named) toast(name);
     if (v?.scene) {
       wakeSound();
@@ -1118,30 +1121,49 @@ loader.load(
 );
 
 /**
- * A rearing horse on a granite plinth, on the front lawn before the porch (the picture of the
- * front Tudor liked has one): "Horse Statue 01" by Rico Cilliers (Poly Haven, CC0), a porcelain
- * figurine made garden-sized, in weathered stone.
+ * The view from under the oak (where you start): there, a great rearing horse in stone stands where
+ * the fountain is, on a round stepped plinth as wide as the fountain's basin; anywhere else, the
+ * fountain. "Horse Statue 01" by Rico Cilliers (Poly Haven, CC0), a porcelain figurine made a
+ * monument, in the dolphin's weathered stone.
  */
 let statue = null;
+let fountainParts = null; // the fountain's meshes, and the brick drum's triangles (hidden in the oak's scene)
+let oakScene = false;
 function addStatue() {
-  const at = [
-    [1.8, 4.2],
-    [2.4, 4.8],
-    [1.2, 5.0],
-  ].find(([x, z]) => landscape._grassAt(x, z) && landscape._grassAt(x + 1, z) && landscape._grassAt(x - 1, z));
-  if (!at) return;
-  const [x, z] = at;
-  // (kept clear: by walking, and by the camera paths, checked once everything is in)
-  landscape.obstacles.push({ x, z, r: 1.05 });
-  landscape.crowns.push({ x, z, r: 1.2, y0: 0, y1: 3.5 });
+  const at = new THREE.Vector3(4.59, 0, 8.28); // the fountain's middle
+  // the fountain: the dolphin, its jet, the stone rim and the water; the brick drum of the basin is
+  // part of the estate's one brick mesh, so its triangles there are left out of that mesh's index
+  fountainParts = { meshes: [], bricks: [] };
+  // (whatever stands within 4 m of its middle and below 1.5 m, but the lawn and the gravel under it)
+  const v = new THREE.Vector3();
+  const inDrum = (p) => Math.hypot(p.x - at.x, p.z - at.z) < 4 && p.y < 1.5 && p.y > -0.6;
+  model.traverse((o) => {
+    if (!o.isMesh) return;
+    const n = o.material.name || '';
+    if (/^cm_fishstatue/.test(n)) fountainParts.meshes.push(o);
+    else if (!/^cm_(grass|gravel)$/.test(n) && o.geometry.index) {
+      const idx = o.geometry.index.array;
+      const pos = o.geometry.attributes.position;
+      const keep = [];
+      let cut = 0;
+      for (let t = 0; t < idx.length; t += 3) {
+        let inside = true;
+        for (let k = 0; k < 3; k++) if (!inDrum(v.fromBufferAttribute(pos, idx[t + k]).applyMatrix4(o.matrixWorld))) inside = false;
+        if (inside) cut++;
+        else keep.push(idx[t], idx[t + 1], idx[t + 2]);
+      }
+      if (cut) fountainParts.bricks.push({ mesh: o, all: o.geometry.index, without: new THREE.BufferAttribute(idx.length > 65535 * 3 || pos.count > 65535 ? new Uint32Array(keep) : new Uint16Array(keep), 1) });
+    }
+  });
+  const pond = water?.surfaces.find((w) => w.outdoor && w.box.containsPoint(at.clone().setY(w.box.min.y)));
+  if (pond) fountainParts.meshes.push(pond.mesh);
   loader.load('/models/horse-statue.glb', (gltf) => {
     const horse = gltf.scene;
     const box = new THREE.Box3().setFromObject(horse);
-    horse.scale.setScalar(2.1 / (box.max.y - box.min.y));
+    horse.scale.setScalar(3.4 / (box.max.y - box.min.y));
     box.setFromObject(horse);
     const c = box.getCenter(new THREE.Vector3());
     horse.position.set(-c.x, -box.min.y, -c.z);
-    // in the same weathered stone as the dolphin on the fountain, on a plinth of the house's dressings
     const named = (n) => {
       let m = null;
       model.traverse((o) => o.isMesh && o.material.name === n && (m = o.material));
@@ -1156,29 +1178,86 @@ function addStatue() {
       if (normalMap && !stone.normalMap) stone.normalMap = normalMap;
       o.castShadow = o.receiveShadow = true;
     });
-    const granite = named('cm_whitestone_0')?.clone() ?? new THREE.MeshStandardMaterial({ color: 0x9a9080, roughness: 0.88 });
-    weatherShader(granite);
+    // (a sandstone of its own: the model's stones are atlases, with brick in them)
+    const dressed = new THREE.MeshStandardMaterial({ map: sandstone(), color: 0xd2bf9c, roughness: 0.86, envMapIntensity: 0.6 });
+    weatherShader(dressed);
     const g = new THREE.Group();
-    for (const [w, h, d, y] of [
-      [1.95, 0.32, 1.35, 0],
-      [1.45, 0.82, 0.98, 0.32],
-      [1.62, 0.08, 1.12, 1.14],
+    // a round stepped plinth, as wide as the basin was
+    let y = 0;
+    // (the lowest step covers the hole the lawn has under the basin)
+    for (const [r0, r1, h] of [
+      [3.7, 3.7, 0.28],
+      [3.0, 3.0, 0.3],
+      [2.3, 2.3, 0.28],
+      [1.25, 1.35, 1.35],
+      [1.48, 1.48, 0.12],
     ]) {
-      const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d).translate(0, y + h / 2, 0), granite);
-      b.castShadow = b.receiveShadow = true;
-      g.add(b);
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(r0, r1, h, 48).translate(0, y + h / 2, 0), dressed);
+      m.castShadow = m.receiveShadow = true;
+      g.add(m);
+      y += h;
     }
-    // (rearing towards the porch, turned a little to the drive)
+    // the lawn has a hole where the basin was: grass over it, in the lawn's own material (its shader
+    // works in world space, so the patch doesn't show)
+    let grass = null;
+    model.traverse((o) => o.isMesh && o.material.name === 'cm_grass' && (grass = o.material));
+    if (grass) {
+      const lawnY = (landscape.groundHeight(at.x - 4.6, at.z) ?? 0.2) + 0.006;
+      const patch = new THREE.Mesh(new THREE.CircleGeometry(4.5, 48).rotateX(-Math.PI / 2), grass);
+      patch.position.y = lawnY - ((landscape.groundHeight(at.x - 3.3, at.z) ?? 0) - 0.04);
+      patch.receiveShadow = true;
+      g.add(patch);
+    }
+    // (rearing towards the gate and the drive, turned a little to the porch)
     const holder = new THREE.Group();
     holder.add(horse);
-    holder.position.y = 1.22;
-    holder.rotation.y = 0.4;
+    holder.position.y = y;
+    holder.rotation.y = -Math.PI / 2 + 0.5;
     g.add(holder);
-    g.position.set(x, (landscape.groundHeight(x, z) ?? 0) - 0.04, z);
-    g.rotation.y = 0.15;
+    g.position.set(at.x, (landscape.groundHeight(at.x - 3.3, at.z) ?? 0) - 0.04, at.z);
+    g.visible = oakScene;
     scene.add(g);
     statue = g;
   });
+}
+/** Sandstone blocks, weathered: for the horse's plinth (wrapped round it, so it tiles across). */
+function sandstone() {
+  const c = document.createElement('canvas');
+  c.width = 512;
+  c.height = 128;
+  const g = c.getContext('2d');
+  g.fillStyle = '#cfc2a6';
+  g.fillRect(0, 0, 512, 128);
+  for (let i = 0; i < 2600; i++) {
+    const v = 150 + Math.random() * 70;
+    g.fillStyle = `rgba(${v + 30},${v + 20},${v},${0.06 + Math.random() * 0.1})`;
+    g.fillRect(Math.random() * 512, Math.random() * 128, 2 + Math.random() * 10, 1 + Math.random() * 5);
+  }
+  // the joints between the blocks
+  g.strokeStyle = 'rgba(90,78,60,0.55)';
+  g.lineWidth = 2;
+  for (let x = 0; x <= 512; x += 64) {
+    g.beginPath();
+    g.moveTo(x, 0);
+    g.lineTo(x, 128);
+    g.stroke();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = THREE.RepeatWrapping;
+  t.repeat.set(3, 1);
+  return t;
+}
+
+/** The oak's scene (the horse in the fountain's place) on or off. */
+function setOakScene(on) {
+  oakScene = on;
+  if (statue) statue.visible = on;
+  if (fountainParts) {
+    for (const m of fountainParts.meshes) m.visible = !on;
+    for (const b of fountainParts.bricks) b.mesh.geometry.setIndex(on ? b.without : b.all);
+  }
+  sound.fountainOff = on ? 1 : 0;
 }
 
 /** The glass and leading of the windows inside a box, by triangle (a flyby may pass through them). */
@@ -1212,7 +1291,10 @@ function toast(text) {
 function doneLoading() {
   if (ready) return;
   ready = true;
-  if (camera.position.distanceTo(SPAWN.eye) < 0.5) holdLens(OPENING_LENS);
+  if (camera.position.distanceTo(SPAWN.eye) < 0.5) {
+    holdLens(OPENING_LENS);
+    setOakScene(true);
+  }
   loadingBar.finish();
   $('loading').classList.add('done');
   $('panel').hidden = false;
@@ -1349,6 +1431,7 @@ async function prepareWalking(ground) {
     leaves = new FallenLeaves(scene, landscape.treeSpots, (x, z) => landscape.groundHeight(x, z));
     addStatue();
     console.info('interior', dressInterior(scene, model));
+    clockHands = hallClock(scene);
     moving = new MovingIn(scene, model, landscape.obstacles);
     await part(0.4, 'Clipping the hedges and planting the borders');
     garden = new Garden(scene, { landscape, bvh: geo.boundsTree, gate: landscape.gate, materialAt: (fi) => meshAtFace(geo, fi)?.material.name || '' });
@@ -1576,6 +1659,7 @@ $('reset').onclick = (e) => {
   sight = null;
   flight = null;
   moving?.set(false);
+  setOakScene(true);
   $('weather').value = 'live';
   forcedWeather = null;
   goToNow();
@@ -1634,6 +1718,13 @@ const HOLIDAYS = {
   deer: { day: () => wanderDay(), hours: 7.0, weather: 'clear', pos: [5, 11, 74], look: [-17, 0.8, 67], orbit: true, then: () => startHunt() },
   // an April evening, the sun out after a shower, looking east, away from it
   rainbow: { day: 118, hours: 18.2, weather: 'clear', wet: 1, pos: [-8, 1.7, 12], look: [50, 9, 10] },
+  // the great hall's clock in a time-lapse: a February day from half past seven, the clock run (a
+  // day in two minutes), the hands spinning and the sun's patches crossing the floor and the walls
+  timelapse: { day: 50, hours: 7.5, weather: 'clear', pos: [0.4, 1.55, -16.6], look: [-1.85, 1.25, -20.1], then: () => {
+    setPlaying(true);
+    playRate = 2; // (a day in a minute: half past seven to six in about 25 seconds)
+    playUntil = 18;
+  } },
   // Moving in: the hall on the day the crates came (a spring morning, the sun in at the windows)
   moving: { day: 100, hours: 10.5, weather: 'clear', pos: [-1.85, 1.7, -12.9], look: [-1.85, 3.0, -24], then: () => moving?.set(true) },
   // an autumn afternoon, the crows going over to roost
@@ -1707,12 +1798,14 @@ $('holiday').onchange = (e) => {
   const flyby = value.startsWith('fly:') ? value.slice(4) : null;
   if (flyby && Object.hasOwn(FLYBYS, flyby) && FLYBYS[flyby].holiday) {
     wakeSound();
+    setOakScene(false);
     startTour(flyby);
     return;
   }
   if (!h) return;
   wakeSound();
   moving?.set(false); // (another holiday or sight: the crates go)
+  setOakScene(false);
   setDate(typeof h.day === 'function' ? h.day() : h.day);
   setTime(h.hours);
   $('weather').value = h.weather;
@@ -1800,8 +1893,14 @@ $('now').onclick = (e) => {
   goToNow();
   e.currentTarget.blur();
 };
+let playRate = 1; // (the time-lapse runs the clock faster, and stops it at an hour)
+let playUntil = null;
 function setPlaying(on) {
   playing = on;
+  if (!on) {
+    playRate = 1;
+    playUntil = null;
+  }
   $('play').textContent = on ? '❚❚' : '▶';
   $('play').title = on ? 'Stop the clock' : 'Run the clock: a day in two minutes';
 }
@@ -1886,8 +1985,12 @@ function step(dt, exporting = false) {
   if (exporting) {
     // (nothing moves the clock or the year while a video is being made)
   } else if (playing) {
-    let h = Number($('time').value) + dt * (24 / 120);
+    let h = Number($('time').value) + dt * (24 / 120) * playRate;
     if (h >= 24) h -= 24;
+    if (playUntil !== null && h >= playUntil) {
+      h = playUntil;
+      setPlaying(false);
+    }
     $('time').value = String(h);
     tod.hours = h;
     tod.update();
@@ -1997,6 +2100,7 @@ function step(dt, exporting = false) {
   tod.fitShadow(camera, { inside: lamps?.houseBox.containsPoint(camera.position) ? 1 : 0, low: camera.position.y < 9, whole: (mode === 'tour' && !lamps?.houseBox.containsPoint(camera.position)) || exporting, house: lamps?.houseBox });
   if (landscape) landscape.update(dt, tod);
   garden?.update(dt, { cold: coldness, wind, night: tod.night, scale: lamps?.glowMat.uniforms.uScale.value });
+  clockHands?.update(Number($('time').value));
   stepLens(dt);
   if (doors) doors.update(camera, dt);
   camSpeed += ((dt > 0 ? camera.position.distanceTo(lastCam) / dt : 0) - camSpeed) * (1 - Math.exp(-dt * 6));
@@ -2037,7 +2141,7 @@ function step(dt, exporting = false) {
     water.update(camera, elapsed);
     if (water.jet) {
       water.jet.material.map.offset.y -= dt * 1.4;
-      water.jet.visible = seasonUniforms.uIce.value < 0.5; // the fountain is turned off when it freezes
+      water.jet.visible = seasonUniforms.uIce.value < 0.5 && !oakScene; // the fountain is turned off when it freezes (and gone in the oak's scene)
     }
   }
   quality.fisheye = mode === 'tour' ? tour.fisheye : 0;

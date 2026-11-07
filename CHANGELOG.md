@@ -8,6 +8,14 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.46.0, 8 November 2026
+
+The hall clock, its time-lapse, and the horse in the fountain's place.
+
+- **The hall clock keeps time**: the grandfather clock in the great hall shows the viewer's time, on a new dial laid over its painted one (an enamel ring with Roman numerals round an engraved brass centre, blued-steel hands, a seconds hand that steps with the tick). Run the clock (the ▶ by the time) and its hands spin.
+- **The hall clock, a day** (Scenes › Sights): a February day in the hall from half past seven to six, in about 25 seconds: the clock beside you, its hands spinning, the sun's patches crossing the floor and the walls, the lamps coming on at dusk.
+- **The view under the oak** (where you start, and *Place › Under the oak*): a great rearing horse in stone stands where the fountain is, on a round stepped sandstone plinth as wide as the basin, the leaves of an oak over the top of the picture and the porch in the middle. Anywhere else (another place, a scene, a flyby, the tour) the fountain is back; Reset brings back the horse. The horse is no longer on the lawn.
+
 ## 0.45.0, 8 November 2026
 
 Scenes, the places' arrows, sun in every room, climbers, snow on every plant, gilt frames.

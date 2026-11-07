@@ -773,7 +773,7 @@ export class Soundscape {
     this.rushFilter.frequency.setTargetAtTime(380 + speed * 45, t, 0.25);
 
     // the fountain (silent when frozen), muffled indoors; the clock muffled outdoors
-    this.waterGain.gain.setTargetAtTime(0.5 * (1 - frozen) * ground, t, 0.5);
+    this.waterGain.gain.setTargetAtTime(0.5 * (1 - frozen) * ground * (1 - (this.fountainOff ?? 0)), t, 0.5);
     this.waterMuffle.frequency.setTargetAtTime(THREE.MathUtils.lerp(9000, 700, inside), t, 0.3);
     this.clockMuffle.frequency.setTargetAtTime(THREE.MathUtils.lerp(9000, 900, outdoors), t, 0.3);
     this.clockGain.gain.setTargetAtTime(THREE.MathUtils.lerp(1, 0.35, outdoors), t, 0.3);

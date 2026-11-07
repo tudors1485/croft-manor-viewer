@@ -140,3 +140,106 @@ export function dressInterior(scene, model) {
   });
   return { frames };
 }
+
+/**
+ * The grandfather clock in the great hall keeping the viewer's time: a dial laid over its painted
+ * one (whose hands are painted at ten past ten), an enamel chapter ring with Roman numerals round a
+ * brass centre, and blued-steel hands; a seconds hand with the tick. When the clock is run (the ▶ by
+ * the time), the hands spin.
+ */
+export function hallClock(scene) {
+  const C = new THREE.Vector3(-1.85, 1.475, -19.957); // the dial's middle, on the front of the hood
+  const R = 0.118;
+  const c = document.createElement('canvas');
+  c.width = c.height = 512;
+  const g = c.getContext('2d');
+  // the brass dial plate, engraved, with the enamel chapter ring on it
+  const brass = g.createRadialGradient(256, 230, 20, 256, 256, 256);
+  brass.addColorStop(0, '#e7c977');
+  brass.addColorStop(1, '#9a7a34');
+  g.fillStyle = brass;
+  g.fillRect(0, 0, 512, 512);
+  g.strokeStyle = 'rgba(80,55,15,0.35)';
+  for (let r = 40; r < 140; r += 9) {
+    g.beginPath();
+    g.arc(256, 256, r, 0, Math.PI * 2);
+    g.stroke();
+  }
+  g.fillStyle = '#f2ede0';
+  g.beginPath();
+  g.arc(256, 256, 250, 0, Math.PI * 2);
+  g.arc(256, 256, 160, 0, Math.PI * 2, true);
+  g.fill('evenodd');
+  g.strokeStyle = '#2a2420';
+  g.lineWidth = 2;
+  for (const r of [250, 228, 160]) {
+    g.beginPath();
+    g.arc(256, 256, r, 0, Math.PI * 2);
+    g.stroke();
+  }
+  // the minute track, and the hours in Roman numerals
+  for (let m = 0; m < 60; m++) {
+    const a = (m / 60) * Math.PI * 2;
+    const r0 = m % 5 ? 236 : 230;
+    g.lineWidth = m % 5 ? 2 : 4;
+    g.beginPath();
+    g.moveTo(256 + Math.sin(a) * r0, 256 - Math.cos(a) * r0);
+    g.lineTo(256 + Math.sin(a) * 248, 256 - Math.cos(a) * 248);
+    g.stroke();
+  }
+  const roman = ['XII', 'I', 'II', 'III', 'IIII', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI'];
+  g.fillStyle = '#1e1a16';
+  g.font = '600 44px Georgia, serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  roman.forEach((t, h) => {
+    const a = (h / 12) * Math.PI * 2;
+    g.save();
+    g.translate(256 + Math.sin(a) * 194, 256 - Math.cos(a) * 194);
+    g.rotate(a);
+    g.fillText(t, 0, 0);
+    g.restore();
+  });
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  const group = new THREE.Group();
+  group.position.copy(C);
+  const dial = new THREE.Mesh(new THREE.CircleGeometry(R, 48), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.45, metalness: 0.1 }));
+  group.add(dial);
+  const steel = new THREE.MeshStandardMaterial({ color: 0x14182a, metalness: 0.7, roughness: 0.3 });
+  // a hand: a tapering blade from the middle, with a tail
+  const hand = (len, width, z) => {
+    const s = new THREE.Shape();
+    s.moveTo(-width * 0.5, -len * 0.18);
+    s.lineTo(width * 0.5, -len * 0.18);
+    s.lineTo(width * 0.32, len * 0.7);
+    s.lineTo(0, len);
+    s.lineTo(-width * 0.32, len * 0.7);
+    s.closePath();
+    const m = new THREE.Mesh(new THREE.ShapeGeometry(s), steel);
+    m.position.z = z;
+    group.add(m);
+    return m;
+  };
+  const hour = hand(R * 0.55, R * 0.11, 0.003);
+  const minute = hand(R * 0.86, R * 0.075, 0.005);
+  const second = hand(R * 0.9, R * 0.02, 0.007);
+  second.material = new THREE.MeshStandardMaterial({ color: 0x5a1610, metalness: 0.4, roughness: 0.4 });
+  const boss = new THREE.Mesh(new THREE.CircleGeometry(R * 0.06, 16), new THREE.MeshStandardMaterial({ color: 0xc9a14a, metalness: 1, roughness: 0.3 }));
+  boss.position.z = 0.009;
+  group.add(boss);
+  group.traverse((o) => o.isMesh && (o.receiveShadow = true));
+  scene.add(group);
+  return {
+    group,
+    /** The hands at `hours` (the viewer's clock, with its seconds). */
+    update(hours) {
+      const s = ((hours * 3600) % 60 + 60) % 60;
+      hour.rotation.z = -(((hours % 12) + 12) % 12 / 12) * Math.PI * 2;
+      minute.rotation.z = -(((hours % 1) + 1) % 1) * Math.PI * 2;
+      // (the seconds hand steps with the tick)
+      second.rotation.z = -(Math.floor(s) / 60) * Math.PI * 2;
+    },
+  };
+}

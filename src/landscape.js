@@ -630,7 +630,7 @@ export class Landscape {
     // an oak on the west of the front lawn, its crown over where you start: the picture of the
     // front Tudor liked, the house seen from under a tree (main.js: the opening view)
     this.frontOak = null;
-    for (const [x, z] of [[-10.5, 15], [-11, 13.5], [-10, 16.5], [-11.5, 12]]) {
+    for (const [x, z] of [[-7.5, 13.5], [-8, 12.5], [-10.5, 15], [-11, 13.5], [-11.5, 12]]) {
       if (!this._clearLawn(x, z, 1.6)) continue;
       entranceSpots.push([1, x, z, 1, 4.1]);
       taken.push([x, z, 9]);
