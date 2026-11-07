@@ -586,7 +586,10 @@ export class Landscape {
       await grown(makeVariant('Bush 1', 71, 1.2, this.wind, { tint: 0x7d9a58, leafCount: 22, leafSize: 2.6, evergreen: true })),
     ];
     // the two trees inside the gate in TRJTA's renders: full, round oaks
-    const entrance = [await grown(makeVariant('Oak Medium', 91, 12.5, this.wind, { tint: 0xa8c07c, leafCount: 34, leafSize: 1.3 }))];
+    const entrance = [
+      await grown(makeVariant('Oak Medium', 91, 12.5, this.wind, { tint: 0xa8c07c, leafCount: 34, leafSize: 1.3 })),
+      await grown(makeVariant('Oak Large', 53, 15, this.wind, { tint: 0x9fb478, leafCount: 26, leafSize: 1.15 })),
+    ];
     const R = rng(20261105);
 
     // --- real trees: some on the lawns, a belt outside the walls ---
@@ -618,6 +621,17 @@ export class Landscape {
         entranceSpots.push([0, best[0], best[1], 1, side > 0 ? 0.8 : 2.3]);
         taken.push([best[0], best[1], 12]);
       }
+    }
+
+    // an oak on the west of the front lawn, its crown over where you start: the picture of the
+    // front Tudor liked, the house seen from under a tree (main.js: the opening view)
+    this.frontOak = null;
+    for (const [x, z] of [[-8, 13.5], [-8.5, 12], [-7.5, 15], [-9, 10.5]]) {
+      if (!this._clearLawn(x, z, 1.6)) continue;
+      entranceSpots.push([1, x, z, 1, 4.1]);
+      taken.push([x, z, 9]);
+      this.frontOak = new THREE.Vector3(x, 0, z);
+      break;
     }
 
     // inside the walls: open lawn, clear of paths and buildings by a few metres

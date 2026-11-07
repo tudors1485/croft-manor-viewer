@@ -173,7 +173,14 @@ export class Lamps {
     for (const m of this.glass) {
       m.emissive = new THREE.Color(0xffb25a);
       m.emissiveIntensity = 0;
+      // seen from outside by day, old glass is dark and mirrors the sky and the trees (TRJTA's
+      // renders); from inside it stays clear to look out through (update)
+      m.userData.clearOpacity = m.opacity;
+      m.color.multiplyScalar(0.55);
+      m.roughness = 0.04;
+      m.metalness = 0;
     }
+    this._outGlass = 1;
 
     // all flames in one draw call
     const geo = new THREE.BufferGeometry();
@@ -300,6 +307,12 @@ export class Lamps {
   setHouse(on) {
     this.houseOn = on;
     for (const l of this.lights) if (!l.outdoor) l.manual = null;
+  }
+
+  /** The outdoor switch: the lamps, the floodlights, the porch lantern and the course's lights. */
+  setOutdoor(on) {
+    this.outdoorOn = on;
+    for (const l of this.lights) if (l.outdoor) l.manual = null;
   }
 
   /**
@@ -439,7 +452,7 @@ export class Lamps {
       // inside come back on: nobody wants to walk round a dark house)
       const asleep = l.bedtime != null && now >= sinceNoon(l.bedtime) && now < sinceNoon(6.5) && !(inside && !l.outdoor);
       const dark = this.dark && !l.outdoor && !inside;
-      const auto = (this.houseOn !== false || l.outdoor) && !asleep && !dark ? level : 0;
+      const auto = (l.outdoor ? this.outdoorOn !== false : this.houseOn !== false) && !asleep && !dark ? level : 0;
       // a light switched on by hand shines by day too
       const want = l.manual === true ? 1 : l.manual === false ? 0 : auto;
       this._want[i] = want;
@@ -464,7 +477,12 @@ export class Lamps {
     // windows glow warmly when you are outside the house, as much as the lights inside are on
     const target = inside ? 0 : indoor ? indoorOn / indoor : 0;
     this.windowsGlow += (target - this.windowsGlow) * (1 - Math.exp(-dt * 4));
-    for (const m of this.glass) m.emissiveIntensity = 0.9 * this.windowsGlow;
+    this._outGlass += ((inside ? 0 : 1) - this._outGlass) * (1 - Math.exp(-dt * 4));
+    for (const m of this.glass) {
+      m.emissiveIntensity = 0.9 * this.windowsGlow;
+      m.opacity = THREE.MathUtils.lerp(m.userData.clearOpacity ?? 0.35, 0.66, this._outGlass);
+      m.envMapIntensity = THREE.MathUtils.lerp(1, 2.8, this._outGlass);
+    }
   }
 }
 

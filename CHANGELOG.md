@@ -8,6 +8,16 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.40.0, 7 November 2026
+
+The opening view, Reset, the outdoor lights' switch, and darker glass.
+
+- **Where you start**: on the front lawn under an oak, its leaves over the top of the picture, the porch straight ahead and a rearing horse in stone on a plinth to the right, through a longer lens (as in the picture of the front Tudor liked). As soon as you move, the lens eases back to the usual one while you keep looking at the house. Also in the Place menu as *Under the oak*.
+- **The statue**: "Horse Statue 01" by Rico Cilliers (Poly Haven, CC0), made garden-sized, in the same weathered stone as the dolphin on the fountain, on a plinth of the house's dressed stone. Walking, it stops you.
+- **Reset** (in the buttons at the bottom of the panel): back to the start, on foot, with today's date, the time now and the real weather.
+- **Outdoor** (beside Room and House under Lights): the lamps, floodlights and lanterns outside and the assault course's lights, all off or on at once; by day it moves the clock on to the evening first, as House does.
+- **Glass**: from outside by day the windows are dark and mirror the sky and the trees, as in TRJTA's renders; from inside they stay clear to look out through.
+
 ## 0.39.0, 7 November 2026
 
 As in TRJTA's pictures: a place for each of his renders Tudor sent, the planting, trees, sky and sunlight to match.

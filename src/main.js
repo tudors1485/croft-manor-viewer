@@ -238,7 +238,11 @@ let flybyId = null; // which flyby the 'tour' mode is playing, or null for the t
 // where you start, and where Walk mode starts if you switch to it from high up: on the drive
 // just inside the gate, between the two oaks, the fountain before you and the front door
 // beyond it (the view Tudor picked, 6 November 2026)
-const SPAWN = { eye: new THREE.Vector3(4.1, 1.7, 17.2), look: new THREE.Vector3(1.7, 3.8, -2.7) };
+// Where you start: on the front lawn under the oak, the porch straight ahead and the statue to
+// the right, through a longer lens (the picture of the front Tudor liked); it eases back to the
+// usual lens as soon as you move, still looking at the house
+const SPAWN = { eye: new THREE.Vector3(-5, 1.7, 16.5), look: new THREE.Vector3(-1.4, 5.0, -12) };
+const OPENING_LENS = 34;
 
 function setMode(next) {
   if (next === 'walk' && !walker) {
@@ -1076,6 +1080,68 @@ loader.load(
   },
 );
 
+/**
+ * A rearing horse on a granite plinth, on the front lawn before the porch (the picture of the
+ * front Tudor liked has one): "Horse Statue 01" by Rico Cilliers (Poly Haven, CC0), a porcelain
+ * figurine made garden-sized, in weathered stone.
+ */
+let statue = null;
+function addStatue() {
+  const at = [
+    [1.8, 4.2],
+    [2.4, 4.8],
+    [1.2, 5.0],
+  ].find(([x, z]) => landscape._grassAt(x, z) && landscape._grassAt(x + 1, z) && landscape._grassAt(x - 1, z));
+  if (!at) return;
+  const [x, z] = at;
+  // (kept clear: by walking, and by the camera paths, checked once everything is in)
+  landscape.obstacles.push({ x, z, r: 1.05 });
+  landscape.crowns.push({ x, z, r: 1.2, y0: 0, y1: 3.5 });
+  loader.load('/models/horse-statue.glb', (gltf) => {
+    const horse = gltf.scene;
+    const box = new THREE.Box3().setFromObject(horse);
+    horse.scale.setScalar(2.1 / (box.max.y - box.min.y));
+    box.setFromObject(horse);
+    const c = box.getCenter(new THREE.Vector3());
+    horse.position.set(-c.x, -box.min.y, -c.z);
+    // in the same weathered stone as the dolphin on the fountain, on a plinth of the house's dressings
+    const named = (n) => {
+      let m = null;
+      model.traverse((o) => o.isMesh && o.material.name === n && (m = o.material));
+      return m;
+    };
+    const stone = named('cm_fishstatue')?.clone() ?? new THREE.MeshStandardMaterial({ color: 0x6f6a5c, roughness: 0.85 });
+    horse.traverse((o) => {
+      if (!o.isMesh) return;
+      const normalMap = o.material.normalMap;
+      o.material = stone;
+      if (normalMap && !stone.normalMap) stone.normalMap = normalMap;
+      o.castShadow = o.receiveShadow = true;
+    });
+    const granite = named('cm_whitestone_0')?.clone() ?? new THREE.MeshStandardMaterial({ color: 0x9a9080, roughness: 0.88 });
+    const g = new THREE.Group();
+    for (const [w, h, d, y] of [
+      [1.95, 0.32, 1.35, 0],
+      [1.45, 0.82, 0.98, 0.32],
+      [1.62, 0.08, 1.12, 1.14],
+    ]) {
+      const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d).translate(0, y + h / 2, 0), granite);
+      b.castShadow = b.receiveShadow = true;
+      g.add(b);
+    }
+    // (rearing towards the porch, turned a little to the drive)
+    const holder = new THREE.Group();
+    holder.add(horse);
+    holder.position.y = 1.22;
+    holder.rotation.y = 0.4;
+    g.add(holder);
+    g.position.set(x, (landscape.groundHeight(x, z) ?? 0) - 0.04, z);
+    g.rotation.y = 0.15;
+    scene.add(g);
+    statue = g;
+  });
+}
+
 /** The glass and leading of the windows inside a box, by triangle (a flyby may pass through them). */
 function windowPanes(geo, box) {
   const out = new Set();
@@ -1107,6 +1173,7 @@ function toast(text) {
 function doneLoading() {
   if (ready) return;
   ready = true;
+  if (camera.position.distanceTo(SPAWN.eye) < 0.5) holdLens(OPENING_LENS);
   loadingBar.finish();
   $('loading').classList.add('done');
   $('panel').hidden = false;
@@ -1241,6 +1308,7 @@ async function prepareWalking(ground) {
       snowman.setSnow(seasonUniforms.uSnow.value);
     }
     leaves = new FallenLeaves(scene, landscape.treeSpots, (x, z) => landscape.groundHeight(x, z));
+    addStatue();
     await part(0.4, 'Clipping the hedges and planting the borders');
     garden = new Garden(scene, { landscape, bvh: geo.boundsTree, gate: landscape.gate });
     console.info('garden', garden.build());
@@ -1432,6 +1500,42 @@ $('lights-house').onclick = (e) => {
   } else lamps.setHouse(on);
 };
 let houseTimer = 0;
+// the outdoor lights: the same, for the lamps, floodlights and lanterns outside
+$('lights-outdoor').onclick = (e) => {
+  wakeSound();
+  const on = !e.currentTarget.classList.contains('on');
+  e.currentTarget.classList.toggle('on', on);
+  e.currentTarget.blur();
+  if (!lamps) return;
+  if (tod.lamps < 0.6) {
+    lamps.setOutdoor(true);
+    setTime(21.5);
+    clearTimeout(outdoorTimer);
+    outdoorTimer = setTimeout(() => lamps.setOutdoor(on), 1600);
+  } else lamps.setOutdoor(on);
+};
+let outdoorTimer = 0;
+// Reset: back to the start (the first view, on foot), today's date and the time now, the real weather
+$('reset').onclick = (e) => {
+  e.currentTarget.blur();
+  wakeSound();
+  if (mode === 'tour') leaveTour();
+  sight = null;
+  flight = null;
+  $('weather').value = 'live';
+  forcedWeather = null;
+  goToNow();
+  refreshWeather();
+  tod.update(true);
+  camera.position.copy(SPAWN.eye);
+  camera.lookAt(SPAWN.look);
+  orbit.target.copy(SPAWN.look);
+  if (walker) {
+    setMode('walk');
+    walker.placeAt(SPAWN.eye, SPAWN.look);
+  }
+  holdLens(OPENING_LENS);
+};
 /** Moves the clock (off the real time). */
 function setTime(h) {
   setPlaying(false);
@@ -2137,6 +2241,12 @@ window.manor = {
   },
   get garden() {
     return garden;
+  },
+  get statue() {
+    return statue;
+  },
+  get lens() {
+    return lens;
   },
   get coldness() {
     return coldness;

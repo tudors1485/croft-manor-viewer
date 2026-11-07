@@ -1,0 +1,3 @@
+horse-statue.glb  "Horse Statue 01" by Rico Cilliers, Poly Haven, https://polyhaven.com/a/horse_statue_01
+                  CC0 1.0 (textures shrunk); drawn here in the fountain's stone, on a plinth
+CC0 1.0: https://creativecommons.org/publicdomain/zero/1.0/
