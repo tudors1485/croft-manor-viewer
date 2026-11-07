@@ -8,6 +8,17 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.49.0, 8 November 2026
+
+Six new sights (Scenes › Sights).
+
+- **Starlings at dusk**: on clear winter evenings, November to February, thousands of starlings over the fields beyond the gate, one dark cloud folding, pouring and turning over on itself, before they drop into the woods as the light goes (`src/sights.js`).
+- **Shooting stars (the Perseids)**: on 10 to 15 August, best on the night of the 12th, meteors streak out from Perseus in the north-east, a few a minute, the odd fireball leaving a glowing trail. The sight is the small hours of 13 August on the lawn, with a busier sky for a few minutes.
+- **The harvest moon**: this year's (the full moon nearest the autumn equinox, from the moon's real place), risen huge and deep orange beside the house's dark roofline; the viewer finds a spot on the lawns with a clear line to it.
+- **A frosty morning**: a new weather, hoar frost white on the lawns and the hedges, a mist lying, the low sun coming through. Clear, cold winter mornings get a lighter frost of their own until the sun is up a while.
+- **Balloons at dawn**: on still summer mornings, now and then, five hot-air balloons in their own stripes drift low over the estate, their burners flaring (`src/sights2.js`).
+- **A summer garden party**: on Saturday evenings in June and July, on the east lawn, long tables laid with white cloths, candles and glasses, chairs, festoon lights strung between posts round it, and a gramophone.
+
 ## 0.48.0, 8 November 2026
 
 Christmas lights all round the house.

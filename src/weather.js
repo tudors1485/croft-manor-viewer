@@ -39,6 +39,7 @@ export const WEATHERS = {
   storm: 'Thunderstorm',
   eerie: 'Storm in the fog',
   fog: 'Fog',
+  frost: 'A frosty morning',
   snow: 'Snow',
 };
 
@@ -128,6 +129,9 @@ export function weatherAt(day, hours, snow, choice = 'auto', live = null) {
   } else if (choice === 'eerie') {
     // Halloween's: thunder and lightning in a gale, a thin rain, fog lying on the lawns
     w = { ...w, clouds: 1, density: 0.95, overcast: 0.9, rain: 0.3, wind: 0.85, storm: 0.75, fog: 0.42 };
+  } else if (choice === 'frost') {
+    // clear and still after a cold night: hoar frost on everything open to the sky, a mist lying
+    w = { ...w, clouds: 0.05, density: 0.4, overcast: 0, fog: 0.32, wind: 0, frost: 1 };
   } else if (choice === 'fog') {
     w = { ...w, clouds: 0.9, density: 0.7, overcast: 0.7, fog: 1, wind: 0 };
   } else if (choice === 'snow') {

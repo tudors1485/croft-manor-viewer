@@ -523,6 +523,11 @@ export class Soundscape {
     return Object.hasOwn(SAMPLES, name);
   }
 
+  /** A recording's length in seconds (0 if it isn't loaded). */
+  duration(name) {
+    return Object.hasOwn(SAMPLES, name) ? SAMPLES[name].duration : 0;
+  }
+
   /** A little chime (an Easter egg found): two bright notes and a sparkle. */
   chime() {
     if (!this.on || !this.ctx) return;

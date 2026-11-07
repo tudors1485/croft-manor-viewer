@@ -38,7 +38,7 @@ export const TIPS = [
   'The ▶ by the time runs a day in two minutes; the one by the season, a year in a minute.',
   'Scenes takes you to Easter, Halloween, Bonfire Night, Christmas Eve or New Year, and to the sights.',
   'On Christmas Eve night, look up: Father Christmas crosses the sky. Or ride with him: the Santa’s sleigh flyby.',
-  'Sights, under Scenes: the northern lights, deer at dawn and the hunt, a rainbow, the crows, moving in.',
+  'Sights, under Scenes: starlings, shooting stars, the harvest moon, balloons, a garden party, the hunt and more.',
   'The animals come and go with the season and the hour. Not every day.',
   'On Easter weekend, a dozen eggs are hidden on the lawns.',
   'At night, Your light gives you a glow, a torch, or a flaming torch to carry.',

@@ -523,6 +523,8 @@ export class TimeOfDay {
     // the moon: up when it is above the horizon, by day too (pale), hidden behind thick cloud
     const md = this.moon.userData;
     this.moon.position.copy(this.moonDir).multiplyScalar(MOON_DISTANCE);
+    // (the harvest moon's sight: low, it looks huge: drawn bigger, and deeper orange)
+    this.moon.scale.setScalar(this.moonBig ?? 1);
     // the near side (the middle of NASA's map, the sphere's +x) turned towards the house
     md.ball.lookAt(0, 0, 0);
     md.ball.rotateY(-Math.PI / 2);
@@ -535,7 +537,9 @@ export class TimeOfDay {
     md.mat.uniforms.uOpacity.value = moonOpacity;
     // low down it is warmer, through more air
     const lowness = 1 - THREE.MathUtils.smoothstep(THREE.MathUtils.radToDeg(moon.elevation), 0, 14);
-    md.mat.uniforms.uTint.value.setRGB(1, 1 - 0.3 * lowness, 1 - 0.55 * lowness);
+    md.halo.material.color.setRGB(1, (this.moonBig ?? 1) > 1 ? 0.7 : 1, (this.moonBig ?? 1) > 1 ? 0.42 : 1);
+    if ((this.moonBig ?? 1) > 1) md.mat.uniforms.uTint.value.setRGB(1.1, 0.62, 0.3); // (the harvest moon's deep orange)
+    else md.mat.uniforms.uTint.value.setRGB(1, 1 - 0.3 * lowness, 1 - 0.55 * lowness);
     // the glare grows with how much of the moon is lit: a full moon dazzles, a thin crescent hardly at all
     md.halo.material.opacity = this.night * this.moonUp * (1 - oc) * Math.pow(this.moonPhase, 1.5) * (1 - whirl);
     md.halo.scale.setScalar(MOON_RADIUS * (4 + 5 * this.moonPhase));

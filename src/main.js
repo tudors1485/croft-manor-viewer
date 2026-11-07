@@ -11,6 +11,8 @@ import { Lamps } from './lamps.js';
 import { Landscape, makeTerrain, makeHillHeight } from './landscape.js';
 import { Garden } from './garden.js';
 import { MovingIn } from './movingin.js';
+import { Meteors, Murmuration, harvestMoon } from './sights.js';
+import { Balloons, GardenParty } from './sights2.js';
 import { dressInterior, hallClock } from './interior.js';
 import { installGrade } from './look.js';
 import { Quality, LOOKS } from './quality.js';
@@ -144,8 +146,16 @@ function refreshWeather() {
   // other date it is the season's
   const today = Math.floor(seasonDay) === dayOfYear(new Date());
   const real = choice === 'live' && today && live.now ? live.at(liveClock ? null : tod.hours) : null;
-  const snowLies = choice === 'snow' ? 1 : real ? live.snowLies(real) : season.snow;
+  let snowLies = choice === 'snow' ? 1 : real ? live.snowLies(real) : season.snow;
   weather = weatherAt(seasonDay, tod.hours, snowLies, choice, real);
+  // hoar frost: a light white over everything open to the sky (as a thin snow would lie), on a
+  // frosty morning chosen, or on the season's clear, cold winter mornings until the sun is up a while
+  {
+    const h = Number($('time').value);
+    const t = 10.5 - 6.5 * Math.cos((2 * Math.PI * (seasonDay - 25)) / 365) - 3.5 * Math.cos((2 * Math.PI * (h - 4)) / 24);
+    const frosty = weather.frost ? 1 : !real && (weather.clouds ?? 1) < 0.35 && h > 4 && h < 11 ? THREE.MathUtils.smoothstep(2.5 - t, 0, 3) * (1 - THREE.MathUtils.smoothstep(h, 9, 11)) : 0;
+    snowLies = Math.max(snowLies, (weather.frost ? 0.5 : 0.32) * frosty);
+  }
   seasonUniforms.uSnow.value = snowLies;
   // with snow lying, the fountain and the pond are frozen and the jet is off (and with the
   // real weather, after a hard frost)
@@ -940,6 +950,7 @@ function goToPlace(i, named = false) {
     placeAt = i;
     const [name, pos, target, v] = viewpoints[i];
     setOakScene(name === 'Under the oak');
+    tod.moonBig = 1;
     if (named) toast(name);
     if (v?.scene) {
       wakeSound();
@@ -1503,6 +1514,16 @@ async function prepareWalking(ground) {
       [-10, 12],
       [16, 12],
     ].find(([x, z]) => landscape._grassAt(x, z) && crownGap(x, z) > 4 && landscape.obstacles.every((o) => Math.hypot(o.x - x, o.z - z) > Math.max(5, (o.r ?? 0) + 4.5)));
+    // the garden party: on the east lawn, clear of the trees and the shrubs
+    {
+      const spot = [
+        [16, 3],
+        [14, 2],
+        [18, 4],
+        [-13, -2],
+      ].find(([x, z]) => landscape._grassAt(x, z) && crownGap(x, z) > 6 && landscape.obstacles.every((o) => o.when || Math.hypot(o.x - x, o.z - z) - (o.r ?? 0) > 6.5));
+      if (spot) party = new GardenParty(scene, { at: new THREE.Vector3(spot[0], 0, spot[1]), ground: (x, z) => landscape.groundHeight(x, z) ?? 0, sound: wildSound, obstacles: landscape.obstacles });
+    }
     if (fireSpot) {
       const [x, z] = fireSpot;
       bonfire = new Bonfire(scene, new THREE.Vector3(x, landscape.groundHeight(x, z) ?? 0, z), festSound, { groundAt });
@@ -1718,6 +1739,35 @@ const HOLIDAYS = {
   deer: { day: () => wanderDay(), hours: 7.0, weather: 'clear', pos: [5, 11, 74], look: [-17, 0.8, 67], orbit: true, then: () => startHunt() },
   // an April evening, the sun out after a shower, looking east, away from it
   rainbow: { day: 118, hours: 18.2, weather: 'clear', wet: 1, pos: [-8, 1.7, 12], look: [50, 9, 10] },
+  // the Perseids at their best: the small hours of 13 August, lying back on the lawn looking up to
+  // the north-east, a busier sky for a few minutes
+  perseids: { day: 224, hours: 1.2, weather: 'clear', pos: [16, 1.3, 14], look: [28, 36, -22], orbit: true, then: () => (meteors.boost = 240) },
+  // a starling murmuration over the fields beyond the gate, at dusk late in November
+  murmuration: { day: 328, hours: 16.25, weather: 'clear', pos: [4.6, 6, 26], look: [-60, 36, 92], orbit: true, then: () => (murmuration.always = true) },
+  // the harvest moon risen huge and orange over the woods, across the front lawn (this year's: the
+  // full moon nearest the autumn equinox)
+  harvestmoon: {
+    day: () => harvestMoon(new Date().getFullYear()).day,
+    hours: () => harvestMoon(new Date().getFullYear()).hours,
+    weather: 'clear',
+    orbit: true,
+    // (from over the woods on the far side: the house's roofline below, the moon just above it)
+    // (a spot on the lawns with a clear line to the moon, and the house beside it in the frame)
+    pos: () => harvestView().pos,
+    look: () => harvestView().look,
+    then: () => {
+      tod.moonBig = 2.4;
+      tod.update(true);
+      setTimeout(() => holdLens(38), 0);
+    },
+  },
+  // hot-air balloons drifting low over the estate on a still June morning, from the lawn
+  balloons: { day: 172, hours: 6.2, weather: 'clear', pos: [4.6, 3, 34], look: [-25, 42, -25], orbit: true, then: () => (balloons.always = true) },
+  // a summer garden party on the east lawn at dusk
+  party: { day: 180, hours: 21.3, weather: 'clear', pos: () => (party ? [party.at.x - 9, 2.4, party.at.z + 11] : [10, 2, 12]), look: () => (party ? [party.at.x, 1, party.at.z - 1] : [20, 1, 0]), then: () => party && (party.always = true) },
+  // a hard frost on a late November morning: the lawns and the hedges white with it, a mist lifting,
+  // the low sun coming through
+  frost: { day: 330, hours: 8.6, weather: 'frost', pos: [16, 1.6, 12], look: [-4, 2.5, -8] },
   // the great hall's clock in a time-lapse: a February day from half past seven, the clock run (a
   // day in two minutes), the hands spinning and the sun's patches crossing the floor and the walls
   timelapse: { day: 50, hours: 7.5, weather: 'clear', pos: [0.4, 1.55, -16.6], look: [-1.85, 1.25, -20.1], then: () => {
@@ -1731,6 +1781,56 @@ const HOLIDAYS = {
   crows: { day: 300, hours: 15.6, weather: 'clear', pos: [4.6, 3, 3.5], look: [5.5, 32, -40], orbit: true, then: () => wildlife?.crowsNow() },
 };
 const bonfireAt = () => bonfire?.at ?? new THREE.Vector3(20, 0, 10);
+
+/**
+ * Where to stand for the harvest moon: on the lawns, where nothing (no tree's crown, no wall) is
+ * between you and the moon for 300 m, and the house is 12 to 30 degrees to one side of it, so both
+ * are in the long lens's frame; looking between them, a little nearer the moon.
+ */
+let harvestPick = null;
+function harvestView() {
+  const m = tod.moonDir.clone();
+  if (harvestPick && harvestPick.dir.distanceTo(m) < 0.01) return harvestPick;
+  const house = new THREE.Vector3(6, 7, -21);
+  const ray = new THREE.Ray();
+  // (a margin below the moon too: drawn big, its disc must clear the roofline)
+  const below = m.clone().add(new THREE.Vector3(0, -0.07, 0)).normalize();
+  const clear = (from) => {
+    for (const d of [m, below]) {
+      ray.set(from, d);
+      if (walker?.bvh.raycastFirst(ray, THREE.DoubleSide, 0, 300)) return false;
+    }
+    for (let d = 2; d < 300; d += 2) {
+      const p = from.clone().addScaledVector(m, d);
+      for (const c of landscape?.crowns ?? []) if (p.y > c.y0 && p.y < c.y1 + 1 && Math.hypot(p.x - c.x, p.z - c.z) < c.r) return false;
+      if (p.y > 25) break;
+    }
+    return true;
+  };
+  let best = null;
+  for (let x = -40; x <= 50; x += 2) {
+    for (let z = -50; z <= 18; z += 2) {
+      if (!landscape?._grassAt(x, z)) continue;
+      const eye = new THREE.Vector3(x, (landscape.groundHeight(x, z) ?? 0) + 1.7, z);
+      const toHouse = house.clone().sub(eye);
+      const dist = toHouse.length();
+      const angle = THREE.MathUtils.radToDeg(toHouse.normalize().angleTo(m));
+      if (angle < 8 || angle > 32 || dist < 28) continue;
+      if (!clear(eye)) continue;
+      // (the house not too far, the angle near 20°)
+      const score = Math.abs(angle - 18) + Math.abs(dist - 40) * 0.2;
+      if (!best || score < best.score) best = { eye, score, toHouse };
+    }
+  }
+  if (!best) {
+    const eye = new THREE.Vector3(4.6, 1.7, 12);
+    harvestPick = { dir: m, pos: eye.toArray(), look: eye.clone().addScaledVector(m, 100).toArray() };
+    return harvestPick;
+  }
+  const look = best.eye.clone().addScaledVector(m.clone().multiplyScalar(0.62).addScaledVector(best.toHouse, 0.38).normalize(), 100);
+  harvestPick = { dir: m, pos: best.eye.toArray(), look: look.toArray() };
+  return harvestPick;
+}
 
 // A sight's own camera (Deer at dawn): where it is over time, looking at what is happening, until
 // you take over (any drag of the view)
@@ -1807,7 +1907,11 @@ $('holiday').onchange = (e) => {
   moving?.set(false); // (another holiday or sight: the crates go)
   setOakScene(false);
   setDate(typeof h.day === 'function' ? h.day() : h.day);
-  setTime(h.hours);
+  setTime(typeof h.hours === 'function' ? h.hours() : h.hours);
+  murmuration.always = false;
+  balloons.always = false;
+  if (party) party.always = false;
+  tod.moonBig = 1;
   $('weather').value = h.weather;
   refreshWeather();
   if (h.wet) wet = h.wet; // (the ground still wet from a shower)
@@ -2130,6 +2234,10 @@ function step(dt, exporting = false) {
   }
   // (after the camera has moved: riding in the sleigh, it must not lag a frame behind)
   santa.update(dt, { day: seasonDay, night: tod.night, camera, scale: lamps?.glowMat.uniforms.uScale.value ?? 800 });
+  meteors.update(dt, { day: seasonDay, night: tod.night, clouds: weather.clouds ?? 0, compass: Number($('sun-azim').value), camera });
+  balloons.update(dt, { day: seasonDay, hours: tod.hours, wind, camera });
+  party?.update(dt, { day: seasonDay, hours: tod.hours, rain: weather.rain ?? 0, dusk: tod.lamps, camera, scale: lamps?.glowMat.uniforms.uScale.value });
+  murmuration.update(dt, { day: seasonDay, sunDeg: THREE.MathUtils.radToDeg(Math.asin(THREE.MathUtils.clamp(tod.sunDir.y, -1, 1))), clouds: weather.clouds ?? 0, rain: weather.rain ?? 0, scale: lamps?.glowMat.uniforms.uScale.value });
   elapsed += dt;
   // the pool: caustics move, brighter by day (the sun through the glass roof), the pool light by night
   poolUniforms.uPoolTime.value += dt;
@@ -2183,6 +2291,8 @@ let videoSoundEvents = []; // the festivals' sounds during a video frame: [what,
 // the wildlife's calls: played, or noted down for the video's soundtrack
 const wildSound = {
   sample: (name, p, opts) => (exporting ? videoSoundEvents.push(['sample', name, p?.clone() ?? null, opts]) : sound.sample(name, p, opts)),
+  has: (name) => sound.has(name),
+  duration: (name) => sound.duration(name),
 };
 // The festivals' sounds (the bonfire, rockets and bangs, the thunder): played as they happen, or,
 // while a video is being made, noted down frame by frame for its soundtrack (video.js plays them back)
@@ -2202,6 +2312,10 @@ storm = new Storm(scene, festSound);
 // Father Christmas over the estate on Christmas Eve, and the ride with him (santa.js)
 // (he lands on the ridge of the front range's roof: its stone cap, 11.35 m up, z -19.9, the sleigh
 // at the west end and the team along it to the east, short of the chimneys)
+const meteors = new Meteors(scene); // the Perseids (sights.js)
+const murmuration = new Murmuration(scene, wildSound); // starlings at a winter dusk (sights.js)
+const balloons = new Balloons(scene, wildSound); // hot-air balloons on still summer mornings (sights2.js)
+let party = null; // a summer garden party on the east lawn (sights2.js)
 const santa = new Santa(scene, wildSound, { roof: { at: new THREE.Vector3(-6.6, 11.36, -19.9), dir: new THREE.Vector3(1, 0, 0) } });
 
 // Making a video of a flyby (video.js): the viewer, as the video maker sees it
@@ -2414,6 +2528,8 @@ window.manor = {
   get moving() {
     return moving;
   },
+  meteors,
+  murmuration,
   get haunt() {
     return haunt;
   },
