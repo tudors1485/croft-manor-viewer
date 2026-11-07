@@ -2,8 +2,7 @@
 // along the drive either side, inside and outside the gate, round the two oaks at the entrance
 // and along the edges of the lawns, coming up, nodding, and going over. Easter weekend (Good
 // Friday to Easter Monday, by day) a dozen painted eggs are hidden in the gardens: walk up to one
-// and you've found it. On Easter morning the bells of the village church ring out across the
-// fields (sound.js). Easter falls on a different day each year: it is worked out here.
+// and you've found it. Easter falls on a different day each year: it is worked out here.
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';

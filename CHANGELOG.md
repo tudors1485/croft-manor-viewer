@@ -8,6 +8,29 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.34.0, 7 November 2026
+
+Tudor's notes of 7 November, the first part: loading, the birds, the bonfire, the assault course, your light.
+
+- Loading:
+  - It says what it is doing, and changes the moment each step is done: downloading the house (with the megabytes), unpacking it, laying out the grounds, mapping the walls for walking, growing the trees, the finishing touches one by one, the shaders, the textures going up to the graphics card (counted), the first view. No more time left.
+  - A tip under the bar while you wait, a new one every few seconds.
+  - Twice as quick: about 10 s here instead of 19. The long wait at the end was the Easter daffodils (4 s, finding the grass one triangle at a time; now a search tree) and the textures (3 s; most now go up while the collision tree is built in its worker, when the page is idle).
+- Birds sing and call only in spring and summer, March to August. In autumn and winter only the crows and magpies do.
+- The fox screams only on Halloween night; the rest of the year the fox is silent.
+- No church bells on Easter Sunday.
+- Bonfire Night:
+  - The bonfire is smaller: about two and a half metres, between the last two sizes.
+  - Much more smoke, dark against the night sky and lit from below by the fire.
+  - The fireworks leave their smoke hanging where they burst, lit up by each new burst.
+  - Other bonfires far off on the hills all round, each a flickering point with its smoke going up, and now and then someone else's fireworks low over the horizon, the bang arriving seconds later.
+- The assault course: no floodlight poles. Instead, LED strips round the foot and the top of every crate, with a soft glow on the sand, to guide the way in the dark. (The crates are found from their own planks, including the ones standing at an angle.)
+- Your light:
+  - A torch (a flashlight) you can see in your right hand, its beam where you look and a faint cone of it in the air.
+  - A flaming torch with its flame at the end of the stick: many small tongues of fire, an uneven flicker, the odd spark, the head charred and glowing.
+  - The glow round you is larger.
+  - What you hold is drawn over everything, so it never goes into a wall.
+
 ## 0.33.1, 7 November 2026
 
 QA: speed, security, the interface.

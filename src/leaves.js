@@ -85,6 +85,7 @@ export class FallenLeaves {
       // a thick carpet under the trees you walk among, fewer under the far ones outside the walls
       const n = t.inside ? 3200 : 500;
       const spread = Math.max(2.5, t.r * 1.25);
+      const base = groundAt(t.x, t.z); // (once a tree, not once a leaf)
       for (let i = 0; i < n; i++) {
         // thickest near the trunk, thinning out past the edge of the crown, drifting downwind
         const a = R() * Math.PI * 2;
@@ -94,7 +95,7 @@ export class FallenLeaves {
         const z = t.z + Math.sin(a) * d - drift * 0.6;
         const y = groundAt(x, z);
         // (not on top of walls or steps: only on the ground itself)
-        if (y === null || Math.abs(y - (groundAt(t.x, t.z) ?? y)) > 0.35) continue;
+        if (y === null || Math.abs(y - (base ?? y)) > 0.35) continue;
         list.push({ x, y, z, tree: t, seed: R(), cell: Math.floor(R() * 4), size: 0.1 + R() * 0.07 * (1 + R()), colour: COLOURS[Math.floor(R() * COLOURS.length)], shade: 0.75 + R() * 0.45 });
       }
     }

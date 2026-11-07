@@ -114,11 +114,11 @@ let spooky = null; // Halloween evening: the figure at a window, the one in the 
 let frontDoor = null; // (Halloween leaves it ajar)
 let easter = null; // daffodils in spring, the eggs and the bells at Easter (easter.js)
 // the village church, across the fields to the south-east (its bells ring on Easter morning)
-const CHURCH = new THREE.Vector3(820, 25, 900);
-const myLight = new MyLight(scene); // your own light at night: a glow, a flashlight or a torch (nightlights.js)
+const myLight = new MyLight(scene); // your own light at night: a glow, a torch or a flaming torch (nightlights.js)
 let running = false; // Run: walking at a run, Shift to walk
-let nightPools = null; // the floodlights' pools of light on the assault course (painted on: nightlights.js)
-let nightPoolLight = null; // and the light they go on and off with
+let courseLeds = null; // the LED strips on the assault course's crates (nightlights.js)
+let courseLedSwitch = null; // and the light they go on and off with
+let courseLedSand = null; // and their light on the sand
 let bonfire = null; // Bonfire Night (bonfire.js)
 let park = null; // deer at dawn, bats at summer dusk (park.js)
 let wildlife = null; // crows, the kite, pigeons, a robin, magpies, rabbits, a fox, a cat, ducks (wildlife.js)
@@ -910,13 +910,13 @@ function resizeWater() {
   water.setSize(drawSize.x, drawSize.y);
 }
 // the loading bar, at the real pace (loading.js); nothing is drawn behind it until everything is in
-const loadingBar = new LoadingBar({ cover: $('loading-cover'), text: $('loading-text'), bytes: 83_000_000 });
+const loadingBar = new LoadingBar({ cover: $('loading-cover'), text: $('loading-text'), tip: $('loading-tip'), bytes: 83_000_000 });
 let ready = false;
 const loader = new GLTFLoader();
 loader.load(
   '/manor.glb',
   (gltf) => {
-    loadingBar.begin('house', 'Building the house…');
+    loadingBar.begin('house', 'Laying out the grounds, the water and the lights');
     model = gltf.scene;
     console.info(`ivy pieces placed: ${placeIvy(model)}`);
     tuneMaterials(model);
@@ -1003,7 +1003,7 @@ loader.load(
   },
   (e) => {
     loadingBar.downloaded(e.loaded, e.total || 83_000_000);
-    if (e.total && e.loaded >= e.total && loadingBar.step === 'download') loadingBar.begin('unpack', 'Unpacking the house…');
+    if (e.total && e.loaded >= e.total && loadingBar.step === 'download') loadingBar.begin('unpack', `Unpacking the house: ${Math.round(e.total / 1e6)} MB of rooms and textures`);
   },
   (err) => {
     console.error(err);
@@ -1054,33 +1054,63 @@ function doneLoading() {
  * drawn. Otherwise the first seconds after loading stutter while it all happens then.
  */
 async function warmUp() {
-  loadingBar.begin('gpu', 'Lighting it…');
+  loadingBar.begin('shaders', 'Preparing the shaders');
   await nextFrame();
   try {
     await renderer.compileAsync(scene, camera);
   } catch (err) {
     console.warn('shaders compiled on first use instead:', err.message);
   }
-  loadingBar.progress(0.45);
-  const textures = new Set();
-  scene.traverse((o) => {
-    for (const m of [o.material ?? []].flat()) for (const v of Object.values(m)) if (v?.isTexture) textures.add(v);
+  const all = sceneTextures();
+  const left = all.filter((t) => !uploaded.has(t));
+  const label = () => `Sending the textures to the graphics card: ${all.length - left.length + sent} of ${all.length}`;
+  let sent = 0;
+  loadingBar.begin('textures', label());
+  // (progress by the pixels sent, which is steady: a 2048 × 2048 texture takes far longer than a small one)
+  const size = (t) => (t.image?.width ?? 256) * (t.image?.height ?? 256);
+  const total = left.reduce((a, t) => a + size(t), 0) || 1;
+  let done = 0;
+  await uploadTextures({
+    list: left,
+    onEach: (t) => {
+      sent++;
+      done += size(t);
+      loadingBar.progress(done / total, label());
+    },
   });
-  let i = 0;
-  let since = performance.now();
-  for (const tex of textures) {
-    renderer.initTexture(tex);
-    if (performance.now() - since > 40) {
-      loadingBar.progress(0.45 + 0.4 * (i / textures.size));
-      await nextFrame();
-      since = performance.now();
-    }
-    i++;
-  }
-  loadingBar.progress(0.9);
+  loadingBar.begin('frame', 'Drawing the first view');
   await nextFrame();
   // the first frame in full: the water's reflections, the sunbeams, the ambient occlusion
   step(1 / 60);
+}
+
+/** Every texture in the scene. */
+function sceneTextures() {
+  const set = new Set();
+  scene.traverse((o) => {
+    for (const m of [o.material ?? []].flat()) for (const v of Object.values(m)) if (v?.isTexture) set.add(v);
+  });
+  return [...set];
+}
+
+/**
+ * Textures onto the graphics card a few at a time, letting the page draw in between (each is
+ * sent once: later calls skip those already sent). Stops early when `until()` says so.
+ */
+const uploaded = new WeakSet();
+async function uploadTextures({ list = sceneTextures(), until = () => false, onEach = null } = {}) {
+  let since = performance.now();
+  for (const tex of list) {
+    if (until()) return;
+    if (uploaded.has(tex)) continue;
+    renderer.initTexture(tex);
+    uploaded.add(tex);
+    onEach?.(tex);
+    if (performance.now() - since > 30) {
+      await new Promise((r) => setTimeout(r, 0));
+      since = performance.now();
+    }
+  }
 }
 
 // Walking: everything solid in the estate plus the fields, but not the ivy or the water.
@@ -1098,9 +1128,16 @@ async function prepareWalking(ground) {
     if (o.material.transparent && !/glass/i.test(name)) return;
     solid.push(o);
   });
-  loadingBar.begin('walk', 'Getting ready to walk…');
+  loadingBar.begin('walk', 'Mapping the walls and floors, for walking');
   await nextFrame();
-  const geo = await buildCollider(solid, (p) => loadingBar.progress(p));
+  // (the collision tree is built in a worker, leaving the page free: the house's textures go up to
+  // the graphics card meanwhile, a few at a time)
+  let built = false;
+  const building = buildCollider(solid, (p) => loadingBar.progress(p)).finally(() => {
+    built = true;
+  });
+  await uploadTextures({ until: () => built });
+  const geo = await building;
   walker = new Walker(camera, geo);
   doors = new Doors(scene, model, geo);
   walker.skipTriangle = passDoor;
@@ -1110,15 +1147,20 @@ async function prepareWalking(ground) {
     else sound.door(opening, d.centre);
   };
   console.info(`doors: ${doors.summary}`);
-  loadingBar.begin('trees', 'Planting the trees…');
+  loadingBar.begin('trees', 'Growing the trees');
   await nextFrame();
 
   lamps?.addOutdoor(geo.boundsTree);
   console.info(`lights: ${lamps?.lightCount} point lights for ${lamps?.count} fittings`);
   landscape = new Landscape({ scene, renderer, model, lawn, bvh: geo.boundsTree, hillHeight });
   landscape.build((p) => loadingBar.progress(p)).then(async (st) => {
-    loadingBar.begin('extras', 'The finishing touches…');
+    loadingBar.begin('extras', 'Scattering the autumn leaves');
     await nextFrame();
+    // (each part named as it starts, the page drawn between them)
+    const part = async (f, label) => {
+      loadingBar.progress(f, label);
+      await nextFrame();
+    };
     walker.obstacles = landscape.obstacles;
     // the snowman: on the front lawn, west of the fountain, looking towards the gate
     const spot = [
@@ -1134,21 +1176,27 @@ async function prepareWalking(ground) {
       snowman.setSnow(seasonUniforms.uSnow.value);
     }
     leaves = new FallenLeaves(scene, landscape.treeSpots, (x, z) => landscape.groundHeight(x, z));
+    await part(0.5, 'Putting up the lights at the gate and the fountain');
     // lights at the gateway, in the fountain and on the assault course (before the first frame: new lights recompile every shader)
     {
       const pond = water?.surfaces.filter((w) => w.outdoor).sort((a, b) => a.box.getCenter(new THREE.Vector3()).distanceTo(new THREE.Vector3(4.6, 0, 5)) - b.box.getCenter(new THREE.Vector3()).distanceTo(new THREE.Vector3(4.6, 0, 5)))[0];
-      const night = nightLights({ bvh: geo.boundsTree, materialAt: (fi) => meshAtFace(geo, fi)?.material.name || '', gate: landscape.gate, fountain: pond?.box ?? null });
+      const crateMeshes = [];
+      model.traverse((o) => o.isMesh && /assault_box/.test(o.material.name || '') && crateMeshes.push(o));
+      const night = nightLights({ bvh: geo.boundsTree, gate: landscape.gate, fountain: pond?.box ?? null, crateMeshes });
       scene.add(night.group);
       lamps.addMore(night.fixtures);
-      nightPools = night.poolMat;
-      nightPoolLight = lamps.fixtureLight(lamps.fixtures.length - night.fixtures.length + night.courseLight);
-      console.info(`night lights: ${night.fixtures.length} (${night.markers} markers on the assault course); ${lamps.lightCount} lights in all`);
+      courseLeds = night.ledMat;
+      courseLedSwitch = lamps.fixtureLight(lamps.fixtures.length - night.fixtures.length + night.courseLight);
+      courseLedSand = night.bandMat;
+      console.info(`night lights: ${night.fixtures.length}; on the assault course ${night.crates} crates, ${night.strips} LED strips, ${night.glows} glows; ${lamps.lightCount} lights in all`);
     }
+    await part(0.6, 'Planting the daffodils');
     easter = new Easter(scene, { isLawn: (x, z) => landscape._grassAt(x, z), ground: (x, z) => landscape.groundHeight(x, z), obstacles: landscape.obstacles, gate: landscape.gate, drive: landscape.drive, lawnEdge: lawn.max.z });
     easter.onFound = (n, total) => {
       sound.chime();
       toast(n === total ? `All ${total} Easter eggs found` : `Easter eggs found: ${n} of ${total}`);
     };
+    await part(0.7, 'Decorating for the holidays');
     // Halloween's pumpkins by the front door, Christmas lights on the house, the gate and the two oaks inside it
     const front = doors.usable.find((d) => d.centre.z > -12 && d.centre.z < -8 && Math.abs(d.centre.x + 1.85) < 1.5);
     const oaks = landscape.gate ? landscape.treeSpots.filter((t) => Math.abs(t.z - (landscape.gate.z - 6.5)) < 1 && Math.abs(Math.abs(t.x - landscape.gate.x) - 5.4) < 1) : [];
@@ -1156,6 +1204,7 @@ async function prepareWalking(ground) {
     festive = new Festive(scene, { bvh: geo.boundsTree, door: front, oaks, gate: landscape.gate });
     for (const pk of festive.pumpkins) landscape.obstacles.push({ x: pk.position.x, z: pk.position.z, r: 0.3, when: () => festive.halloween.visible });
     spooky = new Spooky(scene, { bvh: geo.boundsTree, materialAt: (fi) => meshAtFace(geo, fi)?.material.name || '', houseBox: lamps.houseBox, gate: landscape.gate, door: front?.centre ?? null, ground: (x, z) => landscape.groundHeight(x, z) });
+    await part(0.9, 'Building the bonfire');
     // the bonfire: on open lawn in front of the house, clear of the trees and shrubs
     // (well clear of the trees' crowns: a big fire under an oak looks wrong)
     const crownGap = (x, z) => Math.min(...landscape.crowns.map((c) => Math.hypot(c.x - x, c.z - z) - c.r));
@@ -1168,8 +1217,8 @@ async function prepareWalking(ground) {
     ].find(([x, z]) => landscape._grassAt(x, z) && crownGap(x, z) > 4 && landscape.obstacles.every((o) => Math.hypot(o.x - x, o.z - z) > Math.max(5, (o.r ?? 0) + 4.5)));
     if (fireSpot) {
       const [x, z] = fireSpot;
-      bonfire = new Bonfire(scene, new THREE.Vector3(x, landscape.groundHeight(x, z) ?? 0, z), festSound);
-      landscape.obstacles.push({ x, z, r: 2, when: () => Bonfire.on(seasonDay) });
+      bonfire = new Bonfire(scene, new THREE.Vector3(x, landscape.groundHeight(x, z) ?? 0, z), festSound, { groundAt });
+      landscape.obstacles.push({ x, z, r: 1.6, when: () => Bonfire.on(seasonDay) });
     }
     // the fountain's and the pool's reflections leave out the shrubs and the fallen leaves (costly, too small to see there)
     water?.notMirrored.push(...landscape.shrubs, leaves.mesh);
@@ -1623,13 +1672,15 @@ function step(dt, exporting = false) {
     const hand = walking ? (vr.presenting ? camera.position.clone().setY(camera.position.y - 0.65) : walker.feet.clone().setY(walker.feet.y + 0.95)) : null;
     lanterns.update(dt, hand, tod.night, lamps.glowMat.uniforms.uScale.value);
     // your own light: while you walk, once it is getting dark (or under a dark sky indoors)
-    myLight.update(dt, camera, mode === 'walk' && !!walker, THREE.MathUtils.smoothstep(tod.night, 0.25, 0.7));
-    if (nightPools) nightPools.opacity = (nightPoolLight?.on ?? 0) * (1 - lamps.cut);
+    myLight.update(dt, camera, mode === 'walk' && !!walker, THREE.MathUtils.smoothstep(tod.night, 0.25, 0.7), lamps?.glowMat.uniforms.uScale.value ?? 800);
+    if (courseLeds) {
+      const on = (courseLedSwitch?.on ?? 0) * (1 - lamps.cut);
+      courseLeds.color.setRGB(0.04 + 1.7 * on, 0.045 + 1.95 * on, 0.05 + 2.2 * on);
+      courseLedSand.opacity = on;
+    }
     park?.update(dt, { sunDeg, hours: tod.hours, day: seasonDay, camera, onFoot: mode === 'walk' });
     wildlife?.update(dt, { day: seasonDay, hours: tod.hours, sunDeg, camera, feet: mode === 'walk' && walker ? walker.feet : null, weather, inside: tod.inside, frozen: seasonUniforms.uIce.value });
     easter?.update(dt, { day: seasonDay, night: tod.night, snow: seasonUniforms.uSnow.value, wind: weather.wind, feet: mode === 'walk' && walker ? walker.feet : null });
-    // Easter morning: the church bells across the fields, from a quarter past nine until half past eleven
-    if (!exporting && Easter.sunday(seasonDay) && tod.hours > 9.25 && tod.hours < 11.5) sound.peal(CHURCH);
     if (bonfire) {
       bonfire.update(dt, { day: seasonDay, hours: tod.hours, level: tod.lamps, wind, camera, exporting });
       bonfire.setScale(lamps.glowMat.uniforms.uScale.value);

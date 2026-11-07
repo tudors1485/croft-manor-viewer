@@ -71,9 +71,9 @@ export function seasonAt(day) {
   const snow = 1 - ss(apart(day, 12), 22, 34);
   // ponds freeze over in the coldest weeks, from about 20 December to early February
   const ice = 1 - ss(apart(day, 14), 24, 40);
-  // birds: the dawn chorus is a spring thing; few sing in winter
-  // birds sing from March to late August (the dawn chorus is a spring thing), none in autumn or winter
-  const birds = ss(day, 55, 90) * (1 - ss(day, 236, 262)) * (1 + 0.35 * (1 - ss(day, 120, 170)));
+  // birds sing in spring and summer only (the dawn chorus is a spring thing): from March, rising
+  // through it, to the end of August; none at all from September to February
+  const birds = ss(day, 59, 80) * (1 - ss(day, 228, 243)) * (1 + 0.35 * (1 - ss(day, 120, 170)));
   // wind: gusty from autumn through winter, calm in summer
   const windy = 1 - ss(apart(day, 15), 50, 140);
   // crickets: from late April, loudest in high summer, quiet again by late October

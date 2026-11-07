@@ -486,22 +486,6 @@ export class Soundscape {
     }
   }
 
-  /** The village church's bells ringing (Easter morning): call each frame while they ring, with where the church is. */
-  peal(position) {
-    if (!this.on || !this.ctx) return;
-    const t = this.ctx.currentTime;
-    // six bells in rounds, treble to tenor, a short gap at each handstroke; scheduled a little ahead
-    const BELLS = [740, 659, 587, 554, 494, 440];
-    this._pealAt = Math.max(this._pealAt ?? 0, t);
-    while (this._pealAt < t + 0.6) {
-      const k = this._pealRow ?? 0;
-      const bell = k % 6;
-      this.bell(position, BELLS[bell], this._pealAt + (Math.random() - 0.5) * 0.02, 0.8 + 0.2 * Math.random());
-      this._pealRow = k + 1;
-      this._pealAt += 0.29 + (bell === 5 && (Math.floor(k / 6) % 2 === 1) ? 0.29 : 0);
-    }
-  }
-
   /** A recorded sound (SAMPLES) at `position` (or everywhere, if null). */
   sample(name, position, { ref = 10, rolloff = 1, max = 400, gain = 1, rate = 1 } = {}) {
     if (!this.on || !this.ctx || !Object.hasOwn(SAMPLES, name)) return;

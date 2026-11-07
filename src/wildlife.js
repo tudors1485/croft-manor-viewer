@@ -34,6 +34,10 @@ const rnd = (a, b) => a + Math.random() * (b - a);
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
 /** Is `day` within [a, b] (which may run over the new year)? */
 const season = (day, a, b) => (a <= b ? day >= a && day <= b : day >= a || day <= b);
+// birds call and sing in spring and summer only (March to August); in autumn and winter only the
+// crows and magpies do
+const singing = (day) => season(day, 59, 243);
+const HALLOWEEN = 303; // (31 October, the season's day)
 
 export const WILD_SOUNDS = ['crow-1', 'crow-2', 'crow-3', 'crows', 'robin-1', 'robin-2', 'woodpigeon', 'dove', 'magpie-1', 'magpie-2', 'kite', 'mallard', 'fox-scream-1', 'fox-scream-2', 'fox-bark', 'cat'];
 
@@ -399,7 +403,7 @@ export class Wildlife {
     play(k, 'Flying', 0.4, s.flap > 0 ? 0.7 : 0.12);
     k.mixer.update(dt);
     this.nextKiteCall -= dt;
-    if (this.nextKiteCall <= 0) {
+    if (this.nextKiteCall <= 0 && singing(day)) {
       this._call('kite', p, { ref: 60, rolloff: 0.8, max: 900, gain: 0.9 });
       this.nextKiteCall = rnd(45, 150);
     }
@@ -418,8 +422,8 @@ export class Wildlife {
       // a turn of the head every so often, a shuffle along the ridge
       pg.holder.rotation.y = Math.PI / 2 + (i % 2 ? Math.PI : 0) + 0.35 * Math.sin(this.t * 0.31 + i * 2) + (Math.sin(this.t * 0.07 + i) > 0.9 ? 0.6 : 0);
     });
-    // cooing: on spring and summer mornings and evenings most, hardly in winter
-    const busy = season(day, 60, 260) ? (hours < 11 || (hours > 16 && hours < 20.5) ? 1 : 0.35) : 0.12;
+    // cooing: on spring and summer mornings and evenings most; not at all in autumn and winter
+    const busy = singing(day) ? (hours < 11 || (hours > 16 && hours < 20.5) ? 1 : 0.35) : 0;
     this.nextCoo -= dt * busy;
     if (ok && this.nextCoo <= 0) {
       const dove = Math.random() < 0.25;
@@ -483,7 +487,7 @@ export class Wildlife {
       }
       s.p.y = this.ground(s.p.x, s.p.z) + (s.hop > 0 ? Math.sin((1 - s.hop / 0.16) * Math.PI) * 0.06 : 0);
       s.sing -= dt;
-      if (s.sing <= 0) {
+      if (s.sing <= 0 && singing(day)) {
         this._call(pick(['robin-1', 'robin-2']), s.p, { ref: 10, rolloff: 1.2, max: 120, gain: 0.8 });
         s.sing = rnd(10, 28);
       }
@@ -686,14 +690,13 @@ export class Wildlife {
       f.mixer.update(dt);
       if (!dark) s.on = false;
     }
-    // calls from the fields: screams in the winter (their mating season), barks the rest of the year
+    // a fox's scream from the fields: on Halloween night only (it is too frightening for any other)
     this.nextFoxCall -= dt;
-    if (dark && this.nextFoxCall <= 0) {
-      const winter = season(day, 335, 59);
+    if (dark && this.nextFoxCall <= 0 && Math.floor(day) === HALLOWEEN) {
       const a = rnd(0, 6.28);
       const d = rnd(90, 260);
       const at = new THREE.Vector3(cam.x + Math.cos(a) * d, 2, cam.z + Math.sin(a) * d);
-      this._call(winter || Math.random() < 0.25 ? pick(['fox-scream-1', 'fox-scream-2']) : 'fox-bark', at, { ref: 60, rolloff: 0.7, max: 900, gain: 0.9 });
+      this._call(Math.random() < 0.7 ? pick(['fox-scream-1', 'fox-scream-2']) : 'fox-bark', at, { ref: 60, rolloff: 0.7, max: 900, gain: 0.9 });
       this.nextFoxCall = rnd(90, 320);
     }
   }
@@ -784,7 +787,7 @@ export class Wildlife {
       }
     });
     this.nextQuack -= dt;
-    if (out && this.nextQuack <= 0) {
+    if (out && this.nextQuack <= 0 && singing(day)) {
       const d = pick(this.ducks).state?.p;
       if (d) this._call('mallard', d, { ref: 14, rolloff: 1, max: 250, gain: 0.8, rate: rnd(0.95, 1.05) });
       this.nextQuack = rnd(18, 60);

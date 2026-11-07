@@ -3,6 +3,7 @@
 // further out, rolling hills on the horizon and the drive running on past the gate.
 
 import * as THREE from 'three';
+import { MeshBVH, acceleratedRaycast } from 'three-mesh-bvh';
 import { nextFrame } from './loading.js';
 import { Tree } from '@dgreenheck/ez-tree';
 import { seasonUniforms } from './season.js';
@@ -473,8 +474,20 @@ export class Landscape {
   }
 
   _grassAt(x, z) {
-    this._ray = this._ray ?? new THREE.Raycaster();
-    this._ray.set(new THREE.Vector3(x, 20, z), new THREE.Vector3(0, -1, 0));
+    if (!this._ray) {
+      this._ray = new THREE.Raycaster();
+      this._ray.firstHitOnly = true;
+      this._down = new THREE.Vector3(0, -1, 0);
+      this._from = new THREE.Vector3();
+      // (a search tree for the lawn and the gravel: asked thousands of times while loading, for the
+      // trees, the daffodils and the wildlife, testing every triangle took seconds; indirect, so
+      // the meshes' own triangles keep their order)
+      for (const m of this._surfaces) {
+        m.geometry.boundsTree ??= new MeshBVH(m.geometry, { indirect: true, maxDepth: 64 });
+        m.raycast = acceleratedRaycast;
+      }
+    }
+    this._ray.set(this._from.set(x, 20, z), this._down);
     this._ray.far = 40;
     const hits = this._ray.intersectObjects(this._surfaces, false);
     return hits.length > 0 && hits[0].object.material.name === 'cm_grass';

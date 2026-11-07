@@ -12,7 +12,7 @@ import * as THREE from 'three';
 
 const BONFIRE_DAY = 308; // 5 November (day of the year, from 0)
 
-function softDot(inner = 0.15) {
+export function softDot(inner = 0.15) {
   const c = document.createElement('canvas');
   c.width = c.height = 64;
   const g = c.getContext('2d');
@@ -28,7 +28,7 @@ function softDot(inner = 0.15) {
 }
 
 /** A pool of particles drawn as one Points call: position, colour, size and alpha per particle. */
-class Particles {
+export class Particles {
   /**
    * near: closer than this (metres) a particle fades out, so a spark flying past the camera doesn't
    * fill the screen; max: the biggest a particle is drawn (pixels on a screen 800 high, scaled with it)
@@ -193,7 +193,7 @@ export class Bonfire {
    * @param {THREE.Vector3} at where the bonfire stands (on the ground)
    * @param {object} sound the soundscape (bonfire level, whistles and bangs)
    */
-  constructor(scene, at, sound) {
+  constructor(scene, at, sound, { groundAt = null } = {}) {
     this.at = at.clone();
     this.sound = sound;
     this.group = new THREE.Group();
@@ -201,14 +201,14 @@ export class Bonfire {
     scene.add(this.group);
     this.t = 0;
 
-    // the pile: logs leaning together in a cone about three metres high, charred and glowing at the foot once it burns
+    // the pile: logs leaning together in a cone a little over two metres high, charred and glowing at the foot once it burns
     this.logMat = new THREE.MeshStandardMaterial({ color: 0x150e09, roughness: 0.97, emissive: new THREE.Color(0.6, 0.16, 0.03), emissiveIntensity: 0 });
-    const logGeo = new THREE.CylinderGeometry(0.1, 0.14, 3.3, 7).translate(0, 1.65, 0);
+    const logGeo = new THREE.CylinderGeometry(0.09, 0.13, 2.8, 7).translate(0, 1.4, 0);
     this.pile = new THREE.Group();
-    for (let i = 0; i < 20; i++) {
-      const a = (i / 20) * Math.PI * 2 + Math.random() * 0.2;
+    for (let i = 0; i < 18; i++) {
+      const a = (i / 18) * Math.PI * 2 + Math.random() * 0.2;
       const log = new THREE.Mesh(logGeo, this.logMat);
-      log.position.set(Math.cos(a) * 1.45, 0, Math.sin(a) * 1.45);
+      log.position.set(Math.cos(a) * 1.25, 0, Math.sin(a) * 1.25);
       log.rotation.set(0, -a, 0);
       log.rotateZ(0.42 + Math.random() * 0.1);
       log.castShadow = true;
@@ -220,14 +220,18 @@ export class Bonfire {
     // fire, embers and smoke
     this.flames = new Particles(900);
     this.embers = new Particles(320, { map: softDot(0.05) });
-    this.smoke = new Particles(190, { additive: false, map: softDot(0.35) });
+    this.smoke = new Particles(520, { additive: false, map: softDot(0.35) });
     this.smoke.points.renderOrder = 8;
+    // the fireworks' smoke, hanging over the field where they burst, lit by each new burst
+    this.haze = new Particles(240, { additive: false, map: softDot(0.3), max: 600 });
+    this.haze.points.renderOrder = 7;
+    this.group.add(this.haze.points);
     this.flames.points.renderOrder = 9;
     this.group.add(this.smoke.points, this.flames.points, this.embers.points);
     // its light, and one for the bursts (both always in the scene, dark the rest of the year:
     // adding lights later would recompile every shader)
-    this.fireLight = new THREE.PointLight(0xff7a2a, 0, 26, 2);
-    this.fireLight.position.copy(this.at).add(new THREE.Vector3(0, 2.3, 0));
+    this.fireLight = new THREE.PointLight(0xff7a2a, 0, 22, 2);
+    this.fireLight.position.copy(this.at).add(new THREE.Vector3(0, 1.9, 0));
     this.flash = new THREE.PointLight(0xffffff, 0, 160, 1.6);
     // (in the scene itself, not the group: a hidden group's lights don't count, so showing it would
     // change the number of lights and recompile every shader, a pause of half a second)
@@ -243,6 +247,41 @@ export class Bonfire {
     this.boost = 1; // a holiday flyby's show: more rockets, more salvos
     this.autoYear = true; // the year written every half-minute (the New Year flyby writes it on cue)
     this._lastDay = null;
+
+    // other bonfires across the country, far off on the hills and in the villages: a flickering
+    // point of orange each, with its smoke going up; and now and then someone else's fireworks,
+    // small and low over the horizon, their bangs arriving seconds later
+    this.far = [];
+    if (groundAt) {
+      let seed = 5;
+      const R = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+      // (only where you can see them from the lawn: on the slopes facing the estate, not behind a hill)
+      const eye = this.at.clone().add(new THREE.Vector3(0, 1.7, 0));
+      const seen = (p) => {
+        for (let k = 1; k < 60; k++) {
+          const q = eye.clone().lerp(p, k / 60);
+          if (groundAt(q.x, q.z) > q.y - 1.5) return false;
+        }
+        return true;
+      };
+      for (let tries = 0; tries < 600 && this.far.length < 12; tries++) {
+        const a = R() * Math.PI * 2;
+        const d = 380 + R() * 2000;
+        const x = this.at.x + Math.cos(a) * d;
+        const z = this.at.z + Math.sin(a) * d;
+        const p = new THREE.Vector3(x, groundAt(x, z) + 1.2, z);
+        // (spread round the horizon, not bunched)
+        if (!seen(p.clone().setY(p.y + 2)) || this.far.some((b) => Math.abs(Math.atan2(Math.sin(b.a - a), Math.cos(b.a - a))) < 0.32)) continue;
+        this.far.push({ p, a, size: 2.6 + R() * 2.2, phase: R() * 10, from: 16.6 + R() * 1.6 });
+      }
+    }
+    this.farFire = new Particles(Math.max(1, this.far.length * 3), { map: softDot(0.08), max: 40 });
+    this.farSmoke = new Particles(Math.max(1, this.far.length * 26), { additive: false, map: softDot(0.35), max: 300 });
+    this.farFire.points.renderOrder = 6;
+    this.farSmoke.points.renderOrder = 5;
+    this.group.add(this.farSmoke.points, this.farFire.points);
+    this.nextFar = 0;
+    this.farSmokeAt = 0;
   }
 
   /** A fresh start for a flyby: no rockets in the air, the year written just after midnight. */
@@ -290,23 +329,24 @@ export class Bonfire {
       this.sound?.setBonfire?.(null, 0);
       return;
     }
+    this.farFire.points.visible = this.farSmoke.points.visible = bonfireNight;
     this.t += dt;
     const burning = bonfireNight && level > 0.05 && hours > 12 && hours < 23.9 ? 1 : 0;
     this.fire += (burning - this.fire) * (1 - Math.exp(-dt * 0.6));
     const f = this.fire;
     const flicker = 0.75 + 0.15 * Math.sin(this.t * 13) + 0.1 * Math.sin(this.t * 29 + 1.7);
-    this.fireLight.intensity = 30 * f * flicker;
+    this.fireLight.intensity = 26 * f * flicker;
     this.logMat.emissiveIntensity = 0.5 * f * flicker;
     this.sound?.setBonfire?.(this.at, f);
 
     // flames: rising, shrinking, yellow-white to orange to red
     const fl = this.flames;
-    for (let n = Math.floor(dt * 560 * f + Math.random()); n > 0; n--) {
+    for (let n = Math.floor(dt * 430 * f + Math.random()); n > 0; n--) {
       const i = fl.spawn();
       const a = Math.random() * Math.PI * 2;
-      const r = Math.sqrt(Math.random()) * 1.2;
-      fl.pos.set([this.at.x + Math.cos(a) * r, this.at.y + 0.25 + Math.random() * 0.7, this.at.z + Math.sin(a) * r], i * 3);
-      fl.vel.set([(Math.random() - 0.5) * 0.4 + wind * 0.7, 2.7 + Math.random() * 2, (Math.random() - 0.5) * 0.4], i * 3);
+      const r = Math.sqrt(Math.random()) * 1.0;
+      fl.pos.set([this.at.x + Math.cos(a) * r, this.at.y + 0.2 + Math.random() * 0.55, this.at.z + Math.sin(a) * r], i * 3);
+      fl.vel.set([(Math.random() - 0.5) * 0.35 + wind * 0.7, 2.2 + Math.random() * 1.6, (Math.random() - 0.5) * 0.35], i * 3);
       fl.life[i] = fl.data[i * 4] = 0.6 + Math.random() * 0.7;
       fl.data[i * 4 + 1] = 0.6 + Math.random() * 0.6;
     }
@@ -329,7 +369,7 @@ export class Bonfire {
     const em = this.embers;
     for (let n = Math.floor(dt * 60 * f + Math.random() * 0.6); n > 0; n--) {
       const i = em.spawn();
-      em.pos.set([this.at.x + (Math.random() - 0.5) * 1.8, this.at.y + 1.7, this.at.z + (Math.random() - 0.5) * 1.8], i * 3);
+      em.pos.set([this.at.x + (Math.random() - 0.5) * 1.4, this.at.y + 1.4, this.at.z + (Math.random() - 0.5) * 1.4], i * 3);
       em.vel.set([(Math.random() - 0.5) * 1.2 + wind * 1.2, 3 + Math.random() * 3, (Math.random() - 0.5) * 1.2], i * 3);
       em.life[i] = em.data[i * 4] = 1.5 + Math.random() * 2.5;
     }
@@ -348,15 +388,18 @@ export class Bonfire {
     }
     em.flush();
 
-    // smoke: grey, rising and spreading, drifting downwind (and still a little after the fire dies)
+    // smoke: a thick grey column, rising and spreading, drifting downwind and hanging over the
+    // grounds (and still a little after the fire dies)
     const sm = this.smoke;
-    for (let n = Math.floor(dt * 12 * Math.max(f, 0.15 * (level > 0 ? 1 : 0)) + Math.random() * 0.3); n > 0; n--) {
+    for (let n = Math.floor(dt * 26 * Math.max(f, 0.15 * (level > 0 ? 1 : 0)) + Math.random() * 0.5); n > 0; n--) {
       const i = sm.spawn();
-      sm.pos.set([this.at.x + (Math.random() - 0.5) * 1.4, this.at.y + 3.4, this.at.z + (Math.random() - 0.5) * 1.4], i * 3);
-      sm.vel.set([0.4 + wind * 2.2 + (Math.random() - 0.5) * 0.3, 1.1 + Math.random() * 0.5, (Math.random() - 0.5) * 0.4], i * 3);
-      sm.life[i] = sm.data[i * 4] = 9 + Math.random() * 5;
+      sm.pos.set([this.at.x + (Math.random() - 0.5) * 1.2, this.at.y + 2.6, this.at.z + (Math.random() - 0.5) * 1.2], i * 3);
+      sm.vel.set([0.4 + wind * 2.2 + (Math.random() - 0.5) * 0.4, 1.0 + Math.random() * 0.6, (Math.random() - 0.5) * 0.5], i * 3);
+      sm.life[i] = sm.data[i * 4] = 13 + Math.random() * 8;
     }
-    const lit = 0.45 + 0.55 * (1 - level); // by day the smoke is pale grey; at night it catches the fire from below
+    // by day the smoke is pale grey; at night dark, a little paler than the sky, catching the fire's
+    // light from below and the fireworks' flashes
+    const lit = THREE.MathUtils.lerp(0.42, 0.012, level);
     for (let i = 0; i < sm.count; i++) {
       if (sm.life[i] <= 0) {
         sm.alpha[i] = 0;
@@ -366,13 +409,16 @@ export class Bonfire {
       const u = 1 - Math.max(0, sm.life[i]) / sm.data[i * 4];
       for (let k = 0; k < 3; k++) sm.pos[i * 3 + k] += sm.vel[i * 3 + k] * dt;
       sm.vel[i * 3 + 1] *= 1 - 0.05 * dt;
-      const above = sm.pos[i * 3 + 1] - this.at.y - 3;
-      const glow = Math.exp(-Math.max(0, above) / 10) * f * level;
-      sm.col.set([0.42 * lit + 0.9 * glow, 0.4 * lit + 0.42 * glow, 0.44 * lit + 0.15 * glow], i * 3);
-      sm.size[i] = 2.2 + u * 8;
-      sm.alpha[i] = Math.min(1, u * 5) * (1 - u) * 0.62;
+      const above = sm.pos[i * 3 + 1] - this.at.y - 2.4;
+      const glow = Math.exp(-Math.max(0, above) / 3.5) * f * level;
+      const flash = this.flashLevel * 0.05;
+      sm.col.set([lit + 0.3 * glow + flash, 0.96 * lit + 0.11 * glow + flash, 1.1 * lit + 0.03 * glow + flash], i * 3);
+      sm.size[i] = 2.2 + u * 12;
+      sm.alpha[i] = Math.min(1, u * 5) * (1 - u) * 0.55;
     }
     sm.flush();
+
+    if (bonfireNight) this._farOff(dt, hours, level, wind, camera);
 
     // fireworks: 18:30 to 22:00 on Bonfire Night; at New Year a few in the last two minutes of the
     // old year, then from midnight a lot
@@ -480,6 +526,98 @@ export class Bonfire {
     sp.flush();
     this.flashLevel *= Math.exp(-dt * 5);
     this.flash.intensity = 1800 * this.flashLevel;
+
+    // the fireworks' smoke: puffs where the shells burst, spreading and drifting, dark against the
+    // night sky but lit up by each new burst near them
+    const hz = this.haze;
+    const fp = this.flash.position;
+    const fc = this.flash.color;
+    for (let i = 0; i < hz.count; i++) {
+      if (hz.life[i] <= 0) {
+        hz.alpha[i] = 0;
+        continue;
+      }
+      hz.life[i] -= dt;
+      const u = 1 - Math.max(0, hz.life[i]) / hz.data[i * 4];
+      for (let k = 0; k < 3; k++) hz.pos[i * 3 + k] += hz.vel[i * 3 + k] * dt;
+      const dx = hz.pos[i * 3] - fp.x;
+      const dy = hz.pos[i * 3 + 1] - fp.y;
+      const dz = hz.pos[i * 3 + 2] - fp.z;
+      const lit = this.flashLevel * Math.min(1, 900 / (dx * dx + dy * dy + dz * dz + 1));
+      hz.col.set([0.012 + 0.3 * lit * fc.r, 0.012 + 0.3 * lit * fc.g, 0.016 + 0.3 * lit * fc.b], i * 3);
+      hz.size[i] = hz.data[i * 4 + 1] * (0.5 + u * 1.2);
+      hz.alpha[i] = Math.min(1, u * 8) * (1 - u) * 0.35;
+    }
+    hz.flush();
+  }
+
+  /** A shell's smoke, left hanging where it burst. */
+  _puff(at) {
+    const hz = this.haze;
+    for (let k = 0; k < 5; k++) {
+      const i = hz.spawn();
+      hz.pos.set([at.x + (Math.random() - 0.5) * 9, at.y + (Math.random() - 0.5) * 7, at.z + (Math.random() - 0.5) * 9], i * 3);
+      hz.vel.set([0.9 + (Math.random() - 0.5) * 0.5, -0.1 + Math.random() * 0.2, (Math.random() - 0.5) * 0.5], i * 3);
+      hz.life[i] = hz.data[i * 4] = 22 + Math.random() * 18;
+      hz.data[i * 4 + 1] = 9 + Math.random() * 9;
+    }
+  }
+
+  /** Other people's bonfires and fireworks, far off across the country. */
+  _farOff(dt, hours, level, wind, camera) {
+    const fire = this.farFire;
+    const smoke = this.farSmoke;
+    let j = 0;
+    for (const b of this.far) {
+      // (each lit at its own time after dusk, out by midnight)
+      const on = level > 0.3 && hours > b.from && hours < 23.6 ? 1 : 0;
+      b.on = (b.on ?? 0) + (on - (b.on ?? 0)) * (1 - Math.exp(-dt * 0.3));
+      const flick = 0.75 + 0.15 * Math.sin(this.t * 9 + b.phase) + 0.1 * Math.sin(this.t * 23 + b.phase * 3);
+      // (a wide faint glow on the smoke and the ground round it, the fire itself, a flame above)
+      for (let k = 0; k < 3; k++, j++) {
+        fire.pos.set([b.p.x, b.p.y + (k === 2 ? 1.2 : 0), b.p.z], j * 3);
+        fire.col.set(k === 0 ? [1.2, 0.36, 0.08] : [1.7, 0.62 - k * 0.12, 0.14], j * 3);
+        fire.size[j] = b.size * (k === 0 ? 5 : k === 1 ? 1 : 0.65);
+        fire.alpha[j] = b.on * (k === 0 ? 0.22 : flick * (k === 1 ? 1 : 0.8));
+      }
+    }
+    fire.flush();
+    // their smoke: a slow faint column from each, leaning with the wind
+    this.farSmokeAt -= dt;
+    if (this.farSmokeAt <= 0 && this.far.length) {
+      this.farSmokeAt = 0.35;
+      const b = this.far[Math.floor(Math.random() * this.far.length)];
+      if (b.on > 0.2) {
+        const i = smoke.spawn();
+        smoke.pos.set([b.p.x, b.p.y + 4, b.p.z], i * 3);
+        smoke.vel.set([0.8 + wind * 3, 1.6 + Math.random(), (Math.random() - 0.5)], i * 3);
+        smoke.life[i] = smoke.data[i * 4] = 30 + Math.random() * 15;
+      }
+    }
+    for (let i = 0; i < smoke.count; i++) {
+      if (smoke.life[i] <= 0) {
+        smoke.alpha[i] = 0;
+        continue;
+      }
+      smoke.life[i] -= dt;
+      const u = 1 - Math.max(0, smoke.life[i]) / smoke.data[i * 4];
+      for (let k = 0; k < 3; k++) smoke.pos[i * 3 + k] += smoke.vel[i * 3 + k] * dt;
+      const low = Math.exp(-u * 6); // (lit orange by the fire just above it)
+      smoke.col.set([0.02 + 0.25 * low, 0.02 + 0.09 * low, 0.024 + 0.02 * low], i * 3);
+      smoke.size[i] = 8 + u * 40;
+      smoke.alpha[i] = Math.min(1, u * 6) * (1 - u) * 0.28;
+    }
+    smoke.flush();
+    // someone else's fireworks: a small shell low over the horizon now and then, its bang late
+    this.nextFar -= dt;
+    if (!this._priming && hours > 18.3 && hours < 22.5 && level > 0.5 && this.nextFar <= 0 && this.far.length) {
+      this.nextFar = 1.5 + Math.random() * 6;
+      const b = this.far[Math.floor(Math.random() * this.far.length)];
+      const at = b.p.clone().add(new THREE.Vector3((Math.random() - 0.5) * 120, 45 + Math.random() * 50, (Math.random() - 0.5) * 120));
+      const r = Math.random();
+      this._burst(at, r < 0.5 ? 'peony' : r < 0.7 ? 'chrysanthemum' : r < 0.85 ? 'willow' : 'crackle', FIREWORK_COLOURS[Math.floor(Math.random() * FIREWORK_COLOURS.length)], undefined, 0.6);
+      this.sound?.bang?.(at, at.distanceTo(camera.position));
+    }
   }
 
   /** "Happy New Year" and the coming year (2027 in 2026), written in gold sparks high over the house, facing the drive. */
@@ -547,10 +685,11 @@ export class Bonfire {
    * stars with long trails; willow: gold, hanging and falling a long way; palm: a few thick gold
    * branches; ring: a tilted circle; crackle: white-gold glitter that crackles at the end.
    */
-  _burst(at, kind, colour, heart = colour) {
+  _burst(at, kind, colour, heart = colour, scale = 1) {
     const sp = this.sparks;
-    const n = { peony: 130, double: 120, chrysanthemum: 140, willow: 150, palm: 16, ring: 80, crackle: 150 }[kind] ?? 120;
-    const speed = kind === 'willow' ? 15 : kind === 'palm' ? 20 : 22 + Math.random() * 8;
+    const n = Math.round(({ peony: 130, double: 120, chrysanthemum: 140, willow: 150, palm: 16, ring: 80, crackle: 150 }[kind] ?? 120) * (scale < 1 ? 0.6 : 1));
+    const speed = (kind === 'willow' ? 15 : kind === 'palm' ? 20 : 22 + Math.random() * 8) * scale;
+    if (scale === 1) this._puff(at);
     const tilt = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.random() * 1.2, 0, Math.random() * 1.2));
     const d = new THREE.Vector3();
     const star = (dir, v, life, col, size, trail, k) => {
@@ -586,6 +725,6 @@ export class Bonfire {
   }
 
   setScale(scale) {
-    for (const ps of [this.flames, this.embers, this.smoke, this.sparks]) ps.material.uniforms.uScale.value = scale;
+    for (const ps of [this.flames, this.embers, this.smoke, this.sparks, this.haze, this.farFire, this.farSmoke]) ps.material.uniforms.uScale.value = scale;
   }
 }
