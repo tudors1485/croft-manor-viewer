@@ -1,7 +1,6 @@
 // Moving in (Sights): the great hall on the day the crates came. Crates and boxes stacked on the
 // floor before the stairs, most of the paintings not hung yet (two of them leaning against the
-// wall), the walls' panelling a plainer honey oak and the timbers of the roof dark old oak instead
-// of the red. Reset, or another holiday or sight, puts it all back.
+// crates), and where each will hang, a paler patch of wall. Reset, or another scene, puts it all back.
 //
 // The crates and boxes are Poly Haven's (CC0): public/models/moving/.
 
@@ -10,35 +9,6 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // the hall's paintings that aren't up yet (the big one over the stairs is)
 const NOT_HUNG = /^cm_obj_(painting_rome|painting_smallset2|painting_mainhall_01|tapestry_unicorn)$/;
-// the wainscot to honey oak; the timber framing and the roof's timbers to dark oak
-const PANELS = /^cm_int_wall_redpanels$/;
-const TIMBERS = /^cm_(int_wall_framed_0[1-4]|int_ceiling_straightbars|int_ceiling_bars_end|int_ceiling_singlebar|wood_beam)$/;
-
-/** Turns a material's reddish wood to another wood (its light and grain kept), as `amount` goes 0..1. */
-function rewood(material, amount, colour) {
-  const before = material.onBeforeCompile;
-  const key = material.customProgramCacheKey?.bind(material);
-  material.onBeforeCompile = (shader, renderer) => {
-    before?.call(material, shader, renderer);
-    shader.uniforms.uRewood = amount;
-    shader.uniforms.uRewoodColour = { value: colour };
-    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uRewood;\nuniform vec3 uRewoodColour;').replace(
-      '#include <map_fragment>',
-      `#include <map_fragment>
-       {
-         // (only the red wood: the white plaster between the timbers stays)
-         // (strongly red and dark: the wood; the cream plaster is warm too, but pale and only a little red)
-         float lum = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11));
-         float sat = (diffuseColor.r - diffuseColor.b) / max(diffuseColor.r, 1e-3);
-         float redness = smoothstep(0.5, 0.75, sat) * (1.0 - smoothstep(0.22, 0.4, lum));
-         diffuseColor.rgb = mix(diffuseColor.rgb, uRewoodColour * lum, uRewood * redness);
-       }`,
-    );
-  };
-  material.customProgramCacheKey = () => `${key ? key() : ''}-rewood`;
-  material.needsUpdate = true;
-}
-
 export class MovingIn {
   /**
    * @param {THREE.Scene} scene
@@ -55,19 +25,18 @@ export class MovingIn {
     this.group.visible = false;
     scene.add(this.group);
     this.hidden = [];
-    this.amount = { value: 0 };
-    const done = new Set();
+    let plaster = null;
     model.traverse((o) => {
       if (!o.isMesh) return;
       const n = o.material.name || '';
       if (NOT_HUNG.test(n)) this.hidden.push(o);
-      if (done.has(o.material)) return;
-      if (PANELS.test(n)) rewood(o.material, this.amount, new THREE.Color(7.2, 3.9, 1.3));
-      else if (TIMBERS.test(n)) rewood(o.material, this.amount, new THREE.Color(2.3, 1.25, 0.6));
-      else return;
-      done.add(o.material);
+      if (n === 'cm_whitestone_sepia_int') plaster = o.material;
     });
     this.paintings = this.hidden.map((m) => m.material);
+    // where a painting isn't hung yet, the wall behind it (the model has no wall there: a hole):
+    // a patch of the plaster, a little paler, unfaded where the painting will go
+    this.patch = plaster ? plaster.clone() : new THREE.MeshStandardMaterial({ color: 0xe8dcc4, roughness: 0.9 });
+    this.patch.color = this.patch.color.clone().multiplyScalar(1.08);
   }
 
   async _load(base = '') {
@@ -124,7 +93,13 @@ export class MovingIn {
       const ar = img?.width && img?.height ? img.width / img.height : 1.3;
       const w = 1.0;
       const frame = new THREE.Group();
-      const canvas = new THREE.Mesh(new THREE.PlaneGeometry(w, w / ar), new THREE.MeshStandardMaterial({ map: m.map, roughness: 0.7 }));
+      const geo = new THREE.PlaneGeometry(w, w / ar);
+      // (the model's pictures come from glTF, the right way up for its own UVs, not a plane's)
+      if (m.map.flipY === false) {
+        const uv = geo.attributes.uv;
+        for (let k = 0; k < uv.count; k++) uv.setY(k, 1 - uv.getY(k));
+      }
+      const canvas = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: m.map, roughness: 0.7 }));
       const back = new THREE.Mesh(new THREE.BoxGeometry(w + 0.1, w / ar + 0.1, 0.05), new THREE.MeshStandardMaterial({ color: 0x6a4a1c, roughness: 0.4, metalness: 0.4 }));
       back.position.z = -0.03;
       canvas.position.z = 0.001;
@@ -141,7 +116,9 @@ export class MovingIn {
     this.on = on;
     if (on) this._load().catch((err) => console.warn('the crates did not load:', err.message));
     this.group.visible = on;
-    this.amount.value = on ? 1 : 0;
-    for (const m of this.hidden) m.visible = !on;
+    for (const m of this.hidden) {
+      m.material = on ? this.patch : this.paintings[this.hidden.indexOf(m)];
+      for (const f of m.userData.frames ?? []) f.visible = !on; // (their gilt frames too: interior.js)
+    }
   }
 }

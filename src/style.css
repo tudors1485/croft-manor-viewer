@@ -204,6 +204,21 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+#panel .place-controls {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+#panel .place-controls select {
+  min-width: 0;
+}
+#panel .place-controls button {
+  font-size: 15px;
+  line-height: 1;
+  padding: 5px 9px;
+}
 #panel .time-controls {
   display: grid;
   grid-template-columns: 1fr auto;

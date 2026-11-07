@@ -408,10 +408,14 @@ export class TimeOfDay {
    * ground ahead of you; from above, and in flybys, the whole estate. The box moves in whole
    * texels, so the shadows don't crawl as you walk.
    */
-  fitShadow(camera, { inside = 0, low = false, whole = false } = {}) {
-    const r = whole ? this.radius : inside > 0.5 ? 16 : low ? 70 : this.radius;
+  fitShadow(camera, { inside = 0, low = false, whole = false, house = null } = {}) {
+    // inside: the whole house at once (about 1.3 cm a texel), so every room the sun reaches has
+    // the windows' shapes on its floor and walls, near or far
+    const houseR = house ? Math.hypot(house.max.x - house.min.x, house.max.z - house.min.z) / 2 + 1 : 16;
+    const r = whole ? this.radius : inside > 0.5 ? houseR : low ? 70 : this.radius;
     const c = (this._fitC ??= new THREE.Vector3());
     if (r === this.radius) c.copy(this.centre);
+    else if (inside > 0.5 && house) house.getCenter(c);
     else {
       const fwd = camera.getWorldDirection(this._fitF ?? (this._fitF = new THREE.Vector3()));
       fwd.y = 0;
@@ -596,7 +600,9 @@ export class TimeOfDay {
       this.haze.material.color.copy(this._fogBase).lerp(pale, 0.7 * f);
     }
     // and the sun that does come in lands harder, so its patches show against the room
-    if (this._sunIntensity !== undefined) this.light.intensity = this._sunIntensity * (this._moonLight ? 1 : THREE.MathUtils.lerp(1, 2.1, this.inside));
+    if (this._sunIntensity !== undefined) this.light.intensity = this._sunIntensity * (this._moonLight ? 1 : THREE.MathUtils.lerp(1, 2.3, this.inside));
+    // (and golden: the sun coming in at a window, warm on the floor)
+    if (!this._moonLight && this._lightColour && !this._keyed) this.light.color.copy(this._lightColour).lerp(this._golden ?? (this._golden = new THREE.Color(1, 0.8, 0.55)), 0.35 * this.inside);
     // a near lightning strike: for that moment the shadowed light is the bolt's, blue-white, from
     // its side, so the house, the trees and the window frames throw hard shadows from it (and it
     // comes in at the windows in their shapes); then back to the sun or the moon

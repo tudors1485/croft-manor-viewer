@@ -330,31 +330,24 @@ export const FLYBYS = {
   newyear: {
     label: 'New Year',
     holiday: true,
-    // 31 December, ten seconds to midnight, the clock running: by the porch, looking out past the
-    // fountain to the gate, as the last seconds count down; then up and out towards the gate, into
-    // the midnight fireworks going up in the fields beyond it as "Happy New Year" and the year are
-    // written in the sky over the drive, on towards them and through the year; then turning back,
-    // round the house from high up, and over the roof towards the gate and the fireworks again
-    // (years: the seconds into the flyby at which the year is written: just after midnight, and as
-    // the camera comes up to where it hangs, so it flies through it)
+    // 31 December, ten seconds to midnight, the clock running: by the fountain, looking up at the
+    // house, as the last seconds count down; then at midnight the fireworks burst right over the house
+    // and "Happy New Year" and the year are written above it, and the camera draws back towards the
+    // gate, rising over the fountain and out through the gateway, keeping the house and the fireworks
+    // in view, and round to a wide view from high over the fields
+    // (years: the seconds into the flyby at which the year is written)
     lapse: { what: 'scenes', every: 1e9, fixed: true, scenes: [{ day: 364, hours: 24 - 11 / 3600, weather: 'clear', run: true, boost: 2.2, years: [12.8, 27, 42.2] }] },
     keys: [
-      k([4.6, 1.7, 0], [4.6, 5, 28], { speed: 0.34 }),
-      k([4.6, 1.9, 4], [4.6, 8, 28], { speed: 0.4 }),
-      k([4.6, 7, 7], [4.4, 26, 58], { speed: 3.5 }),
-      k([4.5, 20, 11], [4.4, 36, 62], { speed: 4.5 }),
-      k([4.4, 31, 20], [4.4, 36, 62], { speed: 2.2 }),
-      k([4.4, 34.5, 40], [4.4, 36, 78], { speed: 1.6 }),
-      k([4.4, 36, 62], [4.4, 40, 88], { speed: 2.6 }),
-      // then turning back, round the house from high up, and over its roof towards the gate and
-      // the fireworks beyond it
-      k([-6, 40, 84], [7, 8, -21], { speed: 3.4 }),
-      k([-40, 32, 60], [7, 8, -21], { speed: 4.2 }),
-      k([-60, 29, 10], [7, 8, -21], { speed: 4.2 }),
-      k([-50, 29, -50], [7, 8, -21], { speed: 4.2 }),
-      k([-14, 27, -68], [5, 12, 20], { speed: 3.4 }),
-      k([3, 23, -42], [5, 14, 60], { speed: 2.2 }),
-      k([4.5, 20, -12], [4.6, 12, 70], { speed: 1 }),
+      k([4.6, 1.7, 1.2], [4.6, 12, -20], { speed: 0.34 }),
+      k([4.6, 1.9, 3.9], [4.6, 18, -20], { speed: 0.4 }),
+      k([4.6, 7.6, 6.6], [4.7, 26, -21], { speed: 2.2 }),
+      k([4.6, 14, 14], [4.8, 30, -21], { speed: 2.8 }),
+      k([4.6, 20, 24], [5, 32, -21], { speed: 3.2 }),
+      k([4.6, 28, 40], [5, 32, -21], { speed: 3.5 }),
+      k([4.6, 34, 62], [5, 30, -21], { speed: 3.5 }),
+      k([28, 36, 58], [5, 26, -21], { speed: 3.5 }),
+      k([42, 34, 40], [5, 24, -21], { speed: 2.2 }),
+      k([45, 32, 30], [5, 24, -21], { speed: 1 }),
     ],
   },
   hall: {

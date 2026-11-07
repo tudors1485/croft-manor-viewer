@@ -743,6 +743,9 @@ export class Soundscape {
     const frozen = unit(env.frozen);
     const speed = Number.isFinite(env.speed) ? Math.max(0, env.speed) : 0;
     const flyby = !!env.flyby;
+    // high up (flying, a drone's view): no birds, crickets or owls, only the wind, stronger
+    const aloft = unit(env.aloft);
+    const ground = 1 - aloft;
     this.snow = snow;
     if (!this.on || !this.ctx) return;
     const t = this.ctx.currentTime;
@@ -756,7 +759,7 @@ export class Soundscape {
     const lull = THREE.MathUtils.smoothstep(0.5 + 0.5 * Math.sin(t * 0.071 + 0.4) * Math.sin(t * 0.113 + 2.1) + 0.15 * Math.sin(t * 0.29), 0.3, 0.75);
     const steady = THREE.MathUtils.smoothstep(windy, 0.55, 0.9);
     const gust = (steady + (1 - steady) * lull) * (0.7 + 0.3 * Math.sin(t * 0.21) * Math.sin(t * 0.53 + 1.3));
-    const wind = 0.17 * Math.pow(windy, 1.3) * gust * (0.25 + 0.75 * outdoors) * (0.6 + 0.4 * day);
+    const wind = 0.17 * Math.pow(Math.max(windy, 0.45 * aloft), 1.3) * gust * (0.25 + 0.75 * outdoors) * (0.6 + 0.4 * day);
     this.windGain.gain.setTargetAtTime(wind, t, 0.5);
     this.windFilter.frequency.setTargetAtTime(380 + 260 * Math.sin(t * 0.13) + 140 * Math.sin(t * 0.37) + 300 * windy * gust, t, 0.8);
     this.howlGain.gain.setTargetAtTime(0.012 * windy * windy * gust * gust * (0.4 + 0.6 * outdoors), t, 0.6);
@@ -770,7 +773,7 @@ export class Soundscape {
     this.rushFilter.frequency.setTargetAtTime(380 + speed * 45, t, 0.25);
 
     // the fountain (silent when frozen), muffled indoors; the clock muffled outdoors
-    this.waterGain.gain.setTargetAtTime(0.5 * (1 - frozen), t, 0.5);
+    this.waterGain.gain.setTargetAtTime(0.5 * (1 - frozen) * ground, t, 0.5);
     this.waterMuffle.frequency.setTargetAtTime(THREE.MathUtils.lerp(9000, 700, inside), t, 0.3);
     this.clockMuffle.frequency.setTargetAtTime(THREE.MathUtils.lerp(9000, 900, outdoors), t, 0.3);
     this.clockGain.gain.setTargetAtTime(THREE.MathUtils.lerp(1, 0.35, outdoors), t, 0.3);
@@ -781,19 +784,19 @@ export class Soundscape {
     }
 
     // crickets from dusk on, on warm nights; through the windows when you're inside
-    const chorus = crickets * Math.max(night, dusk * 0.7) * (1 - 0.8 * rain);
+    const chorus = crickets * Math.max(night, dusk * 0.7) * (1 - 0.8 * rain) * ground;
     this.cricketGain.gain.setTargetAtTime(0.05 * chorus * (0.15 + 0.85 * outdoors), t, 1.0);
     this.shimmerGain.gain.setTargetAtTime(0.012 * chorus * (0.1 + 0.9 * outdoors), t, 1.0);
     if (chorus > 0.01) this._chirps(t);
 
     // birds sing in spring and summer days, not in the rain
-    const song = day * birds * (1 - 0.85 * rain) * (0.35 + 0.65 * outdoors);
+    const song = day * birds * (1 - 0.85 * rain) * (0.35 + 0.65 * outdoors) * ground;
     if (t > this._nextBird) {
       if (day > 0.3 && song > 0.05) this._bird(t + 0.05);
       this._nextBird = t + (0.8 + Math.random() * 3.5) / Math.max(0.12, song);
     }
     if (t > this._nextOwl) {
-      if (night > 0.7 && outdoors > 0.5 && rain < 0.3) this._owl(t + 0.05);
+      if (night > 0.7 && outdoors > 0.5 && rain < 0.3 && aloft < 0.3) this._owl(t + 0.05);
       this._nextOwl = t + 14 + Math.random() * 22;
     }
   }

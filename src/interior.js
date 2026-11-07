@@ -1,0 +1,142 @@
+// The house's finer things, as TRJTA's renders show them: the chandeliers and sconces polished gilt
+// metal that catches the room (the model's gold is a flat texture), and the paintings varnished, each
+// in a gilt frame of its own (the model's are flat pictures on the wall).
+
+import * as THREE from 'three';
+
+/** The connected pieces of a mesh (triangles sharing vertices, welded by position), in world space. */
+function pieces(mesh) {
+  const g = mesh.geometry;
+  const pos = g.attributes.position;
+  const idx = g.index ? g.index.array : Array.from({ length: pos.count }, (_, i) => i);
+  const v = new THREE.Vector3();
+  const key = new Map();
+  const id = new Int32Array(pos.count);
+  const world = [];
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld);
+    world.push(v.clone());
+    const k = `${Math.round(v.x * 200)},${Math.round(v.y * 200)},${Math.round(v.z * 200)}`;
+    if (!key.has(k)) key.set(k, key.size);
+    id[i] = key.get(k);
+  }
+  const parent = Array.from({ length: key.size }, (_, i) => i);
+  const find = (a) => (parent[a] === a ? a : (parent[a] = find(parent[a])));
+  for (let t = 0; t < idx.length; t += 3) {
+    const a = find(id[idx[t]]);
+    parent[find(id[idx[t + 1]])] = a;
+    parent[find(id[idx[t + 2]])] = a;
+  }
+  const groups = new Map();
+  for (let t = 0; t < idx.length; t += 3) {
+    const r = find(id[idx[t]]);
+    if (!groups.has(r)) groups.set(r, []);
+    groups.get(r).push(idx[t], idx[t + 1], idx[t + 2]);
+  }
+  return [...groups.values()].map((tris) => tris.map((i) => world[i]));
+}
+
+/** A gilt frame round a picture: four mitred-looking bars, a raised lip inside. */
+function frameAround(pts, gilt) {
+  // the picture's plane: its normal from the biggest triangle, its sides horizontal and vertical
+  let n = new THREE.Vector3();
+  let best = 0;
+  const e1 = new THREE.Vector3();
+  const e2 = new THREE.Vector3();
+  for (let i = 0; i < pts.length; i += 3) {
+    e1.subVectors(pts[i + 1], pts[i]);
+    e2.subVectors(pts[i + 2], pts[i]);
+    const c = e1.clone().cross(e2);
+    if (c.length() > best) {
+      best = c.length();
+      n = c.normalize();
+    }
+  }
+  if (best < 1e-6 || Math.abs(n.y) > 0.5) return null; // (not hanging on a wall)
+  n.y = 0;
+  n.normalize();
+  const u = new THREE.Vector3(-n.z, 0, n.x);
+  let u0 = Infinity;
+  let u1 = -Infinity;
+  let y0 = Infinity;
+  let y1 = -Infinity;
+  let d = 0;
+  for (const p of pts) {
+    const s = p.dot(u);
+    u0 = Math.min(u0, s);
+    u1 = Math.max(u1, s);
+    y0 = Math.min(y0, p.y);
+    y1 = Math.max(y1, p.y);
+    d += p.dot(n);
+  }
+  d /= pts.length;
+  const w = u1 - u0;
+  const h = y1 - y0;
+  if (w < 0.15 || h < 0.15 || w > 6 || h > 5) return null;
+  const t = THREE.MathUtils.clamp(Math.min(w, h) * 0.07, 0.04, 0.13); // the frame's width
+  const depth = t * 0.6;
+  const group = new THREE.Group();
+  const bar = (len, thick, along, at) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(along === 'u' ? len : thick, along === 'u' ? thick : len, depth), gilt);
+    m.position.copy(at);
+    return m;
+  };
+  const c = new THREE.Vector3(0, 0, 0);
+  // outer bars (the frame sits round the picture, overlapping its edge a little)
+  group.add(bar(w + 2 * t, t, 'u', new THREE.Vector3(0, h / 2 + t / 2 - t * 0.25, 0)));
+  group.add(bar(w + 2 * t, t, 'u', new THREE.Vector3(0, -h / 2 - t / 2 + t * 0.25, 0)));
+  group.add(bar(h + 2 * t, t, 'v', new THREE.Vector3(-w / 2 - t / 2 + t * 0.25, 0, 0)));
+  group.add(bar(h + 2 * t, t, 'v', new THREE.Vector3(w / 2 + t / 2 - t * 0.25, 0, 0)));
+  // the lip: thinner, standing a little proud, just inside
+  const lipT = t * 0.28;
+  const lip = (len, along, at) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(along === 'u' ? len : lipT, along === 'u' ? lipT : len, depth * 1.4), gilt);
+    m.position.copy(at);
+    return m;
+  };
+  group.add(lip(w, 'u', new THREE.Vector3(0, h / 2 - lipT / 2 + t * 0.2, 0)), lip(w, 'u', new THREE.Vector3(0, -h / 2 + lipT / 2 - t * 0.2, 0)));
+  group.add(lip(h, 'v', new THREE.Vector3(-w / 2 + lipT / 2 - t * 0.2, 0, 0)), lip(h, 'v', new THREE.Vector3(w / 2 - lipT / 2 + t * 0.2, 0, 0)));
+  group.traverse((o) => {
+    if (o.isMesh) o.castShadow = o.receiveShadow = true;
+  });
+  // placed on the picture, facing out of the wall
+  const centre = u.clone().multiplyScalar((u0 + u1) / 2).add(n.clone().multiplyScalar(d + depth / 2 - 0.004)).setY((y0 + y1) / 2);
+  group.position.copy(centre).add(c);
+  group.lookAt(centre.clone().add(n));
+  return group;
+}
+
+export function dressInterior(scene, model) {
+  const gilt = new THREE.MeshStandardMaterial({ color: 0xd2a84e, metalness: 1, roughness: 0.3, envMapIntensity: 2.6 });
+  const done = new Set();
+  let frames = 0;
+  model.updateMatrixWorld(true);
+  model.traverse((o) => {
+    if (!o.isMesh) return;
+    const m = o.material;
+    const name = m.name || '';
+    if (/^cm_obj_sconcegold$/.test(name) && !done.has(m)) {
+      // polished gilt: the room in it, bright where the light catches
+      done.add(m);
+      m.metalness = 1;
+      m.roughness = 0.24;
+      m.envMapIntensity = 2.6;
+      m.color.setRGB(1, 0.86, 0.6);
+    }
+    if (/^cm_obj_painting_/.test(name)) {
+      if (!done.has(m)) {
+        done.add(m);
+        m.roughness = 0.42; // (varnished: a soft sheen)
+      }
+      o.userData.frames = [];
+      for (const pts of pieces(o)) {
+        const f = frameAround(pts, gilt);
+        if (!f) continue;
+        scene.add(f);
+        o.userData.frames.push(f);
+        frames++;
+      }
+    }
+  });
+  return { frames };
+}

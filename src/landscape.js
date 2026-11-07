@@ -437,7 +437,7 @@ function billboardMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: THREE.UniformsUtils.merge([
       THREE.UniformsLib.fog,
-      { uMap: { value: null }, uMapBare: { value: null }, uLight: { value: new THREE.Color(1, 1, 1) } },
+      { uMap: { value: null }, uMapBare: { value: null }, uLight: { value: new THREE.Color(1, 1, 1) }, uSnow: seasonUniforms.uSnow },
     ]),
     vertexShader: /* glsl */ `
       #include <common>
@@ -467,6 +467,7 @@ function billboardMaterial() {
       uniform sampler2D uMap;
       uniform sampler2D uMapBare;
       uniform vec3 uLight;
+      uniform float uSnow;
       varying vec2 vUv;
       varying vec3 vSeason;
       void main() {
@@ -480,6 +481,8 @@ function billboardMaterial() {
           vec3 autumn = mix(vec3(0.62, 0.36, 0.03), vec3(0.5, 0.15, 0.02), vSeason.z) * mix(0.45, 1.1, clamp(lum * 4.0, 0.0, 1.0));
           t.rgb = mix(t.rgb, autumn, vSeason.y * leafy);
         }
+        // (snow on the branches and the crowns, more on the upper parts)
+        t.rgb = mix(t.rgb, vec3(0.62, 0.64, 0.68), uSnow * (0.35 + 0.45 * vUv.y));
         gl_FragColor = vec4(t.rgb * uLight * vec3(1.45, 1.55, 1.3), 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>

@@ -11,9 +11,10 @@ import { Lamps } from './lamps.js';
 import { Landscape, makeTerrain, makeHillHeight } from './landscape.js';
 import { Garden } from './garden.js';
 import { MovingIn } from './movingin.js';
+import { dressInterior } from './interior.js';
 import { installGrade } from './look.js';
 import { Quality, LOOKS } from './quality.js';
-import { tuneMaterials, GRASS_TINT, grassShader, TINTS, buildSkyMap } from './materials.js';
+import { tuneMaterials, GRASS_TINT, grassShader, TINTS, buildSkyMap, weatherShader } from './materials.js';
 import { Tour, FLYBYS, SCENES, TOUR_LIGHT, checkPath } from './tour.js';
 import { Soundscape, loadSamples, MORE_SOUNDS } from './sound.js';
 import { seasonAt, seasonUniforms, dateLabel, Snowfall } from './season.js';
@@ -171,7 +172,7 @@ function refreshWeather() {
 }
 
 const LOOK = { exposure: 0.66 };
-const BEAMS = { strength: 0.42 }; // dust in the air indoors: how strongly it scatters sunlight
+const BEAMS = { strength: 0.55 }; // dust in the air indoors: how strongly it scatters sunlight
 const ADAPT = { indoors: 1.75 }; // how far the eye opens up when you go in by day
 let roofed = 1; // 1 under a solid roof, 0 under glass (the pool hall), eased
 let roofCheck = 0;
@@ -911,9 +912,32 @@ async function loadViewpoints() {
   if (pictures.children.length) sel.appendChild(pictures);
   sel.onchange = () => {
     if (sel.value === '') return;
-    const [, pos, target, v] = viewpoints[Number(sel.value)];
+    const i = Number(sel.value);
     sel.value = '';
     sel.blur();
+    goToPlace(i);
+  };
+  // ‹ and ›: the place before and after the last one you went to, round the list
+  const step = (d) => {
+    wakeSound();
+    const n = viewpoints.length;
+    goToPlace((((placeAt < 0 ? (d > 0 ? -1 : 0) : placeAt) + d) % n + n) % n, true);
+  };
+  $('place-prev').onclick = (e) => {
+    e.currentTarget.blur();
+    step(-1);
+  };
+  $('place-next').onclick = (e) => {
+    e.currentTarget.blur();
+    step(1);
+  };
+}
+let placeAt = -1; // the last place gone to (for ‹ and ›)
+function goToPlace(i, named = false) {
+  {
+    placeAt = i;
+    const [name, pos, target, v] = viewpoints[i];
+    if (named) toast(name);
     if (v?.scene) {
       wakeSound();
       setDate(v.scene.day);
@@ -927,7 +951,12 @@ async function loadViewpoints() {
     if (mode === 'tour') leaveTour();
     flyTo(pos, target);
     if (v?.fov) holdLens(v.fov);
-  };
+    else if (lens) {
+      lens = null;
+      camera.fov = LENS;
+      camera.updateProjectionMatrix();
+    }
+  }
 }
 
 // A place's own lens (a longer one, as in the picture it matches): held until you move, then it
@@ -1119,6 +1148,7 @@ function addStatue() {
       return m;
     };
     const stone = named('cm_fishstatue')?.clone() ?? new THREE.MeshStandardMaterial({ color: 0x6f6a5c, roughness: 0.85 });
+    weatherShader(stone); // (a clone doesn't keep the snow and the rain)
     horse.traverse((o) => {
       if (!o.isMesh) return;
       const normalMap = o.material.normalMap;
@@ -1127,6 +1157,7 @@ function addStatue() {
       o.castShadow = o.receiveShadow = true;
     });
     const granite = named('cm_whitestone_0')?.clone() ?? new THREE.MeshStandardMaterial({ color: 0x9a9080, roughness: 0.88 });
+    weatherShader(granite);
     const g = new THREE.Group();
     for (const [w, h, d, y] of [
       [1.95, 0.32, 1.35, 0],
@@ -1317,9 +1348,10 @@ async function prepareWalking(ground) {
     }
     leaves = new FallenLeaves(scene, landscape.treeSpots, (x, z) => landscape.groundHeight(x, z));
     addStatue();
+    console.info('interior', dressInterior(scene, model));
     moving = new MovingIn(scene, model, landscape.obstacles);
     await part(0.4, 'Clipping the hedges and planting the borders');
-    garden = new Garden(scene, { landscape, bvh: geo.boundsTree, gate: landscape.gate });
+    garden = new Garden(scene, { landscape, bvh: geo.boundsTree, gate: landscape.gate, materialAt: (fi) => meshAtFace(geo, fi)?.material.name || '' });
     console.info('garden', garden.build());
     await part(0.5, 'Putting up the lights at the gate and the fountain');
     // lights at the gateway, in the fountain and on the assault course (before the first frame: new lights recompile every shader)
@@ -1591,9 +1623,9 @@ const HOLIDAYS = {
   bonfire: { day: 308, hours: 19.75, weather: 'clear', pos: () => [bonfireAt().x - 1.5, 1.7, bonfireAt().z + 6], look: () => [bonfireAt().x - 5, 4.5, bonfireAt().z - 18] },
   // the lights, and snow falling
   christmas: { day: 357, hours: 16, weather: 'snow', pos: [4.6, 1.7, 19.2], look: [2.5, 5, -6] },
-  // just after midnight, by the porch looking out to the gate: the fireworks going up beyond it, and
-  // the new year written in the sky over the drive
-  newyear: { day: 0, hours: 0.02, weather: 'clear', pos: [4.6, 1.7, 0], look: [4.5, 18, 60] },
+  // just after midnight, on the drive: the fireworks bursting over the house, and the new year
+  // written in the sky above it
+  newyear: { day: 0, hours: 0.02, weather: 'clear', pos: [4.6, 1.7, 19.2], look: [4.5, 18, -20] },
   // the next night with the northern lights: up over the gate, looking north over the house at
   // them (they hang low; on the ground the gate and the house hide most of them)
   aurora: { day: () => nextAuroraNight(dayOfYear(new Date())), hours: 22, weather: 'clear', pos: [4.5, 24, 64], look: [4, 12, -30], orbit: true },
@@ -1962,7 +1994,7 @@ function step(dt, exporting = false) {
     tod.applyAmbient();
   }
   // the sun's shadows: close round you inside, the ground ahead on foot, the estate from above
-  tod.fitShadow(camera, { inside: lamps?.houseBox.containsPoint(camera.position) ? 1 : 0, low: camera.position.y < 9, whole: mode === 'tour' || exporting });
+  tod.fitShadow(camera, { inside: lamps?.houseBox.containsPoint(camera.position) ? 1 : 0, low: camera.position.y < 9, whole: (mode === 'tour' && !lamps?.houseBox.containsPoint(camera.position)) || exporting, house: lamps?.houseBox });
   if (landscape) landscape.update(dt, tod);
   garden?.update(dt, { cold: coldness, wind, night: tod.night, scale: lamps?.glowMat.uniforms.uScale.value });
   stepLens(dt);
@@ -2036,6 +2068,8 @@ function soundEnv() {
     frozen: seasonUniforms.uIce.value,
     speed: camSpeed,
     flyby: mode === 'tour' && !!flybyId,
+    // how high above the ground you are: from 25 m up the ground's sounds fade, gone by 80 m
+    aloft: THREE.MathUtils.smoothstep(camera.position.y - (hillHeight ? hillHeight(camera.position.x, camera.position.z) : 0), 25, 80),
   };
 }
 

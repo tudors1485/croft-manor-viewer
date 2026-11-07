@@ -77,9 +77,10 @@
         </div>
       </details>
 
-      <label class="row">Place
-        <select id="viewpoint"></select>
-      </label>
+      <div class="row">
+        <span>Place</span>
+        <span class="place-controls"><button id="place-prev" class="small" title="The place before" aria-label="The place before">‹</button><select id="viewpoint" aria-label="Place"></select><button id="place-next" class="small" title="The next place" aria-label="The next place">›</button></span>
+      </div>
 
       <div class="row time">
         <span>Time <b id="time-label">15:00</b></span>
@@ -107,10 +108,10 @@
         </select>
       </label>
       <div class="row lights">
-        <span>Holidays</span>
-        <select id="holiday" title="Go to a holiday, or watch its flyby">
-          <option value="">Holidays…</option>
-          <optgroup label="Go there">
+        <span>Scenes</span>
+        <select id="holiday" title="A holiday, a sight or a scene, or a holiday's flyby">
+          <option value="">Scenes…</option>
+          <optgroup label="Holidays">
             <option value="easter">Easter Sunday</option>
             <option value="halloween">Halloween night</option>
             <option value="bonfire">Bonfire Night</option>

@@ -14,6 +14,7 @@ import * as THREE from 'three';
 import { addTreeShader } from './landscape.js';
 import { Particles } from './bonfire.js';
 import { seasonUniforms } from './season.js';
+import { weatherShader } from './materials.js';
 
 function rng(seed) {
   let s = seed >>> 0;
@@ -302,11 +303,12 @@ export class Garden {
    * @param {import('three-mesh-bvh').MeshBVH} o.bvh the collision tree (to find walls)
    * @param {{x:number,z:number}} o.gate
    */
-  constructor(scene, { landscape, bvh, gate }) {
+  constructor(scene, { landscape, bvh, gate, materialAt = () => '' }) {
     this.scene = scene;
     this.landscape = landscape;
     this.bvh = bvh;
     this.gate = gate;
+    this.materialAt = materialAt;
     this.group = new THREE.Group();
     this.group.name = 'Garden';
     scene.add(this.group);
@@ -373,6 +375,8 @@ export class Garden {
     this._grass();
     this._smallPlants();
     this._topiary();
+    this._climbers();
+    this._gatePlants();
     this._trolley();
     this._smoke();
     this.stats.ms = Math.round(performance.now() - t0);
@@ -469,6 +473,7 @@ export class Garden {
     if (!cores.length) return;
     const merged = mergeBoxes(cores);
     const coreMat = new THREE.MeshStandardMaterial({ map: this.pictures.hedge, color: 0xa6b890, roughness: 0.95, envMapIntensity: 0.3 });
+    weatherShader(coreMat); // (snow on its top in the snow season, as on everything open to the sky)
     const coreMesh = new THREE.Mesh(merged, coreMat);
     coreMesh.castShadow = coreMesh.receiveShadow = true;
     this.group.add(coreMesh);
@@ -625,7 +630,7 @@ export class Garden {
       shader.uniforms.uDay = seasonUniforms.uDay;
       shader.uniforms.uSnow = seasonUniforms.uSnow;
       shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nuniform float uWindTime;\nuniform float uWindAmp;\nuniform float uDay;\nvarying float vDry;')
+        .replace('#include <common>', '#include <common>\nuniform float uWindTime;\nuniform float uWindAmp;\nuniform float uDay;\nuniform float uSnow;\nvarying float vDry;')
         .replace(
           '#include <begin_vertex>',
           `#include <begin_vertex>
@@ -635,7 +640,8 @@ export class Garden {
            transformed.z += sin(uWindTime * 2.3 + ip.y * 0.5) * 0.05 * bend * (0.4 + uWindAmp);
            // straw in late summer and autumn, low and grey-brown in winter, fresh in spring
            vDry = smoothstep(200.0, 260.0, uDay) * (1.0 - smoothstep(330.0, 364.0, uDay)) + (1.0 - smoothstep(40.0, 110.0, uDay)) * 0.8;
-           transformed.y *= mix(1.0, 0.65, (1.0 - smoothstep(40.0, 110.0, uDay)));`,
+           transformed.y *= mix(1.0, 0.65, (1.0 - smoothstep(40.0, 110.0, uDay)));
+           transformed.y *= 1.0 - 0.6 * uSnow; // (half buried in snow)`,
         );
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <common>', '#include <common>\nvarying float vDry;\nuniform float uSnow;')
@@ -699,6 +705,10 @@ export class Garden {
     const mat = new THREE.MeshStandardMaterial({ map: this.pictures.rosette, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.8, envMapIntensity: 0.3 });
     mat.onBeforeCompile = (shader) => {
       shader.uniforms.uDay = seasonUniforms.uDay;
+      shader.uniforms.uSnow = seasonUniforms.uSnow;
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', '#include <common>\nuniform float uSnow;')
+        .replace('#include <map_fragment>', '#include <map_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.8, 0.83, 0.88), uSnow * 0.85);');
       shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nuniform float uDay;').replace(
         '#include <begin_vertex>',
         // (they die back in winter, and come up again in spring)
@@ -716,6 +726,8 @@ export class Garden {
     const box = this._leafMaterial(this.pictures.box, { tint: 0xd0e0b8, height: 1.5, stiff: 9 });
     const coreMat = new THREE.MeshStandardMaterial({ map: this.pictures.hedge, color: 0x8fa080, roughness: 0.95, envMapIntensity: 0.3 });
     const potMat = new THREE.MeshStandardMaterial({ color: 0xb4643c, roughness: 0.85 });
+    weatherShader(coreMat);
+    weatherShader(potMat);
     const add = (geo, mat, x, y, z, { cast = true } = {}) => {
       const m = new THREE.Mesh(geo, mat.m ?? mat);
       if (mat.depth) m.customDepthMaterial = mat.depth;
@@ -802,6 +814,128 @@ export class Garden {
     plant.position.set(-10.75, fy + 0.3, -28.15);
     plant.traverse((o) => o.isMesh && (o.castShadow = o.receiveShadow = true));
     this.group.add(plant);
+  }
+
+  // --- climbers up the walls (TRJTA's renders: up the plain brick between the windows) ----------
+
+  _climbers() {
+    const R = this.R;
+    const ray = new THREE.Ray();
+    const o = new THREE.Vector3();
+    // the house's faces, from outside: [ray direction, where rays start, along which axis, range]
+    const faces = [
+      [new THREE.Vector3(0, 0, -1), 8, 'x', [-15, 30]],
+      [new THREE.Vector3(0, 0, 1), -44, 'x', [-15, 30]],
+      [new THREE.Vector3(1, 0, 0), -32, 'z', [-36, -7]],
+      [new THREE.Vector3(-1, 0, 0), 44, 'z', [-36, -7]],
+    ];
+    const hitAt = (dir, from, axis, s, y) => {
+      if (axis === 'x') o.set(s, y, from);
+      else o.set(from, y, s);
+      ray.set(o, dir);
+      return this.bvh.raycastFirst(ray, THREE.DoubleSide, 0, 40);
+    };
+    const spots = [];
+    for (const [dir, from, axis, [a, b]] of faces) {
+      let last = -99;
+      for (let s = a; s <= b; s += 0.5) {
+        if (s - last < 2.6) continue;
+        const base = hitAt(dir, from, axis, s, 0.6);
+        if (!base || !/brick/.test(this.materialAt(base.faceIndex)) || Math.abs(base.face.normal.dot(dir)) < 0.7) continue;
+        const wall = axis === 'x' ? base.point.z : base.point.x;
+        // plain brick up to a height, in line with the foot (no window, no door, no step out)
+        let top = 0.6;
+        for (let y = 1.2; y <= 7.5; y += 0.6) {
+          let ok = true;
+          for (const ds of [-0.3, 0, 0.3]) {
+            const h = hitAt(dir, from, axis, s + ds, y);
+            const p = h ? (axis === 'x' ? h.point.z : h.point.x) : 1e9;
+            if (!h || !/brick/.test(this.materialAt(h.faceIndex)) || Math.abs(p - wall) > 0.25) ok = false;
+          }
+          if (!ok) break;
+          top = y;
+        }
+        if (top < 3) continue;
+        // (the ground in front must be open: a lawn, gravel or a bed)
+        const out = dir.clone().negate();
+        const foot = base.point.clone().addScaledVector(out, 0.25);
+        const g = this._ground(foot.x, foot.z);
+        if (g === null || g > 0.35) continue;
+        if (R() < 0.3) continue; // (not every stretch)
+        spots.push({ foot: new THREE.Vector3(foot.x, g, foot.z), out, up: top - 0.2 - R() * 1.2 });
+        last = s;
+      }
+    }
+    // each one a meandering stem up the wall with side shoots, its leaves flat-ish against the brick
+    const along = [];
+    for (const sp of spots) {
+      const side = new THREE.Vector3(-sp.out.z, 0, sp.out.x);
+      let p = sp.foot.clone();
+      let drift = 0;
+      const n = Math.round(sp.up * 34);
+      for (let k = 0; k < n; k++) {
+        const h = (k / n) * sp.up;
+        drift += (R() - 0.5) * 0.06;
+        drift *= 0.97;
+        p = sp.foot.clone().addScaledVector(side, Math.sin(h * 1.7 + sp.foot.x) * 0.22 + drift).setY(sp.foot.y + h);
+        // (fuller low down, spreading sideways as it climbs)
+        const spread = 0.18 + 0.32 * Math.min(1, h / 2.5);
+        along.push({ p: p.clone().addScaledVector(side, (R() - 0.5) * 2 * spread).addScaledVector(sp.out, 0.06 + R() * 0.12), out: sp.out.clone().add(new THREE.Vector3((R() - 0.5) * 0.6, (R() - 0.2) * 0.6, (R() - 0.5) * 0.6)).normalize(), occ: 0.7 + R() * 0.35 });
+      }
+    }
+    if (!along.length) return;
+    let i = 0;
+    const geo = cardsGeometry(along.length, 0.3, () => along[i++], 57);
+    const mats = this._leafMaterial(this.pictures.box, { tint: 0xc4d4a8, height: 6, stiff: 8 });
+    const mesh = new THREE.Mesh(geo, mats.m);
+    mesh.customDepthMaterial = mats.depth;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    this.group.add(mesh);
+    this.stats.climbers = spots.length;
+  }
+
+  // --- the gate: leafy shrubs either side of the archway, inside and out, and a climber up each pillar
+
+  _gatePlants() {
+    const g = this.gate;
+    if (!g) return;
+    const R = this.R;
+    const ray = new THREE.Ray();
+    const spots = [];
+    const climb = [];
+    for (const side of [-1, 1]) {
+      for (const dir of [-1, 1]) {
+        // (dir -1: outside, looking north at the wall; 1: inside, looking south)
+        const x = g.x + side * 2.3;
+        ray.set(new THREE.Vector3(x, 0.5, g.z - dir * 4), new THREE.Vector3(0, 0, dir));
+        const hit = this.bvh.raycastFirst(ray, THREE.DoubleSide, 0, 8);
+        if (!hit) continue;
+        const z = hit.point.z - dir * 0.6;
+        const y = this._ground(x, z);
+        if (y === null || y > 0.4) continue;
+        spots.push({ x, y, z, s: 0.95 + R() * 0.25, sy: 0.8 + R() * 0.2, rot: R() * 6.28 });
+        spots.push({ x: x + side * 1.1, y, z: z - dir * 0.15, s: 0.75 + R() * 0.2, sy: 0.7, rot: R() * 6.28 });
+        // a climber up the pillar beside the opening
+        const foot = new THREE.Vector3(g.x + side * 1.55, y, hit.point.z - dir * 0.12);
+        for (let k = 0; k < 120; k++) {
+          const h = (k / 120) * 3.6;
+          climb.push({ p: foot.clone().add(new THREE.Vector3((R() - 0.5) * (0.25 + 0.2 * h / 3.6), h, -dir * R() * 0.12)), out: new THREE.Vector3((R() - 0.5) * 0.6, R() * 0.5, -dir).normalize(), occ: 0.75 + R() * 0.3 });
+        }
+      }
+    }
+    const kinds = [this.landscape.leafMaps.bush, this.landscape.leafMaps.oak];
+    if (spots.length) this._instanced(cardsGeometry(150, 0.55, ballPlace(0.8, 0.62, 0.7, 0), 71), this._leafMaterial(kinds[0], { tint: 0xd0e0b4, height: 1.4 }), spots);
+    for (const s of spots) this.obstacles.push({ x: s.x, z: s.z, r: 0.6 * s.s });
+    if (climb.length) {
+      let i = 0;
+      const geo = cardsGeometry(climb.length, 0.3, () => climb[i++], 73);
+      const mats = this._leafMaterial(this.pictures.box, { tint: 0xc4d4a8, height: 4, stiff: 8 });
+      const mesh = new THREE.Mesh(geo, mats.m);
+      mesh.customDepthMaterial = mats.depth;
+      mesh.castShadow = mesh.receiveShadow = true;
+      this.group.add(mesh);
+    }
   }
 
   // --- the zip line's trolley ---------------------------------------------------------------

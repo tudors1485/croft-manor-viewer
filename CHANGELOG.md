@@ -8,6 +8,20 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.45.0, 8 November 2026
+
+Scenes, the places' arrows, sun in every room, climbers, snow on every plant, gilt frames.
+
+- **Scenes**: the *Holidays* menu is now *Scenes* (holidays, sights and their flybys).
+- **‹ and ›** beside Place step to the place before or after, with its name shown.
+- **Sun in every room**: indoors the sun's shadows cover the whole house at once (about 1.3 cm a texel), so every room the sun reaches has the windows' shapes on its floor and walls, near or far (before, rooms more than 16 m away lost them, and could even be lit where the sun can't reach). The sun that comes in is stronger and golden, the sunbeams in the air a little thicker.
+- **Climbers** up the plain brick between the windows, all round the house (24), as in TRJTA 11 and 14; and at the gate, leafy shrubs either side of the archway, inside and out, and a climber up each pillar.
+- **Snow on every plant** in the snow season: the hedges and the clipped evergreens (their tops), their pots, the small plants, the long grass (half buried), the Christmas firs, the stone horse, and the far woods.
+- **Chandeliers and paintings** (TRJTA 12): the chandeliers and sconces polished gilt that catches the room; each painting varnished, in a gilt frame of its own (`src/interior.js`).
+- **Moving in**: the walls keep their colours; where a painting isn't hung yet, a paler patch of wall instead of a hole; the leaning painting the right way up.
+- **New Year**: the fireworks burst right over the house again and the year is written above it; the flyby starts by the fountain looking up at the house, then draws back towards the gate, up over the fountain and out through the gateway, the house and the fireworks in view all the way, and round to a wide view over the fields.
+- **High up**: no birdsong, crickets, owls or fountain from 25 m up (gone by 80 m), only the wind.
+
 ## 0.44.0, 7 November 2026
 
 Moving in.

@@ -11,6 +11,7 @@
 // in more of the trees, lights wound up the gate's pillars and along the wall either side of it.
 
 import * as THREE from 'three';
+import { weatherShader } from './materials.js';
 
 const HALLOWEEN = [298, 306]; // 26 October .. 3 November (days of the year, from 0)
 const CHRISTMAS = [334, 5]; // 1 December .. 6 January
@@ -207,6 +208,7 @@ function bulbs(list, size, kind = 'twinkle') {
 function fir(h) {
   const t = new THREE.Group();
   const needles = new THREE.MeshStandardMaterial({ color: 0x173a22, roughness: 0.9 });
+  weatherShader(needles); // (snow on the branches, on the sides that face the sky)
   const bark = new THREE.MeshStandardMaterial({ color: 0x3a2a1c, roughness: 0.95 });
   const trunk = new THREE.Mesh(new THREE.CylinderGeometry(h * 0.025, h * 0.035, h * 0.2, 8).translate(0, h * 0.1, 0), bark);
   t.add(trunk);
