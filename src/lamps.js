@@ -13,6 +13,11 @@
 import * as THREE from 'three';
 
 const JOIN = 3.2; // fittings closer than this (and at about the same height) share a light
+// Real lights: a fixed number, handed each frame to the light groups that matter most from where
+// you are (near, bright, in view). Every point light costs every pixel, and past a couple of dozen
+// the cost climbs steeply (three more on 41 took a fifth of the frame); and the number never
+// changes, so nothing recompiles as they are handed round.
+const POOL = 18;
 
 /** Bounding boxes of the connected pieces of a merged mesh (world space). */
 function partsIn(mesh) {
@@ -211,7 +216,7 @@ export class Lamps {
         varying float vKind;
         void main() {
           vec4 t = texture2D(uMap, gl_PointCoord);
-          vec3 col = vKind > 1.5 ? vec3(1.0, 0.78, 0.5) * t.a * 1.8 : vKind > 0.5 ? vec3(0.85, 0.92, 1.0) * t.a * 1.6 : t.rgb * t.a * 2.2;
+          vec3 col = vKind > 2.5 ? vec3(1.0, 0.52, 0.1) * t.a * 2.0 : vKind > 1.5 ? vec3(1.0, 0.78, 0.5) * t.a * 1.8 : vKind > 0.5 ? vec3(0.85, 0.92, 1.0) * t.a * 1.6 : t.rgb * t.a * 2.2;
           gl_FragColor = vec4(col * uLevel * vFlicker, 1.0);
         }`,
       transparent: true,
@@ -227,14 +232,25 @@ export class Lamps {
     this._buildLights();
   }
 
-  /** One point light per group of nearby fittings, each switched (and put to bed) on its own. */
+  /** One light group per group of nearby fittings, each switched (and put to bed) on its own (the real lights are handed out among them: _handOut). */
   _buildLights() {
-    for (const l of this.lights) this.scene.remove(l.light);
+    if (!this.pool) {
+      this.pool = [];
+      for (let k = 0; k < POOL; k++) {
+        const light = new THREE.PointLight(0xffffff, 0, 10, 2);
+        light.castShadow = false;
+        light.visible = false;
+        this.scene.add(light);
+        this.pool.push({ light, group: -1 });
+      }
+    }
+    for (const p of this.pool) p.group = -1;
     const groups = [];
     const fixtureGroup = new Int32Array(this.fixtures.length);
     const order = this.fixtures.map((f, i) => i).sort((a, b) => this.fixtures[b].power - this.fixtures[a].power);
     for (const i of order) {
       const f = this.fixtures[i];
+      if (f.glowOnly) continue; // (a glow with no light of its own: it follows another's, below)
       let gi = groups.findIndex(
         (g) => !!g.outdoor === !!f.outdoor && g.kind === f.kind && Math.hypot(g.pos.x - f.pos.x, g.pos.z - f.pos.z) < JOIN && Math.abs(g.pos.y - f.pos.y) < 1.5,
       );
@@ -242,27 +258,28 @@ export class Lamps {
         const g = groups[gi];
         g.pos.multiplyScalar(g.power).addScaledVector(f.pos, f.power).divideScalar(g.power + f.power);
         g.power += f.power;
+        g.range = Math.max(g.range ?? 0, f.range ?? 0) || undefined;
       } else {
         gi = groups.length;
-        groups.push({ pos: f.pos.clone(), power: f.power, kind: f.kind, outdoor: f.outdoor });
+        groups.push({ pos: f.pos.clone(), power: f.power, kind: f.kind, outdoor: f.outdoor, range: f.range });
       }
       fixtureGroup[i] = gi;
     }
+    this.fixtures.forEach((f, i) => {
+      if (f.glowOnly) fixtureGroup[i] = fixtureGroup[f.follow] ?? 0;
+    });
+    this._fixtureGroup = fixtureGroup;
     this.lights = groups.map((g, i) => {
-      const colour = g.kind === 'tube' ? 0xe8f0ff : g.kind === 'flood' || g.kind === 'lantern' ? 0xffc890 : g.kind === 'pool' ? 0x7fe6ff : 0xffb870;
+      const colour = g.kind === 'tube' ? 0xe8f0ff : g.kind === 'flood' || g.kind === 'lantern' ? 0xffc890 : g.kind === 'pool' ? 0x7fe6ff : g.kind === 'fountain' ? 0xfff0d6 : 0xffb870;
       // a shared light is stronger, but less than the sum (the fittings were close together)
       const power = g.power * 0.85;
-      const light = new THREE.PointLight(colour, 0, g.outdoor ? 26 : 9 + Math.sqrt(power) * 1.6, 2);
-      light.position.copy(g.pos);
-      light.castShadow = false;
-      light.visible = false;
-      this.scene.add(light);
+      const range = g.range ?? (g.outdoor ? 26 : 9 + Math.sqrt(power) * 1.6);
       // bedtime: most lights go out between about 23:25 and 01:30, one by one; about a quarter
       // stay on all night, as does the porch lantern; the floodlights go off around half past
       // midnight and the pool light at eleven
       const r = hash(i * 7.31 + g.pos.x * 0.13 + g.pos.z * 0.71);
-      const bedtime = g.kind === 'lantern' ? null : g.kind === 'flood' ? 0.4 + r * 0.25 : g.kind === 'pool' ? 23 : r < 0.25 ? null : 23.4 + ((r - 0.25) / 0.75) * 2.1;
-      return { light, power, pos: g.pos, kind: g.kind, outdoor: !!g.outdoor, bedtime, manual: null, on: 0 };
+      const bedtime = g.kind === 'lantern' ? null : g.kind === 'flood' || g.kind === 'fountain' ? 0.4 + r * 0.25 : g.kind === 'pool' ? 23 : r < 0.25 ? null : 23.4 + ((r - 0.25) / 0.75) * 2.1;
+      return { colour: new THREE.Color(colour), range, power, pos: g.pos, kind: g.kind, outdoor: !!g.outdoor, bedtime, manual: null, on: 0, pooled: 0, score: 0 };
     });
     // the flames take their light group's brightness
     for (const [glow, fixtures] of [
@@ -317,8 +334,18 @@ export class Lamps {
     for (const i of list) this.lights[i].manual = on;
   }
 
+  /** The light group a fixture belongs to ({ light, on, … }), or null. */
+  fixtureLight(i) {
+    return this.lights[this._fixtureGroup?.[i]] ?? null;
+  }
+
   get lightCount() {
     return this.lights.length;
+  }
+
+  /** How many real lights there are for them. */
+  get poolSize() {
+    return this.pool?.length ?? 0;
   }
 
   /**
@@ -340,6 +367,33 @@ export class Lamps {
       if (!hit) continue;
       add(new THREE.Vector3(x, 0.28, hit.point.z + 0.9), 7, 0.2);
     }
+    this._outFlames = flames;
+    this._outdoorGlow();
+    this._buildLights();
+  }
+
+  /**
+   * More lights outside, once their places are known (nightlights.js: the gateway's lanterns, the
+   * fountain's, the assault course's): { pos, kind, power, glow (its size), range, glowOnly and
+   * follow (a glow with no light, lit with that fixture), glowKind }. Before the first frame only:
+   * new lights recompile every shader.
+   */
+  addMore(list) {
+    const base = this.fixtures.length;
+    for (const f of list) {
+      this.fixtures.push({ pos: f.pos, kind: f.kind, power: f.power, outdoor: true, range: f.range, glowOnly: !!f.glowOnly, follow: f.follow != null ? base + f.follow : undefined });
+      this._outFlames.push([f.pos.x, f.pos.y, f.pos.z, f.glow ?? 0.2, Math.random() * 10, f.glowKind ?? 2, this.fixtures.length - 1]);
+    }
+    this._outdoorGlow();
+    this._buildLights();
+  }
+
+  _outdoorGlow() {
+    const flames = this._outFlames;
+    if (this.outdoorGlow) {
+      this.scene.remove(this.outdoorGlow);
+      this.outdoorGlow.geometry.dispose();
+    }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(flames.flatMap((f) => f.slice(0, 3)), 3));
     geo.setAttribute('size', new THREE.Float32BufferAttribute(flames.map((f) => f[3]), 1));
@@ -351,7 +405,6 @@ export class Lamps {
     this.outdoorGlow.frustumCulled = false;
     this.outdoorGlow.renderOrder = 10;
     this.scene.add(this.outdoorGlow);
-    this._buildLights();
   }
 
   get count() {
@@ -393,7 +446,6 @@ export class Lamps {
       l.on += (want - l.on) * (1 - Math.exp(-dt * 3.5));
       if (Math.abs(want - l.on) < 0.002) l.on = want;
       u.uOn.value[i] = l.on * (1 - this.cut);
-      l.light.intensity = l.power * l.on * (1 - this.cut);
       lit = Math.max(lit, l.on);
       if (l.kind === 'tube') tubes = Math.max(tubes, l.on);
       if (!l.outdoor) {
@@ -401,9 +453,10 @@ export class Lamps {
         indoorOn += l.on;
       }
     });
-    // every light stays in the scene while any is lit (adding or removing one recompiles every shader)
+    this._handOut(camera, inside, dt);
+    // the pool stays in the scene while any light is lit (adding or removing one recompiles every shader)
     const any = lit > 0.001;
-    for (const { light } of this.lights) light.visible = any;
+    for (const { light } of this.pool) light.visible = any;
     this.glow.visible = any;
     if (this.outdoorGlow) this.outdoorGlow.visible = any;
     if (this.tlMat) this.tlMat.emissiveIntensity = 2.2 * tubes;
@@ -414,6 +467,56 @@ export class Lamps {
     for (const m of this.glass) m.emissiveIntensity = 0.9 * this.windowsGlow;
   }
 }
+
+const _frustum = new THREE.Frustum();
+const _view = new THREE.Matrix4();
+const _sphere = new THREE.Sphere();
+
+/** Gives the real lights to the light groups that matter most from here: bright, near, in view. */
+Lamps.prototype._handOut = function (camera, inside, dt) {
+  _frustum.setFromProjectionMatrix(_view.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+  const cam = camera.position;
+  const cut = 1 - this.cut;
+  const lit = [];
+  this.lights.forEach((l, i) => {
+    const strength = l.power * l.on * cut;
+    if (strength < 0.01) {
+      l.score = 0;
+      return;
+    }
+    const d = Math.max(0, l.pos.distanceTo(cam) - l.range * 0.6);
+    let score = strength / (1 + (d / 12) ** 2);
+    if (!_frustum.intersectsSphere(_sphere.set(l.pos, l.range))) score *= 0.05; // (behind you, out of sight)
+    // (indoors, the lights outside are behind the walls; outside, the rooms' lights are behind the glass)
+    if (inside === l.outdoor) score *= inside ? 0.12 : 0.35;
+    l.score = score;
+    lit.push(i);
+  });
+  lit.sort((a, b) => this.lights[b].score - this.lights[a].score);
+  const chosen = new Set(lit.slice(0, this.pool.length));
+  // (a group keeps its light while it stays among the chosen; the newly chosen take the free ones)
+  for (const p of this.pool) if (p.group >= 0 && !chosen.has(p.group)) p.group = -1;
+  const has = new Set(this.pool.map((p) => p.group));
+  for (const i of chosen) {
+    if (has.has(i)) continue;
+    const p = this.pool.find((q) => q.group < 0);
+    if (!p) break;
+    p.group = i;
+    this.lights[i].pooled = 0; // (and fades in, rather than popping on)
+  }
+  for (const p of this.pool) {
+    if (p.group < 0) {
+      p.light.intensity = 0;
+      continue;
+    }
+    const l = this.lights[p.group];
+    l.pooled = Math.min(1, l.pooled + dt * 5);
+    p.light.position.copy(l.pos);
+    p.light.color.copy(l.colour);
+    p.light.distance = l.range;
+    p.light.intensity = l.power * l.on * cut * l.pooled;
+  }
+};
 
 function hash(n) {
   const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;

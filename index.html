@@ -54,6 +54,7 @@
       <div class="row modes">
         <button id="mode-orbit">Orbit</button>
         <button id="mode-walk" class="on">Walk</button>
+        <button id="mode-run" title="Walking at a run (Shift walks)">Run</button>
         <button id="mode-fly">Fly</button>
       </div>
 
@@ -95,6 +96,15 @@
         <span>Lights</span>
         <span class="light-buttons"><button id="lights-room" class="small" title="The lights of the room you are in (L)" disabled>Room</button><button id="lights-house" class="small on" title="Every light inside the house, at once (the outdoor lights stay on); by day the clock moves on to the evening">House</button></span>
       </div>
+      <label class="row lights">
+        <span>Your light</span>
+        <select id="my-light" title="A light of your own while you walk at night">
+          <option value="off">None</option>
+          <option value="glow">A glow round you</option>
+          <option value="flashlight">Flashlight</option>
+          <option value="torch">Torch</option>
+        </select>
+      </label>
       <div class="row lights">
         <span>Holidays</span>
         <select id="holiday" title="Go to a holiday, or watch its flyby">
@@ -145,7 +155,7 @@
         <div class="pad"><span></span><button data-key="KeyW">W</button><span></span><button data-key="KeyA">A</button><button data-key="KeyS">S</button><button data-key="KeyD">D</button></div>
         <div class="legend">
           <p><kbd>W A S D</kbd> walk</p>
-          <p><button data-key="ShiftLeft">Shift</button> run</p>
+          <p><button data-key="ShiftLeft">Shift</button> <span id="shift-does">run</span></p>
           <p><button data-key="Space" class="wide">Space</button> jump</p>
           <p><kbd>Mouse</kbd> look</p>
           <p><kbd>Esc</kbd> frees the mouse</p>

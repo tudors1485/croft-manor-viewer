@@ -34,6 +34,7 @@ import { setupPool, poolUniforms } from './pool.js';
 import { installErrorLog, setupReport } from './report.js';
 import { LoadingBar, nextFrame } from './loading.js';
 import { Easter, nextEaster } from './easter.js';
+import { nightLights, MyLight } from './nightlights.js';
 
 installErrorLog();
 
@@ -113,6 +114,10 @@ let frontDoor = null; // (Halloween leaves it ajar)
 let easter = null; // daffodils in spring, the eggs and the bells at Easter (easter.js)
 // the village church, across the fields to the south-east (its bells ring on Easter morning)
 const CHURCH = new THREE.Vector3(820, 25, 900);
+const myLight = new MyLight(scene); // your own light at night: a glow, a flashlight or a torch (nightlights.js)
+let running = false; // Run: walking at a run, Shift to walk
+let nightPools = null; // the floodlights' pools of light on the assault course (painted on: nightlights.js)
+let nightPoolLight = null; // and the light they go on and off with
 let bonfire = null; // Bonfire Night (bonfire.js)
 let park = null; // deer at dawn, bats at summer dusk (park.js)
 let pathProblems = null; // what the check of the camera paths found (for the console)
@@ -231,7 +236,9 @@ function setMode(next) {
   }
   const prev = mode;
   mode = next;
-  for (const m of ['orbit', 'walk', 'fly']) $(`mode-${m}`).classList.toggle('on', mode === m);
+  for (const m of ['orbit', 'walk', 'fly']) $(`mode-${m}`).classList.toggle('on', mode === m && !(m === 'walk' && running));
+  $('mode-run').classList.toggle('on', mode === 'walk' && running);
+  $('shift-does').textContent = running ? 'walk' : 'run';
   $('tour').classList.toggle('on', mode === 'tour' && !flybyId);
   $('tour').textContent = mode === 'tour' && !flybyId ? 'Stop the tour' : 'Take the tour';
   document.body.classList.toggle('touring', mode === 'tour');
@@ -273,12 +280,15 @@ function setMode(next) {
   updateLockHint();
 }
 let pendingWalk = false;
-for (const m of ['orbit', 'walk', 'fly']) {
+for (const m of ['orbit', 'walk', 'fly', 'run']) {
   $(`mode-${m}`).onclick = (e) => {
     wakeSound();
-    setMode(m);
+    // (Run is walking at a run: Shift walks instead)
+    if (m === 'run' || m === 'walk') running = m === 'run';
+    const to = m === 'run' ? 'walk' : m;
+    setMode(to);
     e.currentTarget.blur(); // so Space does not press the button again
-    if ((m === 'walk' || m === 'fly') && mode === m && !look.isLocked) lockMouse();
+    if ((to === 'walk' || to === 'fly') && mode === to && !look.isLocked) lockMouse();
   };
 }
 // The keys for the mode: under the panel if there is room for them there, else bottom right.
@@ -762,7 +772,7 @@ function walkInput() {
     forward: (held('KeyW', 'ArrowUp') ? 1 : 0) - (held('KeyS', 'ArrowDown') ? 1 : 0),
     right: (held('KeyD', 'ArrowRight') ? 1 : 0) - (held('KeyA', 'ArrowLeft') ? 1 : 0),
     jump: held('Space'),
-    run: held('ShiftLeft', 'ShiftRight'),
+    run: running !== held('ShiftLeft', 'ShiftRight'),
   };
 }
 function moveFly(dt) {
@@ -1115,6 +1125,16 @@ async function prepareWalking(ground) {
       snowman.setSnow(seasonUniforms.uSnow.value);
     }
     leaves = new FallenLeaves(scene, landscape.treeSpots, (x, z) => landscape.groundHeight(x, z));
+    // lights at the gateway, in the fountain and on the assault course (before the first frame: new lights recompile every shader)
+    {
+      const pond = water?.surfaces.filter((w) => w.outdoor).sort((a, b) => a.box.getCenter(new THREE.Vector3()).distanceTo(new THREE.Vector3(4.6, 0, 5)) - b.box.getCenter(new THREE.Vector3()).distanceTo(new THREE.Vector3(4.6, 0, 5)))[0];
+      const night = nightLights({ bvh: geo.boundsTree, materialAt: (fi) => meshAtFace(geo, fi)?.material.name || '', gate: landscape.gate, fountain: pond?.box ?? null });
+      scene.add(night.group);
+      lamps.addMore(night.fixtures);
+      nightPools = night.poolMat;
+      nightPoolLight = lamps.fixtureLight(lamps.fixtures.length - night.fixtures.length + night.courseLight);
+      console.info(`night lights: ${night.fixtures.length} (${night.markers} markers on the assault course); ${lamps.lightCount} lights in all`);
+    }
     easter = new Easter(scene, { isLawn: (x, z) => landscape._grassAt(x, z), ground: (x, z) => landscape.groundHeight(x, z), obstacles: landscape.obstacles, gate: landscape.gate, drive: landscape.drive, lawnEdge: lawn.max.z });
     easter.onFound = (n, total) => {
       sound.chime();
@@ -1229,6 +1249,20 @@ $('lights-room').onclick = (e) => {
 };
 // The house: every light inside goes out (or comes on) at once, the outdoor lights stay; by day
 // the clock moves on to the evening first, so you can see it
+$('my-light').onchange = (e) => {
+  myLight.set(e.target.value);
+  try {
+    localStorage.setItem('croft-my-light', myLight.kind);
+  } catch {}
+  e.target.blur();
+};
+{
+  let saved = null;
+  try {
+    saved = localStorage.getItem('croft-my-light');
+  } catch {}
+  if (saved && [...$('my-light').options].some((o) => o.value === saved)) myLight.set(($('my-light').value = saved));
+}
 $('lights-house').onclick = (e) => {
   wakeSound();
   const on = !e.currentTarget.classList.contains('on');
@@ -1561,6 +1595,9 @@ function step(dt, exporting = false) {
     const walking = (mode === 'walk' && walker) || vr.presenting;
     const hand = walking ? (vr.presenting ? camera.position.clone().setY(camera.position.y - 0.65) : walker.feet.clone().setY(walker.feet.y + 0.95)) : null;
     lanterns.update(dt, hand, tod.night, lamps.glowMat.uniforms.uScale.value);
+    // your own light: while you walk, once it is getting dark (or under a dark sky indoors)
+    myLight.update(dt, camera, mode === 'walk' && !!walker, THREE.MathUtils.smoothstep(tod.night, 0.25, 0.7));
+    if (nightPools) nightPools.opacity = (nightPoolLight?.on ?? 0) * (1 - lamps.cut);
     park?.update(dt, { sunDeg, hours: tod.hours, day: seasonDay, camera, onFoot: mode === 'walk' });
     easter?.update(dt, { day: seasonDay, night: tod.night, snow: seasonUniforms.uSnow.value, wind: weather.wind, feet: mode === 'walk' && walker ? walker.feet : null });
     // Easter morning: the church bells across the fields, from a quarter past nine until half past eleven

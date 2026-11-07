@@ -8,6 +8,20 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.32.0, 7 November 2026
+
+- Run, beside Walk, Orbit and Fly: you walk at a run, and Shift walks.
+- Your light, in the panel: while you walk at night, a soft glow round you, a flashlight, or a flaming torch. It is remembered.
+- Night lights: lanterns at the gateway, uplights in the fountain, and safety lights on the assault course (a floodlight pole at each corner and amber markers along the boxes).
+- Faster at night, by about a third: only 18 real lights are lit at once, handed each frame to the ones that matter from where you are. It looks the same. Measured at 2400×1350 against 0.31.0:
+
+  | View, at night | 0.31.0 | 0.32.0 |
+  |---|---|---|
+  | The front | 28 fps | 37 fps |
+  | The hall | 43 fps | 52 fps |
+  | The gallery | 44 fps | 49 fps |
+  | The assault course | 35 fps | 46 fps |
+
 ## 0.31.0, 7 November 2026
 
 - Easter, worked out for each year (28 March in 2027), in the Holidays menu and as a flyby:
