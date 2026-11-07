@@ -8,6 +8,11 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.23.0, 7 November 2026
+
+- Deer at dawn: a small herd grazes in the field south-west of the gate from first light until a couple of hours after sunrise. Walk up to them and they look up and bound away. (Quaternius's Deer and Stag, CC0.)
+- Bats at summer dusk: from late May to early September, for about an hour after sunset, bats flit round the front of the house and over the fountain.
+
 ## 0.22.0, 7 November 2026
 
 - A rainbow when the sun comes out after a shower, opposite the sun, with a fainter second bow above it. It needs the sun lower than 42°, so look for one in the morning or late afternoon after rain. *With seasons and weathers* has one among its cuts.

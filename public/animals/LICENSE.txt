@@ -1,0 +1,6 @@
+deer.glb  "Deer" by Quaternius, https://poly.pizza/m/T6Cs7tmMHJ
+stag.glb  "Stag" by Quaternius, https://poly.pizza/m/tQdzbZ1Cmw
+
+Both CC0 1.0 (public domain dedication): https://creativecommons.org/publicdomain/zero/1.0/
+Changed here: trimmed to the animations the viewer uses (Eating, Walk, Idle, Idle_Headlow,
+Gallop), keyframes resampled.

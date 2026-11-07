@@ -25,6 +25,7 @@ import { Bonfire } from './bonfire.js';
 import { Storm } from './storm.js';
 import { Rainbow } from './rainbow.js';
 import { Footprints } from './footprints.js';
+import { Park } from './park.js';
 import { makeVideo, FORMATS, videoSupported } from './video.js';
 import { setupPool, poolUniforms } from './pool.js';
 import { installErrorLog, setupReport } from './report.js';
@@ -99,6 +100,7 @@ let leaves = null; // fallen leaves under the trees in autumn (leaves.js)
 let festive = null; // pumpkins at Halloween, lights at Christmas (festive.js)
 let spooky = null; // Halloween night's figures and ghosts (spooky.js)
 let bonfire = null; // Bonfire Night (bonfire.js)
+let park = null; // deer at dawn, bats at summer dusk (park.js)
 let pathProblems = null; // what the check of the camera paths found (for the console)
 let forcedWeather = null;
 const live = new LiveWeather(() => {
@@ -936,6 +938,14 @@ async function prepareWalking(ground) {
     const moves = [...tour.tourMoves, ...Object.values(tour.flybyMoves)];
     const problems = await checkPath(moves, geo.boundsTree, opens, { crowns: landscape.crowns, allow: [frontWindow] });
     pathProblems = problems;
+    // the wildlife: the deer keep clear of wherever a camera path passes low
+    const low = [];
+    for (const mv of moves) for (let i = 0; i <= 300; i++) {
+      const pt = mv.pos.getPointAt(i / 300);
+      if (pt.y < 14) low.push(pt);
+    }
+    park = new Park(scene, { ground: groundAt, avoid: low });
+    park.load().catch((err) => console.warn('the deer did not load:', err.message));
     if (problems.length) console.warn(`camera paths touch walls or trees at ${problems.length} points`, JSON.stringify(problems.slice(0, 12)));
     else console.info('camera paths: clear of walls and trees');
     console.info(`landscape: ${st.trees} trees, ${st.bushes} bushes, ${st.billboards} far trees, ${Math.round(st.triangles / 1000)}k triangles, ${st.ms} ms`);
@@ -1303,6 +1313,7 @@ function step(dt, exporting = false) {
       festive.setScale(lamps.glowMat.uniforms.uScale.value);
     }
     spooky?.update(dt, camera, seasonDay, tod.night);
+    park?.update(dt, { sunDeg, hours: tod.hours, day: seasonDay, camera, onFoot: mode === 'walk' });
     if (bonfire) {
       bonfire.update(dt, { day: seasonDay, hours: tod.hours, level: tod.lamps, wind, camera, exporting });
       bonfire.setScale(lamps.glowMat.uniforms.uScale.value);
@@ -1614,6 +1625,9 @@ window.manor = {
   },
   rainbow,
   footprints,
+  get park() {
+    return park;
+  },
   get pathProblems() {
     return pathProblems;
   },
