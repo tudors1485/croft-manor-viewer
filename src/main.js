@@ -18,7 +18,7 @@ import { installGrade } from './look.js';
 import { Quality, LOOKS } from './quality.js';
 import { tuneMaterials, GRASS_TINT, grassShader, TINTS, buildSkyMap, weatherShader } from './materials.js';
 import { Tour, FLYBYS, SCENES, TOUR_LIGHT, checkPath } from './tour.js';
-import { Soundscape, loadSamples, MORE_SOUNDS } from './sound.js';
+import { Soundscape, loadSamples, MORE_SOUNDS, LATER_SOUNDS } from './sound.js';
 import { seasonAt, seasonUniforms, dateLabel, Snowfall } from './season.js';
 import { weatherAt, WEATHERS, Rainfall } from './weather.js';
 import { LiveWeather } from './liveweather.js';
@@ -27,6 +27,8 @@ import { FallenLeaves } from './leaves.js';
 import { Festive } from './festive.js';
 import { Spooky } from './spooky.js';
 import { Haunt, findWindows } from './haunt.js';
+import { Lure } from './lure.js';
+import { HauntInside } from './hauntin.js';
 import { Bonfire } from './bonfire.js';
 import { Storm } from './storm.js';
 import { Santa } from './santa.js';
@@ -106,6 +108,8 @@ let weather = weatherAt(145, 15, 0);
 let wet = 0; // the ground stays wet for a while after the rain stops
 let wind = 0.2; // eased towards the weather's wind, for the trees and the sound
 let coldness = 0; // 0 a warm day .. 1 a cold one (refreshWeather): smoke from the chimneys
+let hauntIn = null; // Halloween night inside: the kitchen, the zombies' party at the red pool, the bedroom, the attic (hauntin.js)
+let lure = null; // Halloween night outside: the figure who lures you to the graveyard, and the decorations (lure.js)
 let haunt = null; // Halloween night: the rooms behind every window, and the candle-bearer (haunt.js)
 let clockHands = null; // the great hall's clock keeping the viewer's time (interior.js)
 let moving = null; // Moving in (Sights): crates in the hall (movingin.js)
@@ -646,6 +650,7 @@ function applyLapse(l) {
       if (sc.halloween) {
         spooky.reset();
         haunt?.reset();
+        lure?.reset();
       }
     }
     // the Santa's sleigh flyby: you ride with him
@@ -1474,7 +1479,10 @@ async function prepareWalking(ground) {
     frontDoor = front ?? null;
     festive = new Festive(scene, { bvh: geo.boundsTree, door: front, oaks, gate: landscape.gate });
     for (const pk of festive.pumpkins) landscape.obstacles.push({ x: pk.position.x, z: pk.position.z, r: 0.3, when: () => festive.halloween.visible });
-    spooky = new Spooky(scene, { bvh: geo.boundsTree, materialAt: (fi) => meshAtFace(geo, fi)?.material.name || '', houseBox: lamps.houseBox, gate: landscape.gate, door: front?.centre ?? null, ground: (x, z) => landscape.groundHeight(x, z) });
+    // (the figure in the gateway is the lure's now: lure.js)
+    spooky = new Spooky(scene, { bvh: geo.boundsTree, materialAt: (fi) => meshAtFace(geo, fi)?.material.name || '', houseBox: lamps.houseBox, gate: null, door: front?.centre ?? null, ground: (x, z) => landscape.groundHeight(x, z) });
+    hauntIn = new HauntInside(scene, { bvh: geo.boundsTree, houseBox: lamps.houseBox, poolUniforms: water?.surfaces.find((w) => !w.outdoor)?.uniforms ?? null, sound: wildSound, say: (text) => toast(text) });
+    lure = new Lure(scene, { gate: landscape.gate, ground: (x, z) => landscape.groundHeight(x, z) ?? hillHeight(x, z), bvh: geo.boundsTree, landscape, door: front, sound: wildSound });
     // the rooms behind every window on Halloween night, and the one who walks them with a candle
     {
       const bw = spooky.bay?.window;
@@ -2162,6 +2170,8 @@ function step(dt, exporting = false) {
     if (spooky) {
       spooky.update(dt, camera, seasonDay, tod.night, tod.flash);
       haunt?.update(dt, { on: Spooky.isOn(seasonDay, tod.night), camera, flash: tod.flash, flight: spooky.flight, candlesOut: spooky.candlesOut });
+      hauntIn?.update(dt, { on: Spooky.isOn(seasonDay, tod.night), camera });
+      lure?.update(dt, { on: Spooky.isOn(seasonDay, tod.night), flight: mode === 'tour', camera, flash: tod.flash, level: tod.lamps, strike: () => storm.strike(modelCentre, 160 + Math.random() * 120, true, true), scale: lamps.glowMat.uniforms.uScale.value });
       // Halloween evening: the house dark, the lights outside failing in the storm, the front door ajar (and stirring in the wind)
       const hallowe = Spooky.isOn(seasonDay, tod.night);
       lamps.dark = hallowe;
@@ -2289,9 +2299,19 @@ let exporting = false;
 let videoDoorEvents = []; // doors that open during a video frame, for its sound
 let videoSoundEvents = []; // the festivals' sounds during a video frame: [what, ...its arguments]
 // the wildlife's calls: played, or noted down for the video's soundtrack
+// the long recordings (music) load the first time something asks for one
+const laterLoading = new Set();
+function wantSound(name) {
+  if (sound.has(name) || laterLoading.has(name) || !LATER_SOUNDS.includes(name)) return;
+  laterLoading.add(name);
+  loadSamples([name]).catch(() => {});
+}
 const wildSound = {
   sample: (name, p, opts) => (exporting ? videoSoundEvents.push(['sample', name, p?.clone() ?? null, opts]) : sound.sample(name, p, opts)),
-  has: (name) => sound.has(name),
+  has: (name) => {
+    wantSound(name);
+    return sound.has(name);
+  },
   duration: (name) => sound.duration(name),
 };
 // The festivals' sounds (the bonfire, rockets and bangs, the thunder): played as they happen, or,
@@ -2532,6 +2552,12 @@ window.manor = {
   murmuration,
   get haunt() {
     return haunt;
+  },
+  get lure() {
+    return lure;
+  },
+  get hauntIn() {
+    return hauntIn;
   },
   get statue() {
     return statue;

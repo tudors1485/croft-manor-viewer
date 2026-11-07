@@ -146,7 +146,14 @@ export class Park {
       for (const clip of g.animations) actions[clip.name.replace(/^.*\|/, '')] = mixer.clipAction(clip);
       return { holder, model, mixer, actions, current: null };
     };
-    if (hound1 && hound2) for (const g of [hound1, hound2, hound1, hound2]) this.hounds.push(rig(g, 1.05));
+    if (hound1 && hound2) {
+      // (beagle-shaped foxhounds; every other one a darker tricolour)
+      [hound1, hound2, hound1, hound2].forEach((g, i) => {
+        const h = rig(g, 1.05);
+        if (i % 2) h.model.traverse((o) => o.isMesh && ((o.material = o.material.clone()), o.material.color.multiplyScalar(0.72)));
+        this.hounds.push(h);
+      });
+    }
     if (horse) {
       this.horse = rig(horse, 2.5);
       this._saddle(this.horse);

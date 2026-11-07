@@ -62,6 +62,21 @@ floor-creak              "Squeaking parquet 1", BigSoundBank (cut to 3 s)       
 rocking-chair            a creak made from BigSoundBank's squeaking parquet recordings  CC0 1.0
                          (bsb3051, bsb3053, bsb3060), looped
 
+whispers                 "Ghostly whispers" by qubodup, Freesound 194628 (cut)           CC0 1.0
+child-giggle             a giggle by RaspberryTickle, Freesound 203230                   CC0 1.0
+moan                     "Ghost #2", Joseph SARDIN, BigSoundBank s2047 (slowed)         CC0 1.0
+eerie-whistle            "Ghost on the flute #1", Joseph SARDIN, BigSoundBank s2054      CC0 1.0
+running-gravel           running on gravel, florianreichelt, Freesound 456038 (cut)      CC0 1.0
+music-box                "4 music box tracks" by Aureolus_Omicron, OpenGameArt (cut)     CC0 1.0
+zombie-1 to zombie-4     "Undead moans" by AntumDeluge, OpenGameArt                      CC0 1.0
+zombie-party             "Death Waltz" by northivanastan, OpenGameArt                    CC0 1.0
+cauldron                 bubbling, LilMati, Freesound 506505 (cut)                       CC0 1.0
+door-slam                "Door slamming #3", Joseph SARDIN, BigSoundBank s1339           CC0 1.0
+starlings                a murmuration taking off, ilesinge, Freesound 545942            CC0 1.0
+balloon-burner           a hot-air balloon's burner, YannSauvin, Freesound 778358        CC0 1.0
+party-music              Strauss, "Kaiserwalzer" (a section), Musopen, Wikimedia Commons CC0 1.0
+gramophone               "Hearts and Flowers", Victor Orchestra, 1908, Wikimedia Commons public domain
+
 CC0 1.0: https://creativecommons.org/publicdomain/zero/1.0/
 CC BY-SA 3.0: https://creativecommons.org/licenses/by-sa/3.0/
 CC BY-SA 4.0: https://creativecommons.org/licenses/by-sa/4.0/

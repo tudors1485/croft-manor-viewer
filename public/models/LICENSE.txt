@@ -21,3 +21,24 @@ crate-big.glb    "Wooden Military Crate" by Prabhjinder Singh, https://polyhaven
 chest.glb        "Wooden Crate 02" by James Ray Cock and Jurita Burger, https://polyhaven.com/a/wooden_crate_02
 crate-small.glb  "Wooden Crate 01" by James Ray Cock, https://polyhaven.com/a/wooden_crate_01
 box.glb          "Cardboard Box 01" by Rahul Chaudhary, https://polyhaven.com/a/cardboard_box_01
+
+halloween/ (Halloween night inside, hauntin.js; outside, lure.js):
+zombie-green.glb    "Zombie" by Quaternius, https://poly.pizza/m/VlXjG0N8Eg                 CC0 1.0
+zombie-blue.glb     "Zombie" by Quaternius, https://poly.pizza/m/22K0aSZkHV                 CC BY 3.0
+zombie-blocky.glb   "Zombie" by Quaternius, https://poly.pizza/m/JoBvxIUpZP                 CC0 1.0
+skeleton.glb        (now with the dance) "Skeleton" by Quaternius, without its dagger    CC0 1.0
+                    the dance, idle and walk added to the zombies and the skeleton are from
+                    Quaternius's Universal Animation Library,
+                    https://quaternius.itch.io/universal-animation-library             CC0 1.0
+cauldron.glb        "Cauldron" by Quaternius, https://poly.pizza/m/QaWJOPa6Gt                CC0 1.0
+cobweb.glb          "Cobweb" by Quaternius, https://poly.pizza/m/EHYNWew6JK                  CC0 1.0
+jars.glb            "Chemistry Set" by Jiří Ptáček, https://polyhaven.com/a/chemistry_set   CC0 1.0
+trunk.glb           "Treasure Chest" by Rico Cilliers, https://polyhaven.com/a/treasure_chest   CC0 1.0
+spinning-wheel.glb  "Spinning Wheel 01" by Sofia Pahaoja, https://polyhaven.com/a/spinning_wheel_01   CC0 1.0
+dress-form.glb      "Dress form" by reyshapes, https://poly.pizza/m/tYwjQJvcFX              CC0 1.0
+doll.glb            "Doll" by CreativeTrio, https://poly.pizza/m/YUAwclCDrF                  CC0 1.0
+birdcage.glb        "Victorian birdcage" by Poly by Google, https://poly.pizza/m/0d4ExMmqXUV   CC BY 3.0
+gramophone.glb      "Gramophone" by Don Carson, https://poly.pizza/m/9MZ0sCt1REv            CC BY 3.0
+witch-hat.glb       "Witch hat" by J-Toastie, https://poly.pizza/m/fy1Elzr3nl                CC BY 3.0
+(textures shrunk; some scaled to metres or decimated)
+CC BY 3.0: https://creativecommons.org/licenses/by/3.0/

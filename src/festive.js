@@ -90,7 +90,7 @@ function faceCanvas(kind) {
 }
 
 /** A pumpkin: ribbed, a little squat, with a stalk. kind 0 grins, 1 is scared, 2 is not carved. */
-function pumpkin(radius, kind) {
+export function pumpkin(radius, kind) {
   const geo = new THREE.SphereGeometry(radius, 64, 32);
   const p = geo.attributes.position;
   const uv = geo.attributes.uv;
@@ -147,7 +147,7 @@ function glowSprite() {
  * time), 'chase' (warm white, then every so often red, green and gold running along the string),
  * 'icicle' (cool white, a drip of light running down each icicle).
  */
-function bulbs(list, size, kind = 'twinkle') {
+export function bulbs(list, size, kind = 'twinkle') {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(list.flatMap((b) => b.pos), 3));
   geo.setAttribute('colour', new THREE.Float32BufferAttribute(list.flatMap((b) => b.colour), 3));

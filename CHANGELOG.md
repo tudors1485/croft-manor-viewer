@@ -8,6 +8,22 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.50.0, 8 November 2026
+
+Halloween: the lure, the graveyard, the house dressed, and every room haunted.
+
+- **The one at the gate** (`src/lure.js`): on Halloween night a dark figure stands in the gateway. Come near and it turns and runs, out through the gate and down the drive, and stops again further off in the fog, waiting, whispering, giggling, moaning, whistling to draw you on. Follow it and it runs on, off the drive and across the fields, to a clearing in the woods.
+- **The surprise**: an old graveyard behind an iron fence, round a dead tree with a swing. Step inside and the candles on the graves flare, a music box plays, the swing swings higher and higher by itself, the figure stands in the open grave, and dark figures appear all round among the stones; then the lightning strikes and they are all gone. Walk away, and later the figure is back in the gateway. (It replaces the figure that used to appear in the gateway behind you.)
+- **The house dressed**: cobwebs in the gate's arch and the porch; sheet ghosts hanging from the oaks by the gate, swaying; a skeleton on the steps who waves as you come up; a few headstones on the front lawn; pumpkins lit along both sides of the drive; bats round the roof.
+- **Inside** (`src/hauntin.js`):
+  - the kitchen: a cauldron bubbling on the floor, green steam rising, jars and bottles on the table, a witch's hat, a broom against the wall;
+  - the pool runs red and the dead have a party: zombies and skeletons dancing round it and two in it, waist-deep, a gramophone playing a waltz, the light turning red, green and violet, and now and then a groan;
+  - the bedroom: by one candle, a doll on the bed who turns to wherever you are, something under the covers breathing, a music box as you come in;
+  - the attic: dress forms, a trunk whose lid lifts and drops, a birdcage swinging, cobwebs, a spinning wheel, and a ghost who floats, turns to you and talks (in the browser's own voice, low and slow, the words shown).
+- **The hounds** are beagle-shaped foxhounds now (a low-poly beagle, CC BY 3.0, on the wolf's animations), instead of the recoloured wolf and husky. No free realistic dog model exists.
+- Models: Quaternius's zombies and skeleton with a dance, his cauldron and cobweb; Poly Haven's trunk, jars and spinning wheel; a dress form, a doll; Poly by Google's birdcage, Don Carson's gramophone, J-Toastie's witch's hat (CC BY 3.0). Recordings: whispers, a giggle, a moan, a whistle, running feet, a music box, zombie groans, a waltz, a cauldron, a door (CC0). All loaded only on Halloween night (models) or when first heard (music).
+- Speed: 30 to 60 fps across the scenes (the Halloween pool 45, the graveyard 60).
+
 ## 0.49.0, 8 November 2026
 
 Six new sights (Scenes › Sights).

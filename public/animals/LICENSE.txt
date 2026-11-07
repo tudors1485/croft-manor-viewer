@@ -15,10 +15,9 @@ pigeon.glb  "Dove" by Poly by Google, https://poly.pizza/m/2jmH3trzPFf       CC 
 robin.glb   "Robin" by jeremy, https://poly.pizza/m/53HOg-b1F4r              CC BY 3.0 (recoloured
             as a European robin)
 
-hound-1.glb "Wolf" by Quaternius, https://poly.pizza/m/P1gU3Qkr9r, recoloured as a
-            tan-and-white hound                                               CC0 1.0
-hound-2.glb "Husky" by Quaternius, https://poly.pizza/m/wcWiuEqwzq, recoloured as a
-            black-and-tan hound                                               CC0 1.0
+hound-1.glb "Beagle" by Poly by Google, https://poly.pizza/m/0BnDT3T1wTE (CC BY 3.0),
+hound-2.glb on the rig and animations of "Wolf" by Quaternius, https://poly.pizza/m/P1gU3Qkr9r
+            (CC0 1.0); the second a darker tricolour                          CC BY 3.0
 terrier.glb "Shiba Inu" by Quaternius, https://poly.pizza/m/y4wdQpg767, recoloured
             white and tan                                                     CC0 1.0
 mouse.glb   "Rat" by Quaternius, https://poly.pizza/m/iltq5bVNaV, recoloured

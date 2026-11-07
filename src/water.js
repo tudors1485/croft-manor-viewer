@@ -47,6 +47,7 @@ float iceCracks(vec2 p) {
 }
 uniform float uSnowOnIce;
 uniform float uGlow;
+uniform float uBlood;
 uniform float uMinAlpha;
 uniform float uMinReflect;
 varying vec4 vMirrorCoord;
@@ -97,6 +98,7 @@ export class WaterSurface {
       uIce: opts.outdoor ? seasonUniforms.uIce : { value: 0 },
       uSnowOnIce: opts.outdoor ? seasonUniforms.uSnow : { value: 0 },
       uGlow: { value: 0 }, // the indoor pool, lit from below at night
+      uBlood: { value: 0 }, // Halloween night: the indoor pool runs red (hauntin.js)
       // how clear the water is looking straight down: the indoor pool's basin is tinted and
       // has its caustics, so it can be clear; the others need more body to read as water
       uMinAlpha: { value: opts.outdoor ? 0.74 : 0.4 },
@@ -169,7 +171,7 @@ export class WaterSurface {
              // the water itself: a clear teal that deepens away from straight down
              // the water body: tiles seen through it turn teal, more so the more water you look through
              float lum = dot(gl_FragColor.rgb, vec3(0.2126, 0.7152, 0.0722));
-             vec3 body = vec3(0.2, 0.58, 0.66) * (0.3 + lum * 0.9);
+             vec3 body = mix(vec3(0.2, 0.58, 0.66), vec3(0.55, 0.02, 0.03), uBlood) * (0.3 + lum * 0.9);
              vec3 below = mix(gl_FragColor.rgb, body, 0.7) * (1.0 - uDepthTint * (1.0 - cosT));
              vec3 sky = gl_FragColor.rgb;
              vec3 refl = mix(sky, mirror, uMirrorOn);
@@ -179,7 +181,9 @@ export class WaterSurface {
              // (blended in linear light behind the post effects, so it needs to be fairly opaque to read)
              gl_FragColor.a = clamp(mix(max(gl_FragColor.a, uMinAlpha), 1.0, fresnel * 0.9), 0.0, 1.0);
              // the pool light below, glowing up through the water at night
-             gl_FragColor.rgb += uGlow * vec3(0.1, 0.38, 0.46) * (0.55 + 0.45 * cosT);
+             gl_FragColor.rgb += uGlow * mix(vec3(0.1, 0.38, 0.46), vec3(0.5, 0.02, 0.02), uBlood) * (0.55 + 0.45 * cosT);
+             // (red right through: the room's reflection in it too)
+             gl_FragColor.rgb = mix(gl_FragColor.rgb, gl_FragColor.rgb * vec3(1.1, 0.18, 0.16), uBlood * 0.8);
              // frozen: the lit ice itself, with only a faint sheen of the sky
              if (uIce > 0.001) {
                gl_FragColor.rgb = mix(gl_FragColor.rgb, ice_lit, uIce);
