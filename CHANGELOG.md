@@ -8,6 +8,10 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.25.0, 7 November 2026
+
+- Photo mode: the panel and the hints go, you click on the picture to focus, set how much the rest blurs, and pick a film look (warm film, a faded print, teal and orange, black and white, sepia), then save it at full resolution. A flyby holds still while you take it.
+
 ## 0.24.0, 7 November 2026
 
 - The northern lights on a few clear winter nights (7 November, 19 January, 2 and 12 February): green along the northern horizon over the house, red and violet rays above, the curtains drifting and folding. The weather label says so while they are up, and *Holidays… › Sights › Northern lights* takes you to the next of those nights. Tonight, 7 November, is one of them.

@@ -18,6 +18,15 @@
     <div id="bar-top" class="film-bar"><span id="bar-clock" hidden></span></div>
     <div id="bar-bottom" class="film-bar"></div>
     <div id="leave-hint"></div>
+    <!-- photo mode: the controls along the bottom, and a mark where you focused -->
+    <div id="photo-bar" hidden>
+      <span class="photo-hint">Click the picture to focus</span>
+      <label>Look <select id="photo-look"></select></label>
+      <label>Blur <input id="photo-blur" type="range" min="0" max="100" value="45" /></label>
+      <button id="photo-save" class="small">Save the picture</button>
+      <button id="photo-close" class="small">Done (Esc)</button>
+    </div>
+    <div id="photo-focus"></div>
 
     <div id="video-panel" hidden>
       <div class="video-box">
@@ -118,6 +127,7 @@
 
       <p id="stats"></p>
       <div class="row buttons">
+        <button id="photo" class="small" title="Hide the panel, focus with a click, pick a film look, save the picture">Photo mode</button>
         <button id="picture" class="small">Save a picture</button>
         <button id="copy-view" class="small">Copy this view</button>
         <button id="report-bug" class="small">Report a bug</button>

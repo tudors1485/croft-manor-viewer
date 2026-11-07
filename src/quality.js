@@ -63,6 +63,116 @@ const Sharpen = {
     }`,
 };
 
+// Photo mode: depth of field. Each pixel gathers its neighbours on a golden-angle spiral out to
+// its own blur size, from how far it is from the focus (the scene's depth, from the occlusion
+// pass); a sharper sample behind a blurred one is held back so the background doesn't bleed into
+// the foreground. In the scene's own light (before tone mapping), so bright lights bloom into
+// round highlights as in a real lens.
+const DepthOfField = {
+  uniforms: {
+    tDiffuse: { value: null },
+    tDepth: { value: null },
+    uTexel: { value: new THREE.Vector2(1, 1) },
+    uNear: { value: 0.1 },
+    uFar: { value: 1000 },
+    uFocus: { value: 10 },
+    uMaxBlur: { value: 12 },
+    uAperture: { value: 0.5 },
+  },
+  vertexShader: /* glsl */ `
+    varying vec2 vUv;
+    void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDiffuse;
+    uniform sampler2D tDepth;
+    uniform vec2 uTexel;
+    uniform float uNear;
+    uniform float uFar;
+    uniform float uFocus;
+    uniform float uMaxBlur;
+    uniform float uAperture;
+    varying vec2 vUv;
+    float distanceAt(vec2 uv) {
+      float z = texture2D(tDepth, uv).x;
+      return (uNear * uFar) / ((uFar - uNear) * z - uFar) * -1.0;
+    }
+    float blurAt(float d) {
+      return clamp(abs(d - uFocus) / max(d, 0.01) * uAperture * 1.6, 0.0, 1.0) * uMaxBlur;
+    }
+    void main() {
+      vec4 centre = texture2D(tDiffuse, vUv);
+      float cd = distanceAt(vUv);
+      float cs = blurAt(cd);
+      vec3 colour = centre.rgb;
+      float total = 1.0;
+      float radius = 0.5;
+      float angle = 0.0;
+      for (int i = 0; i < 180; i++) {
+        if (radius >= uMaxBlur) break;
+        angle += 2.39996323;
+        vec2 uv = vUv + vec2(cos(angle), sin(angle)) * uTexel * radius;
+        vec3 c = texture2D(tDiffuse, uv).rgb;
+        float d = distanceAt(uv);
+        float size = blurAt(d);
+        if (d > cd) size = clamp(size, 0.0, cs * 2.0);
+        float m = smoothstep(radius - 0.5, radius + 0.5, size);
+        colour += mix(colour / total, c, m);
+        total += 1.0;
+        radius += 1.0 / radius;
+      }
+      gl_FragColor = vec4(colour / total, centre.a);
+    }`,
+};
+
+// Photo mode: a film look over the finished picture (colour, grain and a vignette).
+export const LOOKS = { natural: 'Natural', warm: 'Warm film', faded: 'Faded print', teal: 'Teal and orange', mono: 'Black and white', sepia: 'Sepia' };
+const LOOK_IDS = Object.keys(LOOKS);
+const FilmLook = {
+  uniforms: { tDiffuse: { value: null }, uLook: { value: 0 }, uTime: { value: 0 }, uRes: { value: new THREE.Vector2(1, 1) } },
+  vertexShader: /* glsl */ `
+    varying vec2 vUv;
+    void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDiffuse;
+    uniform int uLook;
+    uniform float uTime;
+    uniform vec2 uRes;
+    varying vec2 vUv;
+    float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+    vec3 curve(vec3 c, float k) { return mix(c, c * c * (3.0 - 2.0 * c), k); } // an S-curve: more contrast
+    void main() {
+      vec3 c = texture2D(tDiffuse, vUv).rgb;
+      float l = dot(c, vec3(0.299, 0.587, 0.114));
+      float grain = 0.0;
+      float vig = 0.0;
+      if (uLook == 1) { // warm film: warmer, soft blacks, a little more contrast
+        c = curve(c, 0.35) * vec3(1.06, 1.0, 0.88) + vec3(0.025, 0.018, 0.0);
+        grain = 0.035; vig = 0.35;
+      } else if (uLook == 2) { // a faded print: lifted blacks, cool shadows, warm highlights, less colour
+        c = mix(vec3(l), c, 0.78);
+        c = vec3(0.07, 0.08, 0.1) + c * 0.86;
+        c += vec3(0.04, 0.0, -0.03) * smoothstep(0.4, 1.0, l) + vec3(-0.02, 0.01, 0.04) * (1.0 - smoothstep(0.0, 0.4, l));
+        grain = 0.03; vig = 0.3;
+      } else if (uLook == 3) { // teal and orange: teal shadows, orange skin-tone highlights
+        c = curve(c, 0.4);
+        c = mix(c, c * vec3(0.8, 1.0, 1.08), 1.0 - smoothstep(0.0, 0.5, l));
+        c = mix(c, c * vec3(1.12, 1.0, 0.84), smoothstep(0.45, 1.0, l));
+        grain = 0.02; vig = 0.4;
+      } else if (uLook == 4) { // black and white, contrasty
+        c = curve(vec3(dot(c, vec3(0.25, 0.65, 0.1))), 0.55);
+        grain = 0.06; vig = 0.45;
+      } else if (uLook == 5) { // sepia, an old print
+        float m = curve(vec3(l), 0.3).x;
+        c = vec3(0.04, 0.03, 0.01) + m * vec3(1.07, 0.9, 0.68) * 0.94;
+        grain = 0.05; vig = 0.55;
+      }
+      vec2 q = vUv - 0.5;
+      c *= 1.0 - vig * smoothstep(0.25, 0.95, dot(q, q) * 2.2);
+      c += (hash(floor(vUv * uRes) + fract(uTime) * 91.7) - 0.5) * grain;
+      gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
+    }`,
+};
+
 export const PRESETS = {
   high: { label: 'High', ao: true, halfRes: false, maxRatio: 2 },
   balanced: { label: 'Balanced', ao: true, halfRes: true, maxRatio: 1.5 },
@@ -109,13 +219,21 @@ export class Quality {
     this.fisheye = 0; // 0..1, set by the flybys
     this.beams = new SunbeamsPass(camera); // needs the scene depth, which the occlusion pass renders
     this.beams.enabled = false;
+    // photo mode (main.js): depth of field and a film look, and the settings for them
+    this.dof = new ShaderPass(DepthOfField);
+    this.dof.enabled = false;
+    this.look = new ShaderPass(FilmLook);
+    this.look.enabled = false;
+    this.photo = { on: false, focus: 10, aperture: 0.5, look: 'natural' };
     this.composer.addPass(this.plain);
     this.composer.addPass(this.ao);
     this.composer.addPass(this.beams);
+    this.composer.addPass(this.dof);
     this.composer.addPass(this.output);
     this.composer.addPass(this.fisheyePass);
     this.composer.addPass(this.smaa);
     this.composer.addPass(this.sharpenPass);
+    this.composer.addPass(this.look);
     this.apply();
   }
 
@@ -157,7 +275,9 @@ export class Quality {
   }
 
   render(dt) {
-    const ao = PRESETS[this.preset].ao && !this.failed;
+    const photo = this.photo.on && !this.failed;
+    // (photo mode needs the scene's depth for its blur, which the occlusion pass renders)
+    const ao = (PRESETS[this.preset].ao || photo) && !this.failed;
     const bend = this.fisheye > 0.001;
     if (ao || bend) {
       this.ao.enabled = ao;
@@ -171,6 +291,28 @@ export class Quality {
       this.sharpenPass.uniforms.uAmount.value = THREE.MathUtils.clamp((stretch - 1) * 0.35, 0, 0.5);
       this.fisheyePass.uniforms.uStrength.value = this.fisheye;
       this.fisheyePass.uniforms.uAspect.value = this.aspect;
+      // photo mode: the blur from the focus distance, and the film look
+      const depth = this.ao.beautyRenderTarget?.depthTexture ?? null;
+      this.dof.enabled = photo && ao && !!depth && this.photo.aperture > 0.01;
+      if (this.dof.enabled) {
+        const u = this.dof.uniforms;
+        const size = this.renderer.getDrawingBufferSize(this._size ?? (this._size = new THREE.Vector2()));
+        u.tDepth.value = depth;
+        u.uTexel.value.set(1 / size.x, 1 / size.y);
+        u.uNear.value = this.camera.near;
+        u.uFar.value = this.camera.far;
+        u.uFocus.value = this.photo.focus;
+        u.uAperture.value = this.photo.aperture;
+        u.uMaxBlur.value = 14 * (size.y / 1080);
+      }
+      const look = LOOK_IDS.indexOf(this.photo.look);
+      this.look.enabled = photo && look > 0;
+      if (this.look.enabled) {
+        const u = this.look.uniforms;
+        u.uLook.value = look;
+        u.uTime.value = (u.uTime.value + dt) % 100;
+        this.renderer.getDrawingBufferSize(u.uRes.value);
+      }
       try {
         this.composer.render(dt);
       } catch (err) {

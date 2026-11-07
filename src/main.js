@@ -10,7 +10,7 @@ import { TimeOfDay } from './sky.js';
 import { Lamps } from './lamps.js';
 import { Landscape, makeTerrain, makeHillHeight } from './landscape.js';
 import { installGrade } from './look.js';
-import { Quality } from './quality.js';
+import { Quality, LOOKS } from './quality.js';
 import { tuneMaterials, GRASS_TINT, grassShader, TINTS, buildSkyMap } from './materials.js';
 import { Tour, FLYBYS, SCENES, checkPath } from './tour.js';
 import { Soundscape } from './sound.js';
@@ -307,7 +307,7 @@ window.addEventListener('keydown', (e) => lightKey(e.code === 'ShiftRight' ? 'Sh
 window.addEventListener('keyup', (e) => lightKey(e.code === 'ShiftRight' ? 'ShiftLeft' : e.code, false));
 const MOVE_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 window.addEventListener('keydown', (e) => {
-  if (!autoLook || e.repeat || look.isLocked || !(mode === 'walk' || mode === 'fly') || !MOVE_KEYS.has(e.code)) return;
+  if (!autoLook || photo || e.repeat || look.isLocked || !(mode === 'walk' || mode === 'fly') || !MOVE_KEYS.has(e.code)) return;
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
   lockMouse();
 });
@@ -330,8 +330,88 @@ window.addEventListener('pointerup', () => {
   drag = null;
 });
 let dragged = 0;
+// Photo mode: the panel and the keys hidden, a click to focus, a film look and a blur, then save.
+// A running flyby holds still while you take it.
+let photo = false;
+const photoDown = { x: 0, y: 0 };
+canvas.addEventListener('pointerdown', (e) => {
+  photoDown.x = e.clientX;
+  photoDown.y = e.clientY;
+});
+for (const [id, label] of Object.entries(LOOKS)) $('photo-look').add(new Option(label, id));
+function setPhoto(on) {
+  photo = on;
+  quality.photo.on = on;
+  document.body.classList.toggle('photo', on);
+  $('photo-bar').hidden = !on;
+  if (on) {
+    look.unlock();
+    if (mode === 'tour') tour.rate = 0;
+    focusAt(innerWidth / 2, innerHeight / 2, false);
+  } else if (mode === 'tour') tour.rate = 1;
+  updateLockHint();
+}
+/** Focus on whatever is under the screen point (x, y): the house or the ground, or a tree's crown. */
+function focusAt(x, y, mark) {
+  const ndc = new THREE.Vector2((x / innerWidth) * 2 - 1, -(y / innerHeight) * 2 + 1);
+  raycaster.setFromCamera(ndc, camera);
+  const { origin, direction } = raycaster.ray;
+  let d = walker ? (firstHit(walker.bvh, origin, direction, 3000, passDoor)?.distance ?? Infinity) : Infinity;
+  // the trees: each crown as an upright cylinder
+  for (const c of landscape?.crowns ?? []) {
+    const ox = origin.x - c.x;
+    const oz = origin.z - c.z;
+    const a = direction.x * direction.x + direction.z * direction.z;
+    const b = 2 * (ox * direction.x + oz * direction.z);
+    const k = ox * ox + oz * oz - (c.r * 0.75) ** 2;
+    const disc = b * b - 4 * a * k;
+    if (a < 1e-6 || disc < 0) continue;
+    const t = (-b - Math.sqrt(disc)) / (2 * a);
+    const yy = origin.y + direction.y * t;
+    if (t > 0 && t < d && yy > c.y0 && yy < c.y1) d = t;
+  }
+  quality.photo.focus = Number.isFinite(d) ? d : 2000;
+  if (mark) {
+    const el = $('photo-focus');
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
+    el.classList.remove('show');
+    void el.offsetWidth;
+    el.classList.add('show');
+  }
+}
+$('photo').onclick = (e) => {
+  e.currentTarget.blur();
+  setPhoto(true);
+};
+$('photo-close').onclick = () => setPhoto(false);
+$('photo-save').onclick = (e) => {
+  e.currentTarget.blur();
+  // at the full resolution, even if the frame rate had stepped it down (the next frame is drawn
+  // that size, and saved)
+  quality.set(quality.preset);
+  wantPicture = true;
+};
+$('photo-look').onchange = (e) => {
+  quality.photo.look = e.target.value;
+  e.target.blur();
+};
+$('photo-blur').oninput = (e) => {
+  quality.photo.aperture = Number(e.target.value) / 100;
+};
+quality.photo.aperture = Number($('photo-blur').value) / 100;
+// (Esc leaves photo mode first, before it would leave a flyby)
+window.addEventListener(
+  'keydown',
+  (e) => {
+    if (!photo || e.code !== 'Escape') return;
+    e.stopImmediatePropagation();
+    setPhoto(false);
+  },
+  true,
+);
 function updateLockHint() {
-  const free = mode === 'walk' || mode === 'fly';
+  const free = (mode === 'walk' || mode === 'fly') && !photo;
   $('lock-hint').textContent = autoLook ? 'Click or press W to look around' : 'Click to look around';
   $('lock-hint').hidden = !(free && !look.isLocked);
   $('crosshair').hidden = !(free && look.isLocked);
@@ -529,7 +609,7 @@ $('flyby').onchange = (e) => {
 const LEAVE_KEYS = new Set(['Escape', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown']);
 const SCRUB = { ArrowLeft: -4, ArrowRight: 4 };
 window.addEventListener('keydown', (e) => {
-  if (mode !== 'tour' || exporting) return;
+  if (mode !== 'tour' || exporting || photo) return;
   if (Object.hasOwn(SCRUB, e.code)) {
     e.preventDefault();
     tour.rate = SCRUB[e.code];
@@ -568,7 +648,12 @@ function lockMouse() {
     if (p?.catch) p.catch(() => {});
   } catch {}
 }
-canvas.addEventListener('click', () => {
+canvas.addEventListener('click', (e) => {
+  // photo mode: a click focuses there (not the end of a drag)
+  if (photo) {
+    if (performance.now() - dragged >= 300 && Math.hypot(e.clientX - photoDown.x, e.clientY - photoDown.y) < 6) focusAt(e.clientX, e.clientY, true);
+    return;
+  }
   if (mode === 'tour') return exporting ? null : leaveTour();
   if (performance.now() - dragged < 300) return; // (the end of a drag, not a click)
   if ((mode === 'walk' || mode === 'fly') && !look.isLocked) lockMouse();
@@ -1558,7 +1643,8 @@ renderer.setAnimationLoop((time) => {
       if (!blob) return;
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `croft-manor-${dateLabel(seasonDay).replace(' ', '-')}-${tod.label().replace(':', '')}-${appVersion}.png`;
+      const looked = photo && quality.photo.look !== 'natural' ? `-${quality.photo.look}` : '';
+      a.download = `croft-manor-${dateLabel(seasonDay).replace(' ', '-')}-${tod.label().replace(':', '')}${looked}-${appVersion}.png`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     }, 'image/png');
@@ -1639,6 +1725,8 @@ window.manor = {
   rainbow,
   footprints,
   aurora,
+  setPhoto,
+  focusAt,
   get park() {
     return park;
   },

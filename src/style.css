@@ -635,3 +635,73 @@ body.touring #dock {
   color: #d9b45a;
   font-size: 13px;
 }
+
+/* photo mode: nothing on the picture but the photo controls at the bottom */
+body.photo #panel,
+body.photo #dock,
+body.photo #lock-hint,
+body.photo #crosshair,
+body.photo #tour-stop,
+body.photo #leave-hint,
+body.photo #caption,
+body.photo .film-bar,
+body.photo .sfxbar,
+body.photo .sfx-game-credits-btn {
+  display: none !important;
+}
+#photo-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 9px 14px;
+  font: 500 13px/1 system-ui, -apple-system, sans-serif;
+  color: #f2efe8;
+  background: rgba(20, 22, 27, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  backdrop-filter: blur(8px);
+  z-index: 9;
+  white-space: nowrap;
+}
+#photo-bar[hidden] {
+  display: none;
+}
+#photo-bar label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+#photo-bar .photo-hint {
+  color: rgba(242, 239, 232, 0.7);
+}
+#photo-bar button {
+  border-radius: 999px;
+}
+#photo-focus {
+  position: fixed;
+  width: 46px;
+  height: 46px;
+  margin: -23px 0 0 -23px;
+  border: 1.5px solid rgba(255, 236, 170, 0.95);
+  border-radius: 4px;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 8;
+}
+#photo-focus.show {
+  animation: photo-focus 1.1s ease-out;
+}
+@keyframes photo-focus {
+  0% { opacity: 0; transform: scale(1.5); }
+  15% { opacity: 1; transform: scale(1); }
+  70% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@media (max-width: 720px) {
+  #photo-bar { flex-wrap: wrap; justify-content: center; border-radius: 14px; width: calc(100% - 24px); white-space: normal; }
+  #photo-bar .photo-hint { display: none; }
+}
