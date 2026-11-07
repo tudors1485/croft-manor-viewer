@@ -8,6 +8,10 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.27.0, 7 November 2026
+
+- A prototype of other visitors, live: where the site has the server for it, a setting shows everyone else walking the estate as faint lanterns. It shares only where you walk, under a random name for the visit, and keeps nothing. The server is on a TwoDoorIdeas branch, not live, so the setting doesn't appear anywhere yet.
+
 ## 0.26.0, 7 November 2026
 
 - VR: with a headset, *Enter VR* appears in the panel. You stand where you were; the left stick walks you, the right stick turns you in steps, and a trigger hops you forward. Walls stop you and you follow the stairs. Not yet tried on a real headset.
