@@ -610,6 +610,7 @@ function applyLapse(l) {
     }
     // the Santa's sleigh flyby: you ride with him
     santa.ride = !!sc.santa;
+    if (sc.santa) Object.assign(santa, { nextBells: 0.3, nextHo: 3.5 });
     if (sc.boost && bonfire) {
       bonfire.reset();
       bonfire.prime({ day: sc.day, hours: sc.hours, level: tod.lamps, wind, camera });
@@ -1441,7 +1442,7 @@ function startHunt() {
       const k = THREE.MathUtils.smoothstep(t, t0, t1);
       return new THREE.Vector3(...a).lerp(new THREE.Vector3(...b), k);
     },
-    look: (t) => (t > 26 && park.hounds.every((h) => h.arrived || h.route.length <= 1) ? door : park.huntFocus),
+    look: (t) => (t > 26 && park.hounds.every((h) => h.arrived || !h.route || h.route.length <= 1) ? door : park.huntFocus),
     end: 40,
   };
 }

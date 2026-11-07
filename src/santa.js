@@ -194,6 +194,17 @@ export class Santa {
       team.rotateX(-Math.asin(THREE.MathUtils.clamp(fwd.y, -1, 1)) * 0.6);
       team.position.copy(camera.position).add(new THREE.Vector3(0, -1.9, 0)).addScaledVector(new THREE.Vector3(fwd.x, 0, fwd.z).normalize(), -0.7);
       this.passing = true;
+      // the bells on the harness just ahead of you all the way, and now and then his laugh
+      this.nextBells = (this.nextBells ?? 0) - dt;
+      if (this.nextBells <= 0) {
+        this.nextBells = 5.4;
+        this.sound?.sample('sleigh-bells', camera.position.clone().addScaledVector(fwd, 5), { ref: 6, rolloff: 1, max: 200, gain: 0.55 });
+      }
+      this.nextHo = (this.nextHo ?? 4) - dt;
+      if (this.nextHo <= 0) {
+        this.nextHo = 11 + Math.random() * 8;
+        this.sound?.sample(Math.random() < 0.5 ? 'hohoho-1' : 'hohoho-2', camera.position.clone().add(new THREE.Vector3(0, -0.4, 0)), { ref: 3, rolloff: 1, max: 100, gain: 0.8 });
+      }
     } else {
       this.santa.visible = true;
       // between passes he is away; then once round his circuit, high over the estate

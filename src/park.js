@@ -58,6 +58,8 @@ export class Park {
     this.sound = sound;
     this.huntDay = null; // the morning of the hunt (the Deer at dawn sight)
     this.huntT = 0;
+    this.hounds = []; // (until they have loaded)
+    this.horse = null;
     this.ground = ground;
     this.avoid = avoid.filter((p) => Math.hypot(p.x - HERD.x, p.z - HERD.z) < HERD.r + 30);
     this.deer = [];
@@ -149,6 +151,7 @@ export class Park {
       this.horse = rig(horse, 2.5);
       this._saddle(this.horse);
     }
+    if (this.huntDay !== null) this._placeHounds(); // (the sight was chosen before they had loaded)
   }
 
   /** A saddle on the horse's back (leather, a cloth under it, the stirrups hanging), on the bone nearest. */
@@ -211,6 +214,11 @@ export class Park {
       d.gone = false;
       d.timer = Math.random() * 4;
     }
+    this._placeHounds();
+  }
+
+  /** The hounds where they start, out in the field (again when they load after the hunt began). */
+  _placeHounds() {
     this.hounds.forEach((h, i) => {
       h.p = new THREE.Vector3(-36 - i * 1.4, 0, 86 + i * 2);
       h.p.y = this.ground(h.p.x, h.p.z);
@@ -239,8 +247,9 @@ export class Park {
 
   /** Where the camera should look while the hunt plays (the herd, then the hounds). */
   get huntFocus() {
-    if (this.houndsOut && this.hounds.length) {
-      const lead = this.hounds.reduce((a, h) => (h.route.length < a.route.length ? h : a), this.hounds[0]);
+    const out = this.hounds.filter((h) => h.route);
+    if (this.houndsOut && out.length) {
+      const lead = out.reduce((a, h) => (h.route.length < a.route.length ? h : a), out[0]);
       return lead.p.clone().setY(lead.p.y + 0.5);
     }
     const c = new THREE.Vector3();
@@ -332,8 +341,8 @@ export class Park {
     }
     const h0 = this.hounds[0];
     for (const [i, h] of this.hounds.entries()) {
-      h.holder.visible = this.houndsOut;
-      if (!this.houndsOut) continue;
+      h.holder.visible = this.houndsOut && !!h.route;
+      if (!this.houndsOut || !h.route) continue;
       if (!h.arrived) {
         const to = h.route[0];
         const dx = to.x - h.p.x;
@@ -371,7 +380,7 @@ export class Park {
       h.mixer.update(dt);
     }
     // a bark now and then as they come up the drive
-    if (this.houndsOut && h0 && !h0.arrived) {
+    if (this.houndsOut && h0?.route && !h0.arrived) {
       this.barkIn -= dt;
       if (this.barkIn <= 0) {
         this.barkIn = 2.5 + Math.random() * 3;

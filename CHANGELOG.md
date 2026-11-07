@@ -8,6 +8,38 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.38.1, 7 November 2026
+
+QA: speed, security, the interface.
+
+- Fixed:
+  - Choosing *Deer at dawn* before the hounds had loaded broke the hunt; they now join it when they arrive.
+  - The *Santa's sleigh* flyby was nearly silent: the sleigh bells now ring just ahead of you all the way, with his "ho ho ho" now and then (in its videos too).
+  - A loading tip read awkwardly.
+- Checked:
+  - Speed, at 1400 × 850 with the adaptive quality off:
+
+    | Scene | fps |
+    |---|---|
+    | An ordinary night at the front | 40 |
+    | Christmas Eve night at the front | 46 |
+    | Bonfire Night at the front | 46 |
+    | Bonfire Night by the fire | 33 |
+    | The Halloween storm | 46 |
+    | *Deer at dawn* | 38 to 41 |
+    | The sleigh ride | 61 |
+
+    The view in through the gate runs at about 30 fps on any night; Christmas Eve's lights add little.
+  - Loading: about 7 to 10 s here, against 19 s before 0.34.0.
+  - A video of the new flyby exports, with its sound.
+  - Every camera path, the new one too, is clear of walls and trees. Walking and the tour work as before.
+  - The loading screen fits a phone.
+  - Security: no dependency has a known vulnerability. Nothing new reaches an outside service or writes HTML; the new sounds and models are the viewer's own files.
+- Known:
+  - Nobody has heard the new recordings yet (fireworks, a shot, hounds, a horse, sleigh bells, "ho ho ho"); their levels are set by measurement only.
+  - The hounds are husky and wolf models recoloured: no free animated hound or beagle exists. The red deer have no walk of their own, so their slow walk is their run, slowed.
+  - The Halloween figure is seen best from the west, coming along the front; straight on, the window's mullions hide much of it.
+
 ## 0.38.0, 7 November 2026
 
 Tudor's notes of 7 November, the fifth part: Christmas Eve.

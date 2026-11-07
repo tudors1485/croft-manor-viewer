@@ -44,7 +44,7 @@ export const TIPS = [
   'At night, Your light gives you a glow, a torch, or a flaming torch to carry.',
   'The tour is always a clear summer afternoon. Your own time and weather come back after.',
   'Tick With seasons and weathers, and a flyby changes every few seconds.',
-  'Make a video records any flyby as an MP4, with its sound.',
+  'Make a video turns any flyby into an MP4, with its sound.',
   'Photo mode hides the panel and lets you pick a film look.',
   'Now sets today’s date and the time, and keeps time.',
   'Flying, you go faster the higher you are.',
