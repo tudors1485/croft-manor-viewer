@@ -10,6 +10,7 @@
 // the look direction), and a slight fisheye bends the edges of the picture.
 
 import * as THREE from 'three';
+import { nextEaster } from './easter.js';
 
 // A key is [camera position, look-at point, options]. Options: caption, speed (metres a
 // second at this key; it changes smoothly to the next key's), roll (degrees, flybys).
@@ -202,6 +203,25 @@ export const FLYBYS = {
     // from the front of the house, spinning round it twice, high up (with "With seasons and
     // weathers" ticked, the seasons cut by as it goes)
     keys: circuit(0, 66, 28, 2, 17),
+  },
+  easter: {
+    label: 'Easter Sunday',
+    holiday: true,
+    // Easter Sunday morning in the spring sun, the church bells ringing across the fields: low over
+    // the daffodils along the drive, through the gate and over the lawns where the eggs are hidden,
+    // round towards the house, and up over it
+    lapse: { what: 'scenes', every: 1e9, fixed: true, scenes: [{ day: nextEaster(), hours: 10.2, weather: 'clear', label: 'Easter Sunday' }] },
+    keys: [
+      k([4.6, 1.0, 36], [2.4, 0.4, 28], { speed: 1.6 }),
+      k([3.4, 1.0, 28.5], [4.6, 1.2, 18], { speed: 2.2 }),
+      k([4.6, 1.4, 21], [1.5, 0.4, 13], { speed: 2.6 }),
+      k([2.4, 1.1, 15], [-3.4, 0.2, 9.2], { speed: 2.2 }),
+      k([-2.5, 1.2, 11.5], [-8.2, 0.2, 4.4], { speed: 2.2 }),
+      k([-8.5, 1.8, 8], [-2, 3, -6], { speed: 2.8 }),
+      k([-7, 6, 4], [3, 6, -12], { speed: 3.4 }),
+      k([2, 14, 14], [4, 4, -12], { speed: 3.4 }),
+      k([8, 22, 34], [5, 4, -12], { speed: 1 }),
+    ],
   },
   halloween: {
     label: 'Halloween night',

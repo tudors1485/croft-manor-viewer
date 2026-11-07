@@ -437,6 +437,75 @@ export class Soundscape {
     this.footstep(surface, 5 * k);
   }
 
+  /**
+   * A church bell struck at `time` (the bell's partials: hum, prime, tierce, quint, nominal and
+   * above, the low ones ringing longest), heard from `position` far off across the fields.
+   */
+  bell(position, nominal, time = this.ctx?.currentTime ?? 0, level = 1) {
+    if (!this.on || !this.ctx) return;
+    const ctx = this.ctx;
+    const out = this._placed(position, { ref: 500, rolloff: 0.7, max: 5000 });
+    const far = this._filter('lowpass', 1800, 0.5);
+    far.connect(out);
+    const PARTIALS = [
+      [0.5, 0.5, 4.5],
+      [1, 0.7, 3],
+      [1.2, 0.55, 2.4],
+      [1.5, 0.3, 2],
+      [2, 1, 2.2],
+      [2.5, 0.35, 1.2],
+      [3, 0.25, 0.9],
+      [4, 0.15, 0.6],
+    ];
+    for (const [ratio, amp, decay] of PARTIALS) {
+      const o = ctx.createOscillator();
+      o.frequency.value = (nominal / 2) * ratio * (1 + (Math.random() - 0.5) * 0.002);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0, time);
+      g.gain.linearRampToValueAtTime(0.05 * amp * level, time + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001, time + decay);
+      o.connect(g).connect(far);
+      o.start(time);
+      o.stop(time + decay + 0.05);
+    }
+  }
+
+  /** The village church's bells ringing (Easter morning): call each frame while they ring, with where the church is. */
+  peal(position) {
+    if (!this.on || !this.ctx) return;
+    const t = this.ctx.currentTime;
+    // six bells in rounds, treble to tenor, a short gap at each handstroke; scheduled a little ahead
+    const BELLS = [740, 659, 587, 554, 494, 440];
+    this._pealAt = Math.max(this._pealAt ?? 0, t);
+    while (this._pealAt < t + 0.6) {
+      const k = this._pealRow ?? 0;
+      const bell = k % 6;
+      this.bell(position, BELLS[bell], this._pealAt + (Math.random() - 0.5) * 0.02, 0.8 + 0.2 * Math.random());
+      this._pealRow = k + 1;
+      this._pealAt += 0.29 + (bell === 5 && (Math.floor(k / 6) % 2 === 1) ? 0.29 : 0);
+    }
+  }
+
+  /** A little chime (an Easter egg found): two bright notes and a sparkle. */
+  chime() {
+    if (!this.on || !this.ctx) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    [1568, 2093, 2637].forEach((f, i) => {
+      const o = ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.value = f;
+      const g = ctx.createGain();
+      const at = t + i * 0.09;
+      g.gain.setValueAtTime(0, at);
+      g.gain.linearRampToValueAtTime(0.05, at + 0.006);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + 0.7);
+      o.connect(g).connect(this.master);
+      o.start(at);
+      o.stop(at + 0.75);
+    });
+  }
+
   _bird(t) {
     const ctx = this.ctx;
     const g = ctx.createGain();

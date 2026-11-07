@@ -8,6 +8,14 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.31.0, 7 November 2026
+
+- Easter, worked out for each year (28 March in 2027), in the Holidays menu and as a flyby:
+  - Daffodils come out across the estate from mid-March to late April: clumps along the drive, round the oaks at the gate and along the lawns. They nod in the wind and go over.
+  - Over the Easter weekend, a dozen painted eggs are hidden on the lawns. Walk up to one to find it; a chime and a line at the top count them.
+  - On Easter morning the village church's bells ring across the fields.
+  - The *Easter Sunday* flyby goes low over the daffodils and the eggs, then up over the house.
+
 ## 0.30.0, 7 November 2026
 
 - The tour is always a clear midsummer afternoon, with the sun raking across the front and in at the windows. Your own time, date and weather come back when it ends.

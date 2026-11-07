@@ -237,6 +237,26 @@ body {
 #countdown.show {
   opacity: 0.92;
 }
+/* a short line at the top for a few seconds (an Easter egg found) */
+#toast {
+  position: fixed;
+  left: 50%;
+  top: 18px;
+  transform: translate(-50%, -8px);
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: rgba(20, 18, 14, 0.78);
+  color: #fff6e0;
+  font-size: 14px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s, transform 0.3s;
+  z-index: 15;
+}
+#toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
 #panel {
   transition: opacity 0.6s;
 }

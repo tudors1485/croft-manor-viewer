@@ -10,6 +10,7 @@
   <body>
     <canvas id="view"></canvas>
     <button id="lock-hint" hidden>Click to look around</button>
+    <div id="toast" role="status" aria-live="polite"></div>
     <div id="crosshair" hidden></div>
     <div id="fade"></div>
     <div id="caption"></div>
@@ -99,6 +100,7 @@
         <select id="holiday" title="Go to a holiday, or watch its flyby">
           <option value="">Holidays…</option>
           <optgroup label="Go there">
+            <option value="easter">Easter Sunday</option>
             <option value="halloween">Halloween night</option>
             <option value="bonfire">Bonfire Night</option>
             <option value="christmas">Christmas Eve</option>

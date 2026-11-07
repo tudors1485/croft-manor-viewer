@@ -33,6 +33,7 @@ import { makeVideo, FORMATS, videoSupported } from './video.js';
 import { setupPool, poolUniforms } from './pool.js';
 import { installErrorLog, setupReport } from './report.js';
 import { LoadingBar, nextFrame } from './loading.js';
+import { Easter, nextEaster } from './easter.js';
 
 installErrorLog();
 
@@ -109,6 +110,9 @@ let leaves = null; // fallen leaves under the trees in autumn (leaves.js)
 let festive = null; // pumpkins at Halloween, lights at Christmas (festive.js)
 let spooky = null; // Halloween evening: the figure at a window, the one in the gateway, the candle, the lights failing (spooky.js)
 let frontDoor = null; // (Halloween leaves it ajar)
+let easter = null; // daffodils in spring, the eggs and the bells at Easter (easter.js)
+// the village church, across the fields to the south-east (its bells ring on Easter morning)
+const CHURCH = new THREE.Vector3(820, 25, 900);
 let bonfire = null; // Bonfire Night (bonfire.js)
 let park = null; // deer at dawn, bats at summer dusk (park.js)
 let pathProblems = null; // what the check of the camera paths found (for the console)
@@ -1007,6 +1011,15 @@ function windowPanes(geo, box) {
   return out;
 }
 
+/** A short line at the top of the screen for a few seconds. */
+let toastTimer = 0;
+function toast(text) {
+  const el = $('toast');
+  el.textContent = text;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
+}
 function doneLoading() {
   if (ready) return;
   ready = true;
@@ -1102,6 +1115,11 @@ async function prepareWalking(ground) {
       snowman.setSnow(seasonUniforms.uSnow.value);
     }
     leaves = new FallenLeaves(scene, landscape.treeSpots, (x, z) => landscape.groundHeight(x, z));
+    easter = new Easter(scene, { isLawn: (x, z) => landscape._grassAt(x, z), ground: (x, z) => landscape.groundHeight(x, z), obstacles: landscape.obstacles, gate: landscape.gate, drive: landscape.drive, lawnEdge: lawn.max.z });
+    easter.onFound = (n, total) => {
+      sound.chime();
+      toast(n === total ? `All ${total} Easter eggs found` : `Easter eggs found: ${n} of ${total}`);
+    };
     // Halloween's pumpkins by the front door, Christmas lights on the house, the gate and the two oaks inside it
     const front = doors.usable.find((d) => d.centre.z > -12 && d.centre.z < -8 && Math.abs(d.centre.x + 1.85) < 1.5);
     const oaks = landscape.gate ? landscape.treeSpots.filter((t) => Math.abs(t.z - (landscape.gate.z - 6.5)) < 1 && Math.abs(Math.abs(t.x - landscape.gate.x) - 5.4) < 1) : [];
@@ -1249,6 +1267,8 @@ function goTo(pos, look) {
 }
 // The holidays, from the menu: the date, the time and the weather for each, and a good place to stand
 const HOLIDAYS = {
+  // Easter Sunday morning: daffodils along the drive, eggs hidden on the lawns, the church bells ringing
+  easter: { day: () => nextEaster(), hours: 10.25, weather: 'clear', pos: [4.6, 1.7, 19.2], look: [3, 0.6, 10] },
   // dusk in a storm and fog: pumpkins by the door left ajar, the house dark (stay by the door a while…)
   halloween: { day: 303, hours: 16.6, weather: 'eerie', pos: [-1.85, 1.7, -7.6], look: [-1.85, 1.3, -12] },
   // the bonfire in front of you, the house behind it, the fireworks over the roof
@@ -1542,6 +1562,9 @@ function step(dt, exporting = false) {
     const hand = walking ? (vr.presenting ? camera.position.clone().setY(camera.position.y - 0.65) : walker.feet.clone().setY(walker.feet.y + 0.95)) : null;
     lanterns.update(dt, hand, tod.night, lamps.glowMat.uniforms.uScale.value);
     park?.update(dt, { sunDeg, hours: tod.hours, day: seasonDay, camera, onFoot: mode === 'walk' });
+    easter?.update(dt, { day: seasonDay, night: tod.night, snow: seasonUniforms.uSnow.value, wind: weather.wind, feet: mode === 'walk' && walker ? walker.feet : null });
+    // Easter morning: the church bells across the fields, from a quarter past nine until half past eleven
+    if (!exporting && Easter.sunday(seasonDay) && tod.hours > 9.25 && tod.hours < 11.5) sound.peal(CHURCH);
     if (bonfire) {
       bonfire.update(dt, { day: seasonDay, hours: tod.hours, level: tod.lamps, wind, camera, exporting });
       bonfire.setScale(lamps.glowMat.uniforms.uScale.value);
@@ -1853,6 +1876,9 @@ window.manor = {
   },
   get festive() {
     return festive;
+  },
+  get easter() {
+    return easter;
   },
   get storm() {
     return storm;
