@@ -8,6 +8,12 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.21.0, 7 November 2026
+
+- Thunderstorms: a new weather in the panel, the real thing when Open-Meteo reports one in Surrey, and a few hot summer afternoons of the season's own. A dark sky, heavy rain and wind, and lightning every few seconds: mostly far off, flickering in the clouds, some nearer with a branching bolt, now and then close. The flashes light the sky and the house, and the thunder rolls in late by the distance, a crack and a boom when it is close, a long low roll when far.
+- *With seasons and weathers* has a July thunderstorm among its cuts.
+- Videos carry the thunder too.
+
 ## 0.20.0, 7 November 2026
 
 - Every holiday has its flyby now, in a *Holidays* group of the flyby list and in the *Holidays…* menu, each putting on a show:

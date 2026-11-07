@@ -110,6 +110,7 @@ export const SCENES = {
     { day: 128, hours: 13, weather: 'clouds' }, // spring, fluffy clouds
     { day: 165, hours: 14, weather: 'clear' }, // early summer
     { day: 196, hours: 19.5, weather: 'clear' }, // a summer evening
+    { day: 205, hours: 17.5, weather: 'storm' }, // a July thunderstorm
     { day: 232, hours: 15, weather: 'clouds' }, // late summer
     { day: 290, hours: 13, weather: 'clear' }, // autumn gold
     { day: 300, hours: 14, weather: 'rain' }, // autumn rain

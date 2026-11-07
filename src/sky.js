@@ -265,8 +265,9 @@ export class TimeOfDay {
     this.lamps = 0; // 0 off .. 1 on (lamps come on before sunset)
     this.dusk = 0; // 1 around sunrise and sunset
     // the weather (weather.js): sky cover and thickness, grey overcast, rain, fog, snow falling
-    this.weather = { clouds: 0.35, density: 0.45, overcast: 0, rain: 0, fog: 0, snowing: 0 };
+    this.weather = { clouds: 0.35, density: 0.45, overcast: 0, rain: 0, fog: 0, snowing: 0, storm: 0 };
     this.windy = 0;
+    this.flash = 0; // lightning (storm.js): 0..1, lights the sky, the fog and the ground for a moment
 
     this.sky = new Sky();
     this.sky.scale.setScalar(3000);
@@ -390,7 +391,7 @@ export class TimeOfDay {
     } else {
       this.light.color.setHSL(0.08, (0.75 - 0.45 * t) * (1 - 0.6 * oc), 0.58 + 0.32 * t);
       // under cloud the sun is dimmed and its shadows go soft and faint
-      this.light.intensity = (1.3 + 2.2 * Math.min(1, t * 1.6)) * sunUp * (1 - 0.8 * oc);
+      this.light.intensity = (1.3 + 2.2 * Math.min(1, t * 1.6)) * sunUp * (1 - 0.8 * oc) * (1 - 0.7 * (w.storm ?? 0));
     }
     this.light.shadow.intensity = 1 - 0.72 * oc;
     this._sunIntensity = this.light.intensity;
@@ -398,7 +399,7 @@ export class TimeOfDay {
 
     // twilight: the sky keeps lighting the ground for a while after sunset
     const twilight = THREE.MathUtils.smoothstep(deg, -10, 0);
-    this._hemiBase = THREE.MathUtils.lerp(0.14, 0.7, twilight) * (1 - 0.2 * this.dusk) * (1 + 0.45 * oc);
+    this._hemiBase = THREE.MathUtils.lerp(0.14, 0.7, twilight) * (1 - 0.2 * this.dusk) * (1 + 0.45 * oc) * (1 - 0.5 * (w.storm ?? 0));
     this.applyAmbient(t);
 
     this.stars.material.uniforms.uFade.value = this.night * (1 - w.clouds * 0.95);
@@ -426,7 +427,7 @@ export class TimeOfDay {
     this.moon.visible = moonOpacity > 0.01;
 
     // fog follows the sky: blue-grey by day, warm at dusk, deep blue at night
-    const day = new THREE.Color(0xc9d6e2).lerp(new THREE.Color(0xb9bfc6), oc).lerp(new THREE.Color(0xd0d4d8), w.fog);
+    const day = new THREE.Color(0xc9d6e2).lerp(new THREE.Color(0xb9bfc6), oc).lerp(new THREE.Color(0xd0d4d8), w.fog).lerp(new THREE.Color(0x5d636c), 0.7 * (w.storm ?? 0));
     const duskC = new THREE.Color(0xd9a77f);
     const nightC = new THREE.Color(0x0b1224);
     this.fog.color.copy(day).lerp(duskC, this.dusk * 0.6 * (1 - oc)).lerp(nightC, this.night);
@@ -439,6 +440,7 @@ export class TimeOfDay {
     this.envHaze.material.color.copy(this.fog.color);
     this.envHaze.material.opacity = THREE.MathUtils.clamp(this.haze.material.opacity * 1.1, 0, 0.98);
     this.envHaze.visible = this.haze.visible;
+    this._fogBase = (this._fogBase ?? new THREE.Color()).copy(this.fog.color);
 
     // the environment map is the costly part: refresh it every 10 minutes of sky time
     const dayMoved = Math.abs(this.day - (this.lastEnvDay ?? -99)) > 3;
@@ -469,7 +471,14 @@ export class TimeOfDay {
     // (there is no real bounce light here), so they keep more of it than at night
     const day = 1 - this.night;
     this.scene.environmentIntensity = env * THREE.MathUtils.lerp(1, THREE.MathUtils.lerp(0.22, 0.34, day), this.inside);
-    this.hemi.intensity = this._hemiBase * THREE.MathUtils.lerp(1, 1.25 + 0.3 * t, this.inside * day);
+    this.hemi.intensity = this._hemiBase * THREE.MathUtils.lerp(1, 1.25 + 0.3 * t, this.inside * day) + 1.6 * this.flash * (1 - 0.8 * this.inside);
+    // lightning: the whole sky and the fog go pale violet-white for a moment
+    if (this._fogBase) {
+      const f = this.flash;
+      const pale = this._flashColour ?? (this._flashColour = new THREE.Color(0xd8dcff));
+      this.fog.color.copy(this._fogBase).lerp(pale, 0.55 * f);
+      this.haze.material.color.copy(this._fogBase).lerp(pale, 0.7 * f);
+    }
     // and the sun that does come in lands harder, so its patches show against the room
     if (this._sunIntensity !== undefined) this.light.intensity = this._sunIntensity * (this._moonLight ? 1 : THREE.MathUtils.lerp(1, 1.45, this.inside));
   }

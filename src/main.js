@@ -22,6 +22,7 @@ import { FallenLeaves } from './leaves.js';
 import { Festive } from './festive.js';
 import { Spooky } from './spooky.js';
 import { Bonfire } from './bonfire.js';
+import { Storm } from './storm.js';
 import { makeVideo, FORMATS, videoSupported } from './video.js';
 import { setupPool, poolUniforms } from './pool.js';
 import { installErrorLog, setupReport } from './report.js';
@@ -88,6 +89,7 @@ let weather = weatherAt(145, 15, 0);
 let wet = 0; // the ground stays wet for a while after the rain stops
 let wind = 0.2; // eased towards the weather's wind, for the trees and the sound
 const rainfall = new Rainfall(scene);
+let storm = null; // thunder and lightning (storm.js), made once the festivals' sounds are wired up
 let snowman = null;
 let leaves = null; // fallen leaves under the trees in autumn (leaves.js)
 let festive = null; // pumpkins at Halloween, lights at Christmas (festive.js)
@@ -1272,6 +1274,8 @@ function step(dt, exporting = false) {
   seasonUniforms.uWet.value = wet;
   snowfall.update(dt, camera, weather.snowing * (1 - tod.inside), renderer.getPixelRatio());
   rainfall.update(dt, camera, weather.rain * (1 - tod.inside));
+  // lightning: its flash lights the sky, the fog and the house (sky.js), its thunder comes late
+  tod.flash = storm.update(dt, { storm: weather.storm ?? 0, centre: modelCentre, inside: tod.inside });
   updateExposure(dt);
   if (lamps) {
     lamps.update(camera, tod.lamps, dt, renderer, tod.hours);
@@ -1369,6 +1373,7 @@ const festSound = {
   moan: (p) => (exporting ? videoSoundEvents.push(['moan', p.clone()]) : sound.moan(p)),
   rocket: (p, time) => (exporting ? videoSoundEvents.push(['rocket', p.clone(), time]) : sound.rocket(p, time)),
   bang: (p, distance) => (exporting ? videoSoundEvents.push(['bang', p.clone(), distance]) : sound.bang(p, distance)),
+  thunder: (p, distance, bolt) => (exporting ? videoSoundEvents.push(['thunder', p.clone(), distance, bolt]) : sound.thunder(p, distance, bolt)),
   setBonfire: (p, level) => {
     if (!exporting) return sound.setBonfire(p, level);
     // (once a frame: only the last one counts)
@@ -1376,6 +1381,8 @@ const festSound = {
     videoSoundEvents.push(['setBonfire', p?.clone() ?? null, level]);
   },
 };
+
+storm = new Storm(scene, festSound);
 
 // Making a video of a flyby (video.js): the viewer, as the video maker sees it
 const videoApp = {
@@ -1582,6 +1589,9 @@ window.manor = {
   },
   get festive() {
     return festive;
+  },
+  get storm() {
+    return storm;
   },
   get pathProblems() {
     return pathProblems;

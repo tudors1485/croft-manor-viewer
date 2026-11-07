@@ -380,6 +380,59 @@ export class Soundscape {
     }
   }
 
+  /**
+   * Thunder from a strike at `position`, `distance` metres away, arriving that much later: close
+   * (`bolt` and under half a kilometre) a sharp crack, then a boom; far, a long low roll that
+   * swells and grumbles away. Far thunder loses its highs, so the further, the lower and softer.
+   */
+  thunder(position, distance, bolt = 1) {
+    if (!this.on) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime + distance / 343;
+    const out = this._placed(position, { ref: 800, rolloff: 0.6, max: 6000 }); // (thunder carries)
+    const close = bolt ? THREE.MathUtils.clamp(1 - (distance - 150) / 400, 0, 1) : 0;
+    const far = THREE.MathUtils.clamp(distance / 3000, 0, 1);
+    const len = 3 + 4 * far + Math.random() * 2.5;
+    // the roll: brown noise, low-passed lower the further it has come, in a few swells
+    const roll = ctx.createBufferSource();
+    roll.buffer = this.brown;
+    roll.loop = true;
+    const e = ctx.createGain();
+    const peak = 1.4 * (0.5 + 0.5 * close) * (1 - 0.45 * far);
+    e.gain.setValueAtTime(0, t);
+    e.gain.linearRampToValueAtTime(peak, t + 0.08 + 0.5 * far);
+    let at = t + 0.3 + 0.5 * far;
+    while (at < t + len - 0.8) {
+      // a grumble now and then as the sound comes back from further along the strike
+      e.gain.linearRampToValueAtTime(peak * (0.3 + 0.6 * Math.random()) * (1 - (at - t) / len), at);
+      at += 0.25 + Math.random() * 0.7;
+    }
+    e.gain.linearRampToValueAtTime(0.0001, t + len);
+    roll.connect(this._filter('lowpass', 420 - 300 * far, 0.7)).connect(e).connect(out);
+    roll.start(t, Math.random() * 3);
+    roll.stop(t + len + 0.1);
+    if (close > 0) {
+      // the crack of a near strike: bright, sudden, a little ragged
+      const crack = ctx.createBufferSource();
+      crack.buffer = this.white;
+      const ce = ctx.createGain();
+      ce.gain.setValueAtTime(0.0001, t);
+      ce.gain.linearRampToValueAtTime(1.1 * close, t + 0.006);
+      ce.gain.exponentialRampToValueAtTime(0.25 * close, t + 0.09);
+      ce.gain.exponentialRampToValueAtTime(0.0001, t + 0.7);
+      crack.connect(this._filter('highpass', 700)).connect(ce).connect(out);
+      crack.start(t, Math.random() * 2, 0.75);
+      const boom = ctx.createBufferSource();
+      boom.buffer = this.brown;
+      const be = ctx.createGain();
+      be.gain.setValueAtTime(0.0001, t + 0.02);
+      be.gain.linearRampToValueAtTime(2 * close, t + 0.06);
+      be.gain.exponentialRampToValueAtTime(0.0001, t + 2.2);
+      boom.connect(this._filter('lowpass', 160, 0.9)).connect(be).connect(out);
+      boom.start(t + 0.02, Math.random() * 2, 2.3);
+    }
+  }
+
   /** Leaving the ground: a harder push-off on whatever you stand on, and the swish of moving. */
   jump(surface = 'stone') {
     if (!this.on) return;
