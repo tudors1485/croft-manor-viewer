@@ -10,8 +10,8 @@
 //   you, in the fog. Once you look at it, or the lightning flashes, it is gone.
 // - After a close strike of lightning the lights outside may fail: they flicker and go out for a
 //   few seconds, then come back. (The pumpkins' candles stay lit.)
-// - In the Halloween flyby only: as you fly along the front, a candle lights in every room you
-//   pass, one after another, and at the end, at a close strike, they all go out at once.
+// - In the Halloween flyby, the end: at a close strike the lights fail (and the candles he left in
+//   each room go out: haunt.js, where the rooms behind the windows are).
 
 import * as THREE from 'three';
 
@@ -72,24 +72,6 @@ function glowTexture() {
   r.addColorStop(1, 'rgba(255,120,40,0)');
   g.fillStyle = r;
   g.fillRect(0, 0, 64, 64);
-  return new THREE.CanvasTexture(c);
-}
-
-/**
- * A room lit by one candle, seen from outside: warm round the flame (low on the right, where it
- * stands on the sill), falling off into the dark at the edges.
- */
-function candlelitRoom() {
-  const c = document.createElement('canvas');
-  c.width = c.height = 128;
-  const g = c.getContext('2d');
-  const r = g.createRadialGradient(80, 92, 0, 72, 84, 92);
-  r.addColorStop(0, 'rgba(255,255,255,1)');
-  r.addColorStop(0.25, 'rgba(255,255,255,0.55)');
-  r.addColorStop(0.6, 'rgba(255,255,255,0.16)');
-  r.addColorStop(1, 'rgba(255,255,255,0.02)');
-  g.fillStyle = r;
-  g.fillRect(0, 0, 128, 128);
   return new THREE.CanvasTexture(c);
 }
 
@@ -161,22 +143,8 @@ export class Spooky {
       return hit ? hit.distance : 20;
     };
     this.flameTex = glowTexture();
-    const roomTex = candlelitRoom();
-    for (const w of big) {
-      w.depth = depth(w);
-      w.roomMat = new THREE.MeshBasicMaterial({ map: roomTex, color: new THREE.Color(1.6, 0.78, 0.32), transparent: true, opacity: 0, depthWrite: false });
-      const room = new THREE.Mesh(new THREE.PlaneGeometry(w.x1 - w.x0 + 1.2, w.top - w.bottom + 1.2), w.roomMat);
-      room.position.set(w.cx, (w.top + w.bottom) / 2, w.z - Math.min(1.1, w.depth - 0.08));
-      this.group.add(room);
-      w.room = room;
-      w.flame = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.flameTex, color: new THREE.Color(2.2, 1.7, 1.3), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
-      w.flame.scale.setScalar(0.4);
-      w.flame.position.set(w.cx + (w.x1 - w.x0) * 0.22, w.bottom + 0.16, w.z - Math.min(0.22, w.depth - 0.05));
-      this.group.add(w.flame);
-      w.lit = 0; // 0 dark .. 1 its candle lit
-      w.want = 0;
-      w.phase = Math.random() * 10;
-    }
+    // (the rooms behind the windows, their candles and what is in them: haunt.js)
+    for (const w of big) w.depth = depth(w);
 
     // --- the figure in the bay behind the big window over the front door ---
     // (the widest window high up near the door's line; the figure stands in the middle of the
@@ -327,7 +295,6 @@ export class Spooky {
     this.nextFigure = 0.5;
     this.candlesOut = false;
     this.endStrike = false;
-    for (const w of this.windows) w.want = w.lit = 0;
     this.cut = 0;
     this.cutT = -1;
     this.cutOnStrike = false;
@@ -367,33 +334,13 @@ export class Spooky {
 
     // --- the flyby: a candle lit in each room as you come level with it; all out at the end ---
     if (this.flight) {
-      if (along && !this.candlesOut) for (const w of this.windows) if (Math.abs(w.cx - p.x) < 3.2 && !w.isBay) w.want = 1;
-      // (at the far end of the front, a close strike: the lights fail and every candle goes out)
+      // (the candles are his, who walks the rooms ahead of you: haunt.js; at the far end of the front, a close strike: the lights fail and every candle goes out)
       if (along && this.vx > 0.5 && p.x > 16.5 && !this.endStrike) {
         this.endStrike = true;
         this.cutOnStrike = true;
         this.strikeIn = 0.4;
       }
-      if (this.endStrike && strike && !this.candlesOut) {
-        this.candlesOut = true;
-        this.windows.forEach((w, i) => {
-          w.want = 0;
-          w.outIn = 0.05 + i * 0.04;
-        });
-      }
-    }
-    for (const w of this.windows) {
-      if (w.outIn > 0) {
-        w.outIn -= dt;
-        if (w.outIn <= 0) w.lit = 0; // (blown out)
-      }
-      // a candle catching: a flare, then steady, guttering a little
-      w.lit += (w.want - w.lit) * (1 - Math.exp(-dt * (w.want ? 2.2 : 8)));
-      const flick = 0.82 + 0.1 * Math.sin(this.t * 13 + w.phase) * Math.sin(this.t * 5.1 + w.phase * 2) + 0.08 * Math.sin(this.t * 31 + w.phase);
-      w.flame.material.opacity = w.lit * flick;
-      w.flame.visible = w.lit > 0.01;
-      w.roomMat.opacity = w.lit * 0.75 * flick;
-      w.room.visible = w.lit > 0.01;
+      if (this.endStrike && strike && !this.candlesOut) this.candlesOut = true;
     }
 
     // --- the figure in the bay ---

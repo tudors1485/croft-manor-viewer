@@ -57,6 +57,11 @@ sleigh-bells             Bells of Santa Claus #2, Joseph SARDIN, BigSoundBank   
 hohoho-1, hohoho-2       Santa Claus, oh oh oh #1 and #5, Joseph SARDIN, BigSoundBank CC0 1.0
                          https://bigsoundbank.com/santa-claus-oh-oh-oh-1-s2074.html (and -5-s2078)
 
+floor-creak              "Squeaking parquet 1", BigSoundBank (cut to 3 s)               CC0 1.0
+                         https://bigsoundbank.com/squeaking-parquet-1-s3051.html
+rocking-chair            a creak made from BigSoundBank's squeaking parquet recordings  CC0 1.0
+                         (bsb3051, bsb3053, bsb3060), looped
+
 CC0 1.0: https://creativecommons.org/publicdomain/zero/1.0/
 CC BY-SA 3.0: https://creativecommons.org/licenses/by-sa/3.0/
 CC BY-SA 4.0: https://creativecommons.org/licenses/by-sa/4.0/

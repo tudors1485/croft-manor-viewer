@@ -8,6 +8,19 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.43.0, 7 November 2026
+
+Halloween: someone walking the house with a candle, and something in every room.
+
+- **The candle-bearer** (`src/haunt.js`): on Halloween night a robed figure walks the house carrying a candle, room to room: the ground floor round all four sides, then upstairs, then the top floor, pausing at a window now and then to look out. From outside you see his light go from window to window (a real light: it lights the rooms it passes), and where a room is deep enough, him. A board creaks under him if you are close.
+- **Something in every room**: 24 windows on all four sides, each with its own:
+  - where there is a room behind the glass: a rocking chair rocking on its own (and creaking), a sheet ghost that slowly turns to face you, a skeleton that waves as you come near, a grandfather clock whose hands run backwards, a mirror with a pale face in it, a lantern swinging, a portrait whose eyes catch the light;
+  - where the window is blind (a wall just behind the glass, as most of the model's are): a candlelit room painted behind it with someone in it: a bride in her veil, a child holding a toy, a tall thin figure with long arms, a hooded figure with a scythe, an old woman rocking, a cat on the sill with shining eyes, a face that peers round the edge of the window when you aren't looking, hands on the glass, bats hanging, eyes in the dark.
+  - They show when his candle is in the room, and all at once when the lightning flashes.
+- **The Halloween flyby**: the candles are his now. He stands in the first upstairs room looking out as you come along the front, then walks the rooms just ahead of you, leaving a lit candle on each sill; at the far end, at the close strike, every candle goes out, and his with it. The figure in the big window over the door is as before.
+- The models: Poly Haven's rocking chair, clock, mirror, frame and lantern, Quaternius's skeleton, CDmir's monk with walks added (all CC0), and a sheet ghost made for the viewer; loaded only on Halloween night (4.6 MB). Two new recordings (CC0): a floorboard and a rocking chair's creak.
+- Speed on Halloween night: 48 fps at the front, 39 at the back (the props' glass is plain glass: drawn by transmission it halved the frame rate).
+
 ## 0.42.0, 7 November 2026
 
 The crows, and the chimney smoke.

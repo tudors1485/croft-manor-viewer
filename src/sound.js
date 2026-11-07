@@ -19,7 +19,7 @@ const _up = new THREE.Vector3();
 // context, the page's and a video's
 export const SAMPLES = {};
 // the recordings the festivals, the animals and the hunt use (public/sounds, credited there)
-export const MORE_SOUNDS = ['fw-whistle', 'fw-bang-1', 'fw-bang-2', 'fw-bang-3', 'fw-crackle', 'fw-far', 'terrier', 'cat-hiss', 'mouse-1', 'mouse-2', 'gunshot', 'hounds', 'hound-bark', 'panting', 'horse-neigh', 'horse-snort', 'sleigh-bells', 'hohoho-1', 'hohoho-2', 'crows-flock'];
+export const MORE_SOUNDS = ['fw-whistle', 'fw-bang-1', 'fw-bang-2', 'fw-bang-3', 'fw-crackle', 'fw-far', 'terrier', 'cat-hiss', 'mouse-1', 'mouse-2', 'gunshot', 'hounds', 'hound-bark', 'panting', 'horse-neigh', 'horse-snort', 'sleigh-bells', 'hohoho-1', 'hohoho-2', 'crows-flock', 'floor-creak', 'rocking-chair'];
 export async function loadSamples(names, base = '') {
   const ctx = new OfflineAudioContext(1, 1, 32000);
   await Promise.all(

@@ -1,3 +1,17 @@
 horse-statue.glb  "Horse Statue 01" by Rico Cilliers, Poly Haven, https://polyhaven.com/a/horse_statue_01
                   CC0 1.0 (textures shrunk); drawn here in the fountain's stone, on a plinth
 CC0 1.0: https://creativecommons.org/publicdomain/zero/1.0/
+
+halloween/ (Halloween night's rooms, haunt.js)
+walker.glb         "Monk" by CDmir, https://opengameart.org/content/monk, with walks added
+                   (one carrying a candle)                                       CC0 1.0
+rocking-chair.glb  "Rockingchair 01" by Jorge Camacho, https://polyhaven.com/a/Rockingchair_01   CC0 1.0
+clock.glb          "Vintage Grandfather Clock 01" by Yann Kervran and James Ray Cock,
+                   https://polyhaven.com/a/vintage_grandfather_clock_01         CC0 1.0
+mirror.glb         "Ornate Mirror 01" by James Ray Cock, https://polyhaven.com/a/ornate_mirror_01   CC0 1.0
+frame.glb          "Fancy Picture Frame 01" by Rob Tuytel and Rico Cilliers,
+                   https://polyhaven.com/a/fancy_picture_frame_01 (the portrait painted here)   CC0 1.0
+lantern.glb        "Lantern Chandelier 01" by Kirill Sannikov, https://polyhaven.com/a/lantern_chandelier_01   CC0 1.0
+skeleton.glb       "Skeleton" by Quaternius, https://poly.pizza/m/yq5ATpujSt     CC0 1.0
+sheet-ghost.glb    a sheet ghost made for the viewer (a cloth simulation)       CC0 1.0
+(textures shrunk; the glass of the clock and the lantern drawn as plain glass)

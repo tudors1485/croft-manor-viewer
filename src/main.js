@@ -22,6 +22,7 @@ import { Snowman } from './snowman.js';
 import { FallenLeaves } from './leaves.js';
 import { Festive } from './festive.js';
 import { Spooky } from './spooky.js';
+import { Haunt, findWindows } from './haunt.js';
 import { Bonfire } from './bonfire.js';
 import { Storm } from './storm.js';
 import { Santa } from './santa.js';
@@ -101,6 +102,7 @@ let weather = weatherAt(145, 15, 0);
 let wet = 0; // the ground stays wet for a while after the rain stops
 let wind = 0.2; // eased towards the weather's wind, for the trees and the sound
 let coldness = 0; // 0 a warm day .. 1 a cold one (refreshWeather): smoke from the chimneys
+let haunt = null; // Halloween night: the rooms behind every window, and the candle-bearer (haunt.js)
 let garden = null; // hedges, shrub borders, long grass, clipped evergreens, chimney smoke (garden.js)
 const rainfall = new Rainfall(scene);
 const rainbow = new Rainbow(scene); // when the sun comes out after a shower
@@ -626,7 +628,10 @@ function applyLapse(l) {
     // the Halloween flyby: the candle upstairs, one figure at a window ahead, the lights failing
     if (spooky) {
       spooky.flight = !!sc.halloween;
-      if (sc.halloween) spooky.reset();
+      if (sc.halloween) {
+        spooky.reset();
+        haunt?.reset();
+      }
     }
     // the Santa's sleigh flyby: you ride with him
     santa.ride = !!sc.santa;
@@ -1341,6 +1346,18 @@ async function prepareWalking(ground) {
     festive = new Festive(scene, { bvh: geo.boundsTree, door: front, oaks, gate: landscape.gate });
     for (const pk of festive.pumpkins) landscape.obstacles.push({ x: pk.position.x, z: pk.position.z, r: 0.3, when: () => festive.halloween.visible });
     spooky = new Spooky(scene, { bvh: geo.boundsTree, materialAt: (fi) => meshAtFace(geo, fi)?.material.name || '', houseBox: lamps.houseBox, gate: landscape.gate, door: front?.centre ?? null, ground: (x, z) => landscape.groundHeight(x, z) });
+    // the rooms behind every window on Halloween night, and the one who walks them with a candle
+    {
+      const bw = spooky.bay?.window;
+      haunt = new Haunt(scene, {
+        windows: findWindows(geo.boundsTree, (fi) => meshAtFace(geo, fi)?.material.name || ''),
+        bvh: geo.boundsTree,
+        houseBox: lamps.houseBox,
+        sound: wildSound,
+        bay: bw ? new THREE.Vector3(bw.cx, (bw.top + bw.bottom) / 2, bw.z) : null,
+      });
+      console.info('haunting', haunt.stats);
+    }
     // Christmas Eve's dressing: the windows' lights and candles, fairy lights in the trees round the
     // lawns (not the gate's oaks, lit already), and the big tree on open lawn east of the fountain
     {
@@ -1898,6 +1915,7 @@ function step(dt, exporting = false) {
     }
     if (spooky) {
       spooky.update(dt, camera, seasonDay, tod.night, tod.flash);
+      haunt?.update(dt, { on: Spooky.isOn(seasonDay, tod.night), camera, flash: tod.flash, flight: spooky.flight, candlesOut: spooky.candlesOut });
       // Halloween evening: the house dark, the lights outside failing in the storm, the front door ajar (and stirring in the wind)
       const hallowe = Spooky.isOn(seasonDay, tod.night);
       lamps.dark = hallowe;
@@ -2247,6 +2265,9 @@ window.manor = {
   },
   get garden() {
     return garden;
+  },
+  get haunt() {
+    return haunt;
   },
   get statue() {
     return statue;
