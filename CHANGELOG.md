@@ -8,6 +8,20 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.35.0, 7 November 2026
+
+Tudor's notes of 7 November, the second part: Halloween and the lightning.
+
+- The Halloween flyby:
+  - A candle lights in every room as you fly past, one after another: its flame on the sill, the room behind warm round it. At the far end a close strike puts out the lights, and every candle goes out with them.
+  - The dark figure is no longer at a window. It stands in the middle of the room behind the big window over the front door, and a candle on the floor below the sill throws its long shadow up the wall behind it. As you draw level the lightning strikes and it is gone.
+- Halloween on foot: now and then that figure is in the room behind the big window while you are outside in front. It goes after a while, or once you have looked at it a moment, or at a flash.
+- Lightning, more like the real thing:
+  - A bolt draws itself down from the cloud in a fraction of a second, then flashes three to five times down the same path at uneven intervals, now and then with a lingering glow. The cloud lights up where the bolt leaves it, and the branches go dark before the main channel.
+  - A near strike lights everything as the sun would, blue-white and from the bolt's side: the house, the trees and the window frames throw hard shadows, and indoors the flash comes in at the windows in their shapes, across the floor.
+  - The strikes the flybys call for (Halloween, the hall at the end of *Through the gate* with seasons) land in front of the house, where you see them and their light comes in.
+- Fixed: the big window over the front door, and the wide one on the east wing, were missed when finding the windows. Their middles fall on stone mullions.
+
 ## 0.34.0, 7 November 2026
 
 Tudor's notes of 7 November, the first part: loading, the birds, the bonfire, the assault course, your light.

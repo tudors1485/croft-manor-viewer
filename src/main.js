@@ -619,7 +619,7 @@ function applyLapse(l) {
   // the year written in the sky on cue (as the flyby comes up to where it is written, or flies through it)
   for (const at of sc.years ?? []) if (lapseSeconds < at && l.seconds >= at) bonfire?.writeYear();
   // lightning on cue, close by (the gate flyby's storm in the hall), by the flyby's own clock (so a video has it too)
-  for (const after of sc.strikes ?? []) if (lapseSeconds < (sc.at ?? 0) + after && l.seconds >= (sc.at ?? 0) + after) storm.strike(modelCentre, 160 + Math.random() * 120, true);
+  for (const after of sc.strikes ?? []) if (lapseSeconds < (sc.at ?? 0) + after && l.seconds >= (sc.at ?? 0) + after) storm.strike(modelCentre, 160 + Math.random() * 120, true, true);
   lapseSeconds = l.seconds;
 }
 let lapseSeconds = 0;
@@ -1647,6 +1647,8 @@ function step(dt, exporting = false) {
   aurora.update(dt, camera, auroraUp * THREE.MathUtils.smoothstep(tod.night, 0.6, 0.95) * (1 - THREE.MathUtils.smoothstep(weather.clouds, 0.25, 0.5)) * (1 - weather.fog) * (1 - weather.rain), tod.compass);
   // lightning: its flash lights the sky, the fog and the house (sky.js), its thunder comes late
   tod.flash = storm.update(dt, { storm: weather.storm ?? 0, centre: modelCentre, inside: tod.inside });
+  tod.flashKey = storm.key;
+  tod.flashDir = storm.keyDir;
   updateExposure(dt);
   if (lamps) {
     lamps.update(camera, tod.lamps, dt, renderer, tod.hours);
@@ -1664,7 +1666,7 @@ function step(dt, exporting = false) {
       if (frontDoor) frontDoor.ajar = hallowe ? 0.27 + 0.03 * Math.sin(elapsed * 0.6) * Math.sin(elapsed * 0.23 + 1) * (0.4 + wind) : 0;
       if (spooky.wantStrike) {
         spooky.wantStrike = false;
-        storm.strike(modelCentre, 230 + Math.random() * 150, true);
+        storm.strike(modelCentre, 230 + Math.random() * 150, true, true);
       }
     }
     // your lantern at hand height while you walk (and in the headset)
@@ -1939,6 +1941,10 @@ renderer.setAnimationLoop((time) => {
 // handy from the console: window.manor.camera.position
 window.manor = {
   THREE,
+  meshAtFace,
+  get modelCentre() {
+    return modelCentre;
+  },
   scene,
   camera,
   renderer,

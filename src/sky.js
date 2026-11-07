@@ -440,6 +440,10 @@ export class TimeOfDay {
     this.light.shadow.intensity = 1 - 0.72 * oc;
     this._sunIntensity = this.light.intensity;
     this._moonLight = useMoon;
+    // (kept, for after a lightning flash has borrowed the light: applyAmbient)
+    (this._lightPos ??= new THREE.Vector3()).copy(this.light.position);
+    (this._lightColour ??= new THREE.Color()).copy(this.light.color);
+    this._shadowIntensity = this.light.shadow.intensity;
 
     // twilight: the sky keeps lighting the ground for a while after sunset
     const twilight = THREE.MathUtils.smoothstep(deg, -10, 0);
@@ -536,6 +540,22 @@ export class TimeOfDay {
     }
     // and the sun that does come in lands harder, so its patches show against the room
     if (this._sunIntensity !== undefined) this.light.intensity = this._sunIntensity * (this._moonLight ? 1 : THREE.MathUtils.lerp(1, 1.45, this.inside));
+    // a near lightning strike: for that moment the shadowed light is the bolt's, blue-white, from
+    // its side, so the house, the trees and the window frames throw hard shadows from it (and it
+    // comes in at the windows in their shapes); then back to the sun or the moon
+    const key = this.flashKey ?? 0;
+    if (key > 0.01 && this.flashDir && this._lightPos) {
+      this.light.position.copy(this.centre).addScaledVector(this.flashDir, this.radius * 1.5);
+      this.light.color.copy(this._boltColour ?? (this._boltColour = new THREE.Color(0xe6eaff)));
+      this.light.intensity = this._sunIntensity * 0.3 + key * 1.15 * (1 + 0.8 * this.inside);
+      this.light.shadow.intensity = 1;
+      this._keyed = true;
+    } else if (this._keyed) {
+      this._keyed = false;
+      this.light.position.copy(this._lightPos);
+      this.light.color.copy(this._lightColour);
+      this.light.shadow.intensity = this._shadowIntensity;
+    }
   }
 
   tick(dt) {
