@@ -10,6 +10,7 @@ import { TimeOfDay } from './sky.js';
 import { Lamps } from './lamps.js';
 import { Landscape, makeTerrain, makeHillHeight } from './landscape.js';
 import { Garden } from './garden.js';
+import { MovingIn } from './movingin.js';
 import { installGrade } from './look.js';
 import { Quality, LOOKS } from './quality.js';
 import { tuneMaterials, GRASS_TINT, grassShader, TINTS, buildSkyMap } from './materials.js';
@@ -103,6 +104,7 @@ let wet = 0; // the ground stays wet for a while after the rain stops
 let wind = 0.2; // eased towards the weather's wind, for the trees and the sound
 let coldness = 0; // 0 a warm day .. 1 a cold one (refreshWeather): smoke from the chimneys
 let haunt = null; // Halloween night: the rooms behind every window, and the candle-bearer (haunt.js)
+let moving = null; // Moving in (Sights): crates in the hall (movingin.js)
 let garden = null; // hedges, shrub borders, long grass, clipped evergreens, chimney smoke (garden.js)
 const rainfall = new Rainfall(scene);
 const rainbow = new Rainbow(scene); // when the sun comes out after a shower
@@ -1315,6 +1317,7 @@ async function prepareWalking(ground) {
     }
     leaves = new FallenLeaves(scene, landscape.treeSpots, (x, z) => landscape.groundHeight(x, z));
     addStatue();
+    moving = new MovingIn(scene, model, landscape.obstacles);
     await part(0.4, 'Clipping the hedges and planting the borders');
     garden = new Garden(scene, { landscape, bvh: geo.boundsTree, gate: landscape.gate });
     console.info('garden', garden.build());
@@ -1540,6 +1543,7 @@ $('reset').onclick = (e) => {
   if (mode === 'tour') leaveTour();
   sight = null;
   flight = null;
+  moving?.set(false);
   $('weather').value = 'live';
   forcedWeather = null;
   goToNow();
@@ -1598,6 +1602,8 @@ const HOLIDAYS = {
   deer: { day: () => wanderDay(), hours: 7.0, weather: 'clear', pos: [5, 11, 74], look: [-17, 0.8, 67], orbit: true, then: () => startHunt() },
   // an April evening, the sun out after a shower, looking east, away from it
   rainbow: { day: 118, hours: 18.2, weather: 'clear', wet: 1, pos: [-8, 1.7, 12], look: [50, 9, 10] },
+  // Moving in: the hall on the day the crates came (a spring morning, the sun in at the windows)
+  moving: { day: 100, hours: 10.5, weather: 'clear', pos: [-1.85, 1.7, -12.9], look: [-1.85, 3.0, -24], then: () => moving?.set(true) },
   // an autumn afternoon, the crows going over to roost
   crows: { day: 300, hours: 15.6, weather: 'clear', pos: [4.6, 3, 3.5], look: [5.5, 32, -40], orbit: true, then: () => wildlife?.crowsNow() },
 };
@@ -1674,6 +1680,7 @@ $('holiday').onchange = (e) => {
   }
   if (!h) return;
   wakeSound();
+  moving?.set(false); // (another holiday or sight: the crates go)
   setDate(typeof h.day === 'function' ? h.day() : h.day);
   setTime(h.hours);
   $('weather').value = h.weather;
@@ -2265,6 +2272,9 @@ window.manor = {
   },
   get garden() {
     return garden;
+  },
+  get moving() {
+    return moving;
   },
   get haunt() {
     return haunt;

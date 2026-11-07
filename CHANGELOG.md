@@ -8,6 +8,12 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.44.0, 7 November 2026
+
+Moving in.
+
+- **Moving in** (Sights, `src/movingin.js`): the great hall on the day the crates came, on a spring morning. Packing cases, chests and cardboard boxes stacked on the floor before the stairs, some on top of others; most of the hall's paintings not hung yet, two of them leaning against the crates; the wainscot panelling a plainer light oak, and the roof's timbers and the framing dark old oak instead of the red. Walking, the crates stop you. Another holiday or sight, or Reset, puts it all back. The crates and boxes are Poly Haven's (CC0), loaded only for this (2.6 MB).
+
 ## 0.43.0, 7 November 2026
 
 Halloween: someone walking the house with a candle, and something in every room.

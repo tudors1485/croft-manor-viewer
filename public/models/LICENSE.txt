@@ -15,3 +15,9 @@ lantern.glb        "Lantern Chandelier 01" by Kirill Sannikov, https://polyhaven
 skeleton.glb       "Skeleton" by Quaternius, https://poly.pizza/m/yq5ATpujSt     CC0 1.0
 sheet-ghost.glb    a sheet ghost made for the viewer (a cloth simulation)       CC0 1.0
 (textures shrunk; the glass of the clock and the lantern drawn as plain glass)
+
+moving/ (Moving in, movingin.js), Poly Haven, CC0 1.0 (textures shrunk):
+crate-big.glb    "Wooden Military Crate" by Prabhjinder Singh, https://polyhaven.com/a/wooden_military_crate
+chest.glb        "Wooden Crate 02" by James Ray Cock and Jurita Burger, https://polyhaven.com/a/wooden_crate_02
+crate-small.glb  "Wooden Crate 01" by James Ray Cock, https://polyhaven.com/a/wooden_crate_01
+box.glb          "Cardboard Box 01" by Rahul Chaudhary, https://polyhaven.com/a/cardboard_box_01
