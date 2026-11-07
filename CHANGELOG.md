@@ -8,6 +8,29 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.39.0, 7 November 2026
+
+As in TRJTA's pictures: a place for each of his renders Tudor sent, the planting, trees, sky and sunlight to match.
+
+- **Places**: under *As in TRJTA's pictures* in the Place menu, TRJTA 1 to 17 (the same camera as each picture, with its lens, and a summer afternoon under fair-weather clouds; the rooms at an hour when the sun comes in), and *Through the gate* and *By the fountain*. A place's longer lens holds until you move, then eases back to the usual one while you keep looking at the same thing.
+- **Trees**: each crown is lit as a volume, bright on the sunny side and dark underneath and inside, with leaf-to-leaf colour; the light inside a crown is green, not the sky's blue.
+  - Woods close behind the side and back walls: a belt of 58 real trees and 1,500 more as billboards behind them, the estate in its clearing; parkland trees in front.
+  - The two big trees inside the gate are taller and closer in, their crowns over the wall.
+  - The far trees are lighter and greener.
+- **Garden** (`src/garden.js`):
+  - A clipped hedge along the back of the low wall to the assault course, its ends turning in beside the path through it.
+  - Shrub borders inside the side walls and in clumps round the course and among its crates; shrubs under the balcony.
+  - Long grass in drifts in the course and along the foot of the walls outside, mown in front of the hedge; it goes to straw in late summer.
+  - Small leafy plants outside the front wall by the gate, dying back in winter.
+  - Clipped evergreens: cones in the pots by the front door, tiered balls in the pots by the kitchen door, cones and a tall column in the planting along the front.
+  - On the balcony: a clipped bay on a stem and a bird of paradise in a white pot (the iron chairs are the model's own).
+  - A trolley with a T-bar on the zip line.
+  - Smoke from three chimneys on cold days: by the real temperature with the live weather, otherwise the season's and the hour's.
+- **Sunlight indoors**: the sun's shadows close in round you inside (a centimetre a texel instead of seven), so the windows land on the floors and walls in their shapes, and the sun that comes in is twice as bright. On foot outside they cover the ground ahead of you, so the shade under the trees is sharper.
+- **Colours**: the crates a warm pine, the stone dressings sandstone, the roof a browner tile, the lawn a deeper green, the hall's black-and-white floor no longer blue.
+- **Sky**: *Fair-weather clouds* are big white heaps of cumulus.
+- Speed, at 1400 × 850, adaptive quality off: 47 to 60 fps (the front 60, the course 54, over the gate 50, the hall 56, the gate at night 47).
+
 ## 0.38.1, 7 November 2026
 
 QA: speed, security, the interface.

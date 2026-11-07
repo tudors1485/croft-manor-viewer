@@ -303,6 +303,8 @@ export class TimeOfDay {
     this.compass = 0;
     this.centre = new THREE.Vector3();
     this.radius = 100;
+    this.shadowCentre = new THREE.Vector3(); // what the sun's shadows cover (fitShadow)
+    this.shadowRadius = 100;
     this.night = 0; // 0 day .. 1 night
     this.inside = 0; // 0 outdoors .. 1 inside the house (set by the caller each frame)
     this.lamps = 0; // 0 off .. 1 on (lamps come on before sunset)
@@ -375,12 +377,66 @@ export class TimeOfDay {
   setBounds(centre, radius) {
     this.centre.copy(centre);
     this.radius = radius;
+    this.shadowCentre.copy(centre);
+    this.shadowRadius = radius;
+    this._shadowBox(radius);
+  }
+
+  _shadowBox(r) {
     const cam = this.light.shadow.camera;
-    cam.left = cam.bottom = -radius;
-    cam.right = cam.top = radius;
+    cam.left = cam.bottom = -r;
+    cam.right = cam.top = r;
     cam.near = 1;
-    cam.far = radius * 3.2;
+    cam.far = Math.max(r * 3.2, 90);
     cam.updateProjectionMatrix();
+  }
+
+  /** The sun (or moon, or a bolt) shining from `dir` on the part of the estate its shadows cover. */
+  _placeLight(dir, keep = true) {
+    // (back far enough along the light that a roof or a tall tree near the box still casts into it)
+    const back = Math.max(this.shadowRadius * 1.5, 45);
+    this.light.position.copy(this.shadowCentre).addScaledVector(dir, back);
+    this.light.target.position.copy(this.shadowCentre);
+    if (keep) (this._lightPos ??= new THREE.Vector3()).copy(this.light.position);
+  }
+
+  /**
+   * What the sun's shadows cover. One shadow map over the whole estate is 7 cm a texel: the
+   * window bars come in as a blur and the leaves' shade under a tree as a soft smudge. So,
+   * inside, it closes in round you (a centimetre a texel: the windows land on the floor and
+   * the walls in their shapes, mullions and leading), and outside on foot it covers the
+   * ground ahead of you; from above, and in flybys, the whole estate. The box moves in whole
+   * texels, so the shadows don't crawl as you walk.
+   */
+  fitShadow(camera, { inside = 0, low = false, whole = false } = {}) {
+    const r = whole ? this.radius : inside > 0.5 ? 16 : low ? 70 : this.radius;
+    const c = (this._fitC ??= new THREE.Vector3());
+    if (r === this.radius) c.copy(this.centre);
+    else {
+      const fwd = camera.getWorldDirection(this._fitF ?? (this._fitF = new THREE.Vector3()));
+      fwd.y = 0;
+      if (fwd.lengthSq() > 1e-6) fwd.normalize();
+      c.copy(camera.position).addScaledVector(fwd, inside > 0.5 ? 3 : 30);
+      c.y = inside > 0.5 ? camera.position.y - 1 : 0;
+      // snap across the light, to the shadow map's texels
+      const dir = this._lightDir ?? this.sunDir;
+      const right = (this._fitR ??= new THREE.Vector3()).crossVectors(THREE.Object3D.DEFAULT_UP, dir);
+      if (right.lengthSq() < 1e-6) right.set(1, 0, 0);
+      right.normalize();
+      const up = (this._fitU ??= new THREE.Vector3()).crossVectors(dir, right).normalize();
+      const texel = (2 * r) / this.light.shadow.mapSize.x;
+      const a = c.dot(right);
+      const b = c.dot(up);
+      c.addScaledVector(right, Math.round(a / texel) * texel - a).addScaledVector(up, Math.round(b / texel) * texel - b);
+    }
+    if (r !== this.shadowRadius) {
+      this.shadowRadius = r;
+      this._shadowBox(r);
+    }
+    if (!c.equals(this.shadowCentre)) {
+      this.shadowCentre.copy(c);
+      if (!this._keyed) this._placeLight(this._lightDir ?? this.sunDir);
+    }
   }
 
   label() {
@@ -414,6 +470,8 @@ export class TimeOfDay {
       const su = s.material.uniforms;
       su.cloudCoverage.value = cover;
       su.cloudDensity.value = w.density;
+      su.cloudScale.value = w.scale ?? 0.0002;
+      su.cloudElevation.value = w.elevation ?? 0.5;
       su.turbidity.value = THREE.MathUtils.lerp(4, 6, oc);
       su.rayleigh.value = THREE.MathUtils.lerp(1.2, 0.35, oc);
       su.mieCoefficient.value = THREE.MathUtils.lerp(0.004, 0.014, oc);
@@ -424,13 +482,13 @@ export class TimeOfDay {
     const sunUp = THREE.MathUtils.smoothstep(deg, -1.5, 4);
     const useMoon = deg < -1;
     const dir = useMoon ? this.moonDir : this.sunDir;
-    this.light.position.copy(this.centre).addScaledVector(dir, this.radius * 1.5);
-    this.light.target.position.copy(this.centre);
+    (this._lightDir ??= new THREE.Vector3()).copy(dir);
+    this._placeLight(dir);
     if (useMoon) {
       this.light.color.set(0x9db4ff);
       // brighter for a high, full moon; with the moon down (or new) the starlit night is darker,
       // and its faint light comes from high in the sky
-      if (this.moonUp < 0.5) this.light.position.copy(this.centre).addScaledVector(this._starlight ?? (this._starlight = new THREE.Vector3(0.3, 0.9, 0.3).normalize()), this.radius * 1.5);
+      if (this.moonUp < 0.5) this._placeLight(this._lightDir.copy(this._starlight ?? (this._starlight = new THREE.Vector3(0.3, 0.9, 0.3).normalize())));
       this.light.intensity = this.night * (0.3 + 0.75 * this.moonUp * (0.25 + 0.75 * this.moonPhase));
     } else {
       this.light.color.setHSL(0.08, (0.75 - 0.45 * t) * (1 - 0.6 * oc), 0.58 + 0.32 * t);
@@ -441,7 +499,6 @@ export class TimeOfDay {
     this._sunIntensity = this.light.intensity;
     this._moonLight = useMoon;
     // (kept, for after a lightning flash has borrowed the light: applyAmbient)
-    (this._lightPos ??= new THREE.Vector3()).copy(this.light.position);
     (this._lightColour ??= new THREE.Color()).copy(this.light.color);
     this._shadowIntensity = this.light.shadow.intensity;
 
@@ -539,20 +596,20 @@ export class TimeOfDay {
       this.haze.material.color.copy(this._fogBase).lerp(pale, 0.7 * f);
     }
     // and the sun that does come in lands harder, so its patches show against the room
-    if (this._sunIntensity !== undefined) this.light.intensity = this._sunIntensity * (this._moonLight ? 1 : THREE.MathUtils.lerp(1, 1.45, this.inside));
+    if (this._sunIntensity !== undefined) this.light.intensity = this._sunIntensity * (this._moonLight ? 1 : THREE.MathUtils.lerp(1, 2.1, this.inside));
     // a near lightning strike: for that moment the shadowed light is the bolt's, blue-white, from
     // its side, so the house, the trees and the window frames throw hard shadows from it (and it
     // comes in at the windows in their shapes); then back to the sun or the moon
     const key = this.flashKey ?? 0;
     if (key > 0.01 && this.flashDir && this._lightPos) {
-      this.light.position.copy(this.centre).addScaledVector(this.flashDir, this.radius * 1.5);
+      this._placeLight(this.flashDir, false);
       this.light.color.copy(this._boltColour ?? (this._boltColour = new THREE.Color(0xe6eaff)));
       this.light.intensity = this._sunIntensity * 0.3 + key * 1.15 * (1 + 0.8 * this.inside);
       this.light.shadow.intensity = 1;
       this._keyed = true;
     } else if (this._keyed) {
       this._keyed = false;
-      this.light.position.copy(this._lightPos);
+      this._placeLight(this._lightDir ?? this.sunDir);
       this.light.color.copy(this._lightColour);
       this.light.shadow.intensity = this._shadowIntensity;
     }

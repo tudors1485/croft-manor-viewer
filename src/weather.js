@@ -117,7 +117,8 @@ export function weatherAt(day, hours, snow, choice = 'auto', live = null) {
   } else if (choice === 'clear') {
     w = { ...w, clouds: 0.02, density: 0.4, wind: 0.1 };
   } else if (choice === 'clouds') {
-    w = { ...w, clouds: 0.48, density: 0.5, wind: 0.3 };
+    // big white cumulus in a deep blue sky, as in TRJTA's renders: solid, separate heaps
+    w = { ...w, clouds: 0.5, density: 2.0, wind: 0.3, scale: 0.0003, elevation: 0.7 };
   } else if (choice === 'overcast') {
     w = { ...w, clouds: 1, density: 0.85, overcast: 0.9, wind: 0.35 };
   } else if (choice === 'rain') {

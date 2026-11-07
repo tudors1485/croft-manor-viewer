@@ -14,15 +14,21 @@ import { seasonUniforms } from './season.js';
 // Calibrated by rendering the view over the gate at 14:00, sampling the lawn, the walls
 // and the gravel, and nudging each tint (in linear light) until they matched the render.
 // The grass texture is a cool blue-green, so its red is lifted a long way.
-export const GRASS_TINT = new THREE.Color(4.09, 1.75, 1.66);
+export const GRASS_TINT = new THREE.Color(3.4, 1.68, 1.38);
 const BRICK_TINT = new THREE.Color(0.623, 0.25, 0.075);
 
 export const TINTS = [
   [/^cm_grass$/, GRASS_TINT],
   [/^cm_brickwall/, BRICK_TINT],
   [/^cm_assault_bricks_red/, BRICK_TINT],
-  [/^cm_roof$/, new THREE.Color(1.28, 1.16, 1.0), { roughness: 0.95 }],
+  [/^cm_roof$/, new THREE.Color(1.32, 1.08, 0.8), { roughness: 0.95 }],
   [/^cm_gravel$/, new THREE.Color(1.9, 1.28, 0.64)],
+  // the course's crates: TRJTA's are a warm, sandy pine, not the grey-white of driftwood
+  [/^cm_assault_(box_straight|box_corners|box_pulp|climb)$/, new THREE.Color(0.62, 0.43, 0.25)],
+  // the stone dressings: warm sandstone, as in the renders, rather than near-white
+  [/^cm_whitestone_(0|1|3|6|7|bumpy|sepia)$/, new THREE.Color(0.97, 0.88, 0.7)],
+  // the hall's black and white floor: a waxed marble, not a mirror for the blue sky outside
+  [/^cm_int_floor_checker$/, new THREE.Color(1, 0.98, 0.95), { roughness: 0.5, envMapIntensity: 0.45 }],
 ];
 
 export function tuneMaterials(model) {

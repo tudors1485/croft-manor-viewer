@@ -222,8 +222,26 @@ const SEASON_COLOUR = /* glsl */ `
  * deciduous leaves, the year (above). Works on the shadow-depth material too, so bare trees
  * cast bare shadows and the shadows move with the leaves.
  */
-function addTreeShader(material, uniforms, { stiff = 1, season = false, snow = null, height = 1, still = false } = {}) {
+export function addTreeShader(material, uniforms, { stiff = 1, season = false, snow = null, height = 1, still = false, crown = false } = {}) {
   material.onBeforeCompile = (shader) => {
+    if (crown) {
+      // the crown's light (shadeCrown): the same outward normal on both faces of a leaf, its depth
+      // in the crown, and leaf-to-leaf colour (some young and yellowish, some dark)
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nattribute float aOcc;\nvarying float vOcc;\nvarying float vTone;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvOcc = aOcc;\nvTone = fract(aLeaf * 7.13 + 0.37);');
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', '#include <common>\nvarying float vOcc;\nvarying float vTone;')
+        .replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n#ifdef DOUBLE_SIDED\n  normal *= faceDirection;\n#endif')
+        // (in a crown the light that isn't the sun's has come through and off other leaves: green,
+        // not the blue of the open sky; and leaves hardly mirror it)
+        .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\nreflectedLight.indirectDiffuse *= vec3(0.95, 1.05, 0.55) * mix(0.75, 1.0, vOcc);\nreflectedLight.indirectSpecular *= 0.3;')
+        .replace(
+          '#include <map_fragment>',
+          `#include <map_fragment>
+           diffuseColor.rgb *= vOcc * mix(vec3(0.8, 0.92, 0.66), vec3(1.1, 1.14, 0.62), vTone);`,
+        );
+    }
     shader.uniforms.uWindTime = uniforms.time;
     shader.uniforms.uWindAmp = uniforms.amp;
     if (season) shader.uniforms.uDay = seasonUniforms.uDay;
@@ -273,7 +291,7 @@ function addTreeShader(material, uniforms, { stiff = 1, season = false, snow = n
         .replace('#include <map_fragment>', '#include <map_fragment>\n' + SEASON_COLOUR);
     }
   };
-  material.customProgramCacheKey = () => `tree-${stiff}-${season}-${snow}-${height.toFixed(1)}-${still}-${material.type}`;
+  material.customProgramCacheKey = () => `tree-${stiff}-${season}-${snow}-${height.toFixed(1)}-${still}-${crown}-${material.type}`;
 }
 
 /** A random number per leaf (each leaf is two crossed quads of four vertices, in order). */
@@ -286,6 +304,47 @@ function addLeafSeeds(geo, perLeaf) {
     seeds[i] = x - Math.floor(x);
   }
   geo.setAttribute('aLeaf', new THREE.BufferAttribute(seeds, 1));
+}
+
+/**
+ * A crown lit as a crown: ez-tree's leaves are flat cards, each lit by its own facing, so a
+ * tree reads as a heap of bright and dark tiles. In the renders a crown is a volume: bright on
+ * the sunny side, dark underneath and inside. So each leaf's normal leans out from the
+ * crown's middle (an ellipsoid round the leaves), and each leaf gets how deep in the crown it
+ * is (aOcc: dark in the middle and low down, bright at the outside and the top).
+ */
+function shadeCrown(geo, perLeaf) {
+  const pos = geo.attributes.position;
+  const nor = geo.attributes.normal;
+  const box = new THREE.Box3().setFromBufferAttribute(pos);
+  // (the crown starts above the bare trunk: the lowest leaves)
+  const c = box.getCenter(new THREE.Vector3());
+  const half = box.getSize(new THREE.Vector3()).multiplyScalar(0.5);
+  const occ = new Float32Array(pos.count);
+  const leaf = new THREE.Vector3();
+  const out = new THREE.Vector3();
+  const n = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i += perLeaf) {
+    leaf.set(0, 0, 0);
+    const k = Math.min(perLeaf, pos.count - i);
+    for (let j = 0; j < k; j++) leaf.x += pos.getX(i + j), leaf.y += pos.getY(i + j), leaf.z += pos.getZ(i + j);
+    leaf.multiplyScalar(1 / k);
+    out.subVectors(leaf, c).divide(half);
+    const r = out.length();
+    const h = (leaf.y - box.min.y) / Math.max(1e-3, box.max.y - box.min.y);
+    // deep inside, little light gets in; low down, less than at the top
+    const o = THREE.MathUtils.lerp(0.42, 1, THREE.MathUtils.smoothstep(r, 0.25, 0.95)) * THREE.MathUtils.lerp(0.72, 1.06, h);
+    out.normalize();
+    for (let j = 0; j < k; j++) {
+      n.set(nor.getX(i + j), nor.getY(i + j), nor.getZ(i + j));
+      // (the card's own facing keeps a little of the sparkle of single leaves)
+      n.multiplyScalar(0.3).addScaledVector(out, 0.85).normalize();
+      nor.setXYZ(i + j, n.x, n.y, n.z);
+      occ[i + j] = o;
+    }
+  }
+  nor.needsUpdate = true;
+  geo.setAttribute('aOcc', new THREE.BufferAttribute(occ, 1));
 }
 
 /** One ez-tree, scaled to `height` metres with its base at y = 0, with PBR materials. */
@@ -320,10 +379,14 @@ export function makeVariant(preset, seed, height, wind, { tint, leafCount, leafS
     side: THREE.DoubleSide,
     roughness: 0.75,
     metalness: 0,
+    // (a crown's leaves see the sky only at its top: lit by the whole blue dome they go grey-blue)
+    envMapIntensity: 0.35,
   });
   const season = !evergreen;
-  addLeafSeeds(lGeo, tree.options.leaves.billboard === 'double' ? 8 : 4);
-  addTreeShader(leaves, wind, { stiff: 1, season, snow: evergreen ? 'cap' : null, height });
+  const perLeaf = tree.options.leaves.billboard === 'double' ? 8 : 4;
+  addLeafSeeds(lGeo, perLeaf);
+  shadeCrown(lGeo, perLeaf);
+  addTreeShader(leaves, wind, { stiff: 1, season, snow: evergreen ? 'cap' : null, height, crown: true });
   addTreeShader(bark, wind, { stiff: 3, snow: 'bark', still: true });
   // the shadow of the leaves: same sway, same leaves (none in winter)
   const leavesDepth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: ol.map, alphaTest: ol.alphaTest, side: THREE.DoubleSide });
@@ -417,7 +480,7 @@ function billboardMaterial() {
           vec3 autumn = mix(vec3(0.62, 0.36, 0.03), vec3(0.5, 0.15, 0.02), vSeason.z) * mix(0.45, 1.1, clamp(lum * 4.0, 0.0, 1.0));
           t.rgb = mix(t.rgb, autumn, vSeason.y * leafy);
         }
-        gl_FragColor = vec4(t.rgb * uLight, 1.0);
+        gl_FragColor = vec4(t.rgb * uLight * vec3(1.45, 1.55, 1.3), 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
         #include <fog_fragment>
@@ -523,7 +586,7 @@ export class Landscape {
       await grown(makeVariant('Bush 1', 71, 1.2, this.wind, { tint: 0x7d9a58, leafCount: 22, leafSize: 2.6, evergreen: true })),
     ];
     // the two trees inside the gate in TRJTA's renders: full, round oaks
-    const entrance = [await grown(makeVariant('Oak Medium', 91, 10.5, this.wind, { tint: 0x9fb478, leafCount: 32, leafSize: 1.45 }))];
+    const entrance = [await grown(makeVariant('Oak Medium', 91, 12.5, this.wind, { tint: 0xa8c07c, leafCount: 34, leafSize: 1.3 }))];
     const R = rng(20261105);
 
     // --- real trees: some on the lawns, a belt outside the walls ---
@@ -539,11 +602,21 @@ export class Landscape {
     const entranceSpots = [];
     if (this.gate) {
       for (const side of [-1, 1]) {
-        const x = this.gate.x + side * 5.4;
-        const z = this.gate.z - 6.5;
-        if (!this._grassAt(x, z)) continue;
-        entranceSpots.push([0, x, z, 1, side > 0 ? 0.8 : 2.3]);
-        taken.push([x, z, 12]);
+        // close in, either side of the gateway, their crowns over the wall (TRJTA's view over the
+        // gate): the nearest lawn to that, clear of the path and the wall
+        let best = null;
+        for (let dx = 3.5; dx <= 8; dx += 0.5) {
+          for (let dz = 2.5; dz <= 7; dz += 0.5) {
+            const x = this.gate.x + side * dx;
+            const z = this.gate.z - dz;
+            if (!this._clearLawn(x, z, 1.2)) continue;
+            const d = Math.hypot(dx - 4.6, dz - 3.4);
+            if (!best || d < best[2]) best = [x, z, d];
+          }
+        }
+        if (!best) continue;
+        entranceSpots.push([0, best[0], best[1], 1, side > 0 ? 0.8 : 2.3]);
+        taken.push([best[0], best[1], 12]);
       }
     }
 
@@ -564,33 +637,26 @@ export class Landscape {
     // the drive carries on south of the gate; keep trees off it
     const onDrive = (x, z) => this.drive && z > L.max.z - 2 && x > this.drive.x0 - 4 && x < this.drive.x1 + 4;
 
-    // outside: a belt hugging the walls, thicker in clumps
+    // outside: woods close behind the side and back walls (as in TRJTA's renders: the estate sits
+    // in a clearing), and fewer, parkland trees in front, south of the wall
+    const around = (depth) => {
+      const side = R();
+      if (side < 0.32) return [L.min.x - depth, THREE.MathUtils.lerp(L.min.z - 40, L.max.z + 30, R())];
+      if (side < 0.64) return [L.max.x + depth, THREE.MathUtils.lerp(L.min.z - 40, L.max.z + 30, R())];
+      if (side < 0.88) return [THREE.MathUtils.lerp(L.min.x - 40, L.max.x + 40, R()), L.min.z - depth];
+      return [THREE.MathUtils.lerp(L.min.x - 40, L.max.x + 40, R()), L.max.z + depth + 6];
+    };
     tries = 0;
     let outside = 0;
-    while (outside < 30 && tries++ < 4000) {
-      const side = R();
-      let x;
-      let z;
-      const depth = 6 + Math.pow(R(), 1.6) * 48;
-      if (side < 0.3) {
-        x = L.min.x - depth;
-        z = THREE.MathUtils.lerp(L.min.z - 50, L.max.z + 50, R());
-      } else if (side < 0.6) {
-        x = L.max.x + depth;
-        z = THREE.MathUtils.lerp(L.min.z - 50, L.max.z + 50, R());
-      } else if (side < 0.8) {
-        z = L.min.z - depth;
-        x = THREE.MathUtils.lerp(L.min.x - 50, L.max.x + 50, R());
-      } else {
-        z = L.max.z + depth;
-        x = THREE.MathUtils.lerp(L.min.x - 50, L.max.x + 50, R());
-      }
-      if (inLawn(x, z, 4) || onDrive(x, z) || !free(x, z, 10)) continue;
+    while (outside < 58 && tries++ < 6000) {
+      const [x, z] = around(4 + Math.pow(R(), 1.7) * 38);
+      if (inLawn(x, z, 3) || onDrive(x, z) || !free(x, z, 8.5)) continue;
       const v = Math.floor(R() * variants.length);
-      spots.push([v, x, z, 0.85 + R() * 0.35, R() * Math.PI * 2]);
-      taken.push([x, z, 10]);
+      spots.push([v, x, z, 0.85 + R() * 0.4, R() * Math.PI * 2]);
+      taken.push([x, z, 8.5]);
       outside++;
     }
+    this._around = around;
 
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
@@ -690,8 +756,20 @@ export class Landscape {
     seasonUniforms.uDay.value = day;
     const bbSpots = variants.map(() => []);
     let bb = 0;
+    // the woods behind the belt of real trees: thick, from just behind them out to the fields
     tries = 0;
-    while (bb < 1400 && tries++ < 20000) {
+    while (bb < 1500 && tries++ < 20000) {
+      const [x, z] = this._around(14 + Math.pow(R(), 1.3) * 110);
+      if (inLawn(x, z, 10) || onDrive(x, z)) continue;
+      // (in front of the house, a few clumps; the sides and the back, solid)
+      if (z > L.max.z + 4 && R() > 0.25) continue;
+      if (!taken.every(([tx, tz]) => Math.hypot(tx - x, tz - z) > 5)) continue;
+      const vi = Math.floor(R() * variants.length);
+      bbSpots[vi].push([x, this.hillHeight(x, z) - 0.3, z, 0.8 + R() * 0.5]);
+      bb++;
+    }
+    tries = 0;
+    while (bb < 3300 && tries++ < 30000) {
       const a = R() * Math.PI * 2;
       // more trees near, and in woods (noise) further out
       const r = 120 + Math.pow(R(), 0.8) * 900;
@@ -725,6 +803,8 @@ export class Landscape {
     this.stats.billboards = bb;
 
     if (this.drive) this.group.add(this._makeDriveOn());
+    // (the leaf pictures, for the garden's shrubs: garden.js)
+    this.leafMaps = { oak: variants[0].leaves.map, ash: variants[2].leaves.map, bush: bushes[0].leaves.map };
 
     this.stats.ms = Math.round(performance.now() - t0);
     for (const v of [...variants, ...bushes, ...entrance]) v.tree.clear();

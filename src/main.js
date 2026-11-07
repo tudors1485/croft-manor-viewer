@@ -9,6 +9,7 @@ import { placeIvy } from './ivy.js';
 import { TimeOfDay } from './sky.js';
 import { Lamps } from './lamps.js';
 import { Landscape, makeTerrain, makeHillHeight } from './landscape.js';
+import { Garden } from './garden.js';
 import { installGrade } from './look.js';
 import { Quality, LOOKS } from './quality.js';
 import { tuneMaterials, GRASS_TINT, grassShader, TINTS, buildSkyMap } from './materials.js';
@@ -99,6 +100,8 @@ function updateSeason(force = true) {
 let weather = weatherAt(145, 15, 0);
 let wet = 0; // the ground stays wet for a while after the rain stops
 let wind = 0.2; // eased towards the weather's wind, for the trees and the sound
+let coldness = 0; // 0 a warm day .. 1 a cold one (refreshWeather): smoke from the chimneys
+let garden = null; // hedges, shrub borders, long grass, clipped evergreens, chimney smoke (garden.js)
 const rainfall = new Rainfall(scene);
 const rainbow = new Rainbow(scene); // when the sun comes out after a shower
 const footprints = new Footprints(scene); // yours, in the snow
@@ -146,6 +149,12 @@ function refreshWeather() {
   leaves?.update();
   tod.weather = weather;
   tod.windy = weather.wind;
+  // how cold it is (fires lit, smoke from the chimneys): the real temperature, or the season's and
+  // the hour's (Surrey: about 4 °C in January, 17 °C in July, coldest before dawn)
+  {
+    const t = real?.temperature_2m ?? 10.5 - 6.5 * Math.cos((2 * Math.PI * (seasonDay - 25)) / 365) - 3.5 * Math.cos((2 * Math.PI * (tod.hours - 4)) / 24);
+    coldness = Math.max(THREE.MathUtils.smoothstep(13 - t, 0, 9), snowLies, weather.snowing ?? 0);
+  }
   const lights = auroraAt(seasonDay, tod.hours) && weather.clouds < 0.35 && weather.fog < 0.2 ? ', northern lights' : '';
   $('weather-label').textContent = (real && live.temperature(real) ? `${weather.label}, ${live.temperature(real)}` : weather.label) + lights;
   const src = $('weather-source');
@@ -490,6 +499,12 @@ function updateLockHint() {
 // The tour and the flybys: they remember where you were (and the clock), and put you back
 let tourReturn = null;
 function startTour(id = null) {
+  if (lens) {
+    // (a flyby has its own lens)
+    lens = null;
+    camera.fov = LENS;
+    camera.updateProjectionMatrix();
+  }
   if (mode !== 'tour') {
     const fwd = camera.getWorldDirection(new THREE.Vector3());
     tourReturn = {
@@ -871,19 +886,64 @@ const viewpoints = [['Overview', null, null]];
 async function loadViewpoints() {
   try {
     const res = await fetch('/viewpoints.json');
-    if (res.ok) for (const v of await res.json()) viewpoints.push([v.name, new THREE.Vector3(...v.pos), new THREE.Vector3(...v.target)]);
+    if (res.ok) for (const v of await res.json()) viewpoints.push([v.name, new THREE.Vector3(...v.pos), new THREE.Vector3(...v.target), v]);
   } catch {}
   const sel = $('viewpoint');
   sel.innerHTML = '';
   sel.add(new Option('Go to a place…', ''));
-  for (const [i, [name]] of viewpoints.entries()) sel.add(new Option(name, String(i)));
+  // (the places matching TRJTA's renders of the house, each with the day, the hour and the lens of
+  // its picture, together under their own heading)
+  const pictures = document.createElement('optgroup');
+  pictures.label = 'As in TRJTA\'s pictures';
+  for (const [i, [name, , , v]] of viewpoints.entries()) (v?.group === 'pictures' ? pictures : sel).appendChild(new Option(name, String(i)));
+  if (pictures.children.length) sel.appendChild(pictures);
   sel.onchange = () => {
     if (sel.value === '') return;
-    const [, pos, target] = viewpoints[Number(sel.value)];
+    const [, pos, target, v] = viewpoints[Number(sel.value)];
     sel.value = '';
-    flyTo(pos, target);
     sel.blur();
+    if (v?.scene) {
+      wakeSound();
+      setDate(v.scene.day);
+      setTime(v.scene.hours);
+      $('weather').value = v.scene.weather;
+      refreshWeather();
+      tod.update(true);
+    }
+    // (a place in the air is seen in Orbit: on foot you would land on the drive)
+    if (mode === 'walk' && walker && walker.heightAboveFloor(pos) > 4) setMode('orbit');
+    if (mode === 'tour') leaveTour();
+    flyTo(pos, target);
+    if (v?.fov) holdLens(v.fov);
   };
+}
+
+// A place's own lens (a longer one, as in the picture it matches): held until you move, then it
+// eases back to the usual one while you keep looking at the same thing.
+const LENS = 55;
+let lens = null;
+function holdLens(fov) {
+  camera.fov = fov;
+  camera.updateProjectionMatrix();
+  lens = { held: true };
+}
+function releaseLens() {
+  if (lens) lens.held = false;
+}
+function stepLens(dt) {
+  if (!lens || lens.held) return;
+  camera.fov += (LENS - camera.fov) * (1 - Math.exp(-dt * 2.2));
+  if (Math.abs(camera.fov - LENS) < 0.05) {
+    camera.fov = LENS;
+    lens = null;
+  }
+  camera.updateProjectionMatrix();
+}
+{
+  const moveKeys = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyC', 'KeyQ', 'KeyE']);
+  window.addEventListener('keydown', (e) => moveKeys.has(e.code) && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) && releaseLens());
+  for (const ev of ['pointerdown', 'wheel', 'touchstart']) renderer.domElement.addEventListener(ev, releaseLens, { passive: true });
+  document.querySelectorAll('#dock [data-key]').forEach((b) => b.addEventListener('pointerdown', releaseLens));
 }
 
 $('copy-view').onclick = async () => {
@@ -1181,6 +1241,9 @@ async function prepareWalking(ground) {
       snowman.setSnow(seasonUniforms.uSnow.value);
     }
     leaves = new FallenLeaves(scene, landscape.treeSpots, (x, z) => landscape.groundHeight(x, z));
+    await part(0.4, 'Clipping the hedges and planting the borders');
+    garden = new Garden(scene, { landscape, bvh: geo.boundsTree, gate: landscape.gate });
+    console.info('garden', garden.build());
     await part(0.5, 'Putting up the lights at the gate and the fountain');
     // lights at the gateway, in the fountain and on the assault course (before the first frame: new lights recompile every shader)
     {
@@ -1765,7 +1828,11 @@ function step(dt, exporting = false) {
     tod.inside += (inside - tod.inside) * (1 - Math.exp(-dt * 3));
     tod.applyAmbient();
   }
+  // the sun's shadows: close round you inside, the ground ahead on foot, the estate from above
+  tod.fitShadow(camera, { inside: lamps?.houseBox.containsPoint(camera.position) ? 1 : 0, low: camera.position.y < 9, whole: mode === 'tour' || exporting });
   if (landscape) landscape.update(dt, tod);
+  garden?.update(dt, { cold: coldness, wind, night: tod.night, scale: lamps?.glowMat.uniforms.uScale.value });
+  stepLens(dt);
   if (doors) doors.update(camera, dt);
   camSpeed += ((dt > 0 ? camera.position.distanceTo(lastCam) / dt : 0) - camSpeed) * (1 - Math.exp(-dt * 6));
   if (camSpeed > 60) camSpeed = 0; // a jump to a place, not flight
@@ -2067,6 +2134,12 @@ window.manor = {
   },
   get leaves() {
     return leaves;
+  },
+  get garden() {
+    return garden;
+  },
+  get coldness() {
+    return coldness;
   },
   get spooky() {
     return spooky;
