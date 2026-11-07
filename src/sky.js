@@ -526,7 +526,7 @@ export class TimeOfDay {
     // (there is no real bounce light here), so they keep more of it than at night
     const day = 1 - this.night;
     this.scene.environmentIntensity = env * THREE.MathUtils.lerp(1, THREE.MathUtils.lerp(0.22, 0.34, day), this.inside);
-    this.hemi.intensity = this._hemiBase * THREE.MathUtils.lerp(1, 1.25 + 0.3 * t, this.inside * day) + 1.6 * this.flash * (1 - 0.8 * this.inside);
+    this.hemi.intensity = this._hemiBase * THREE.MathUtils.lerp(1, 1.25 + 0.3 * t, this.inside * day) + 1.6 * this.flash * (1 - 0.55 * this.inside);
     // lightning: the whole sky and the fog go pale violet-white for a moment
     if (this._fogBase) {
       const f = this.flash;

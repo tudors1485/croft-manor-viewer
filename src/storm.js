@@ -127,7 +127,8 @@ export class Storm {
     this.strikes = this.strikes.filter((s) => !s.done);
     this.core.opacity = 1;
     this.flash = flash;
-    this.light.intensity = light * (1 - 0.85 * inside);
+    // (indoors it comes in at the windows: dimmer, but a close strike still lights the room)
+    this.light.intensity = light * (1 - 0.6 * inside);
     return flash;
   }
 }

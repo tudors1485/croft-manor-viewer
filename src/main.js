@@ -12,7 +12,7 @@ import { Landscape, makeTerrain, makeHillHeight } from './landscape.js';
 import { installGrade } from './look.js';
 import { Quality, LOOKS } from './quality.js';
 import { tuneMaterials, GRASS_TINT, grassShader, TINTS, buildSkyMap } from './materials.js';
-import { Tour, FLYBYS, SCENES, checkPath } from './tour.js';
+import { Tour, FLYBYS, SCENES, TOUR_LIGHT, checkPath } from './tour.js';
 import { Soundscape } from './sound.js';
 import { seasonAt, seasonUniforms, dateLabel, Snowfall } from './season.js';
 import { weatherAt, WEATHERS, Rainfall } from './weather.js';
@@ -476,21 +476,28 @@ function startTour(id = null) {
     };
   } else setMode('orbit'); // (from one flyby straight to another)
   flybyId = id;
-  // (with "With seasons and weathers" ticked, any flyby cuts through the seasons as it flies)
-  tour.lapseOver = id && $('flyby-scenes').checked && !FLYBYS[id].lapse?.fixed ? SCENES : null;
+  // (with "With seasons and weathers" ticked, any flyby cuts through the seasons as it flies, or
+  // through its own, if it has them)
+  tour.lapseOver = id && $('flyby-scenes').checked && !FLYBYS[id].lapse?.fixed ? (FLYBYS[id].seasons ?? SCENES) : null;
   const lapse = id && (tour.lapseOver ?? FLYBYS[id].lapse);
   playingLapse = lapse || null;
-  // the seasons cut between their scenes in a new order each time (never the same one twice running)
-  sceneOrder = lapse?.what === 'scenes' ? shuffled(lapse.scenes.length) : null;
+  // the seasons cut between their scenes in a new order each time (never the same one twice
+  // running), or in their own order at their own moments
+  sceneOrder = lapse?.what === 'scenes' ? (lapse.script ? lapse.scenes.map((_, i) => i) : shuffled(lapse.scenes.length)) : null;
   // (always opening on heavy snow)
   const first = lapse?.what === 'scenes' ? lapse.scenes.findIndex((sc) => sc.first) : -1;
   if (first >= 0) sceneOrder = [first, ...sceneOrder.filter((i) => i !== first)];
   sceneShown = -1;
-  if (lapse) {
+  if (lapse || !id) {
     // the flyby runs the clock or the calendar itself
     liveClock = false;
     setPlaying(false);
     setPlayingYear(false);
+  }
+  // the tour: a clear midsummer afternoon, whatever the time, date and weather were (they come back after)
+  if (!id) {
+    playingLapse = { what: 'scenes', scenes: [TOUR_LIGHT] };
+    applyScene(TOUR_LIGHT);
   }
   tour.rate = 1;
   setMode('tour');
@@ -512,7 +519,7 @@ function leaveTour() {
   }
   if (r) {
     // the time and the date as they were before a time-lapse flyby
-    const lapsed = flybyId && lapsedNow;
+    const lapsed = lapsedNow;
     if (lapsed) {
       $('time').value = String(r.clock.hours);
       seasonDay = r.clock.day;
@@ -556,7 +563,8 @@ function applyLapse(l) {
   if (l.what !== 'scenes') return;
   // a cut to another season, time and weather every few seconds, all at once: the trees, the
   // light, the ground soaked or under snow in an instant
-  const k = Math.floor(l.seconds / l.every);
+  // (a scripted one: the last scene whose moment has come)
+  const k = l.script ? Math.max(0, l.scenes.findLastIndex((sc) => sc.at <= l.seconds)) : Math.floor(l.seconds / l.every);
   if (k !== sceneShown) {
     // (past the end of the order, a fresh one that doesn't start with the scene just shown)
     while (k >= sceneOrder.length) {
@@ -566,16 +574,9 @@ function applyLapse(l) {
     }
     sceneShown = k;
     const sc = l.scenes[sceneOrder[k]];
-    seasonDay = sc.day;
-    $('season').value = String(sc.day);
-    $('time').value = String(sc.hours);
-    tod.hours = sc.hours;
-    forcedWeather = sc.weather;
-    updateSeason(true);
-    wet = sc.wet ?? Math.min(1, weather.rain * 3);
-    rainbow.snap = true; // (a cut: a rainbow is there at once, or gone)
-    $('time-label').textContent = tod.label();
+    applyScene(sc);
     $('bar-clock').textContent = `${dateLabel(sc.day)} · ${sc.label ?? WEATHERS[sc.weather]}`;
+
     // a holiday flyby puts on a show: the bonfire already burning, more fireworks, the lights chasing
     setShow(sc.boost ?? 0);
     // the Halloween flyby: the candle upstairs, one figure at a window ahead, the lights failing
@@ -594,9 +595,23 @@ function applyLapse(l) {
   if (sc.run) runClock(sc, l.seconds);
   // the year written in the sky on cue (as the flyby comes up to where it is written, or flies through it)
   for (const at of sc.years ?? []) if (lapseSeconds < at && l.seconds >= at) bonfire?.writeYear();
+  // lightning on cue, close by (the gate flyby's storm in the hall), by the flyby's own clock (so a video has it too)
+  for (const after of sc.strikes ?? []) if (lapseSeconds < (sc.at ?? 0) + after && l.seconds >= (sc.at ?? 0) + after) storm.strike(modelCentre, 160 + Math.random() * 120, true);
   lapseSeconds = l.seconds;
 }
 let lapseSeconds = 0;
+/** A cut to a scene: its date, time and weather all at once (the trees, the light, the ground soaked or under snow). */
+function applyScene(sc) {
+  seasonDay = sc.day;
+  $('season').value = String(sc.day);
+  $('time').value = String(sc.hours);
+  tod.hours = sc.hours;
+  forcedWeather = sc.weather;
+  updateSeason(true);
+  wet = sc.wet ?? Math.min(1, weather.rain * 3);
+  rainbow.snap = true; // (a cut: a rainbow is there at once, or gone)
+  $('time-label').textContent = tod.label();
+}
 /** A holiday flyby's show (0 for none): more rockets and salvos, the ghosts back sooner, the lights chasing. */
 function setShow(boost) {
   if (!boost && spooky) spooky.flight = false;
@@ -1095,17 +1110,19 @@ async function prepareWalking(ground) {
     for (const pk of festive.pumpkins) landscape.obstacles.push({ x: pk.position.x, z: pk.position.z, r: 0.3, when: () => festive.halloween.visible });
     spooky = new Spooky(scene, { bvh: geo.boundsTree, materialAt: (fi) => meshAtFace(geo, fi)?.material.name || '', houseBox: lamps.houseBox, gate: landscape.gate, door: front?.centre ?? null, ground: (x, z) => landscape.groundHeight(x, z) });
     // the bonfire: on open lawn in front of the house, clear of the trees and shrubs
+    // (well clear of the trees' crowns: a big fire under an oak looks wrong)
+    const crownGap = (x, z) => Math.min(...landscape.crowns.map((c) => Math.hypot(c.x - x, c.z - z) - c.r));
     const fireSpot = [
-      [16, 12],
+      [20, 10],
+      [21, 13],
       [17.5, 9],
       [-10, 12],
-      [13, 15],
-      [-12, 8],
-    ].find(([x, z]) => landscape._grassAt(x, z) && landscape.obstacles.every((o) => Math.hypot(o.x - x, o.z - z) > Math.max(4, (o.r ?? 0) + 3.5)));
+      [16, 12],
+    ].find(([x, z]) => landscape._grassAt(x, z) && crownGap(x, z) > 4 && landscape.obstacles.every((o) => Math.hypot(o.x - x, o.z - z) > Math.max(5, (o.r ?? 0) + 4.5)));
     if (fireSpot) {
       const [x, z] = fireSpot;
       bonfire = new Bonfire(scene, new THREE.Vector3(x, landscape.groundHeight(x, z) ?? 0, z), festSound);
-      landscape.obstacles.push({ x, z, r: 1.4, when: () => Bonfire.on(seasonDay) });
+      landscape.obstacles.push({ x, z, r: 2, when: () => Bonfire.on(seasonDay) });
     }
     // the fountain's and the pool's reflections leave out the shrubs and the fallen leaves (costly, too small to see there)
     water?.notMirrored.push(...landscape.shrubs, leaves.mesh);
@@ -1237,14 +1254,14 @@ const HOLIDAYS = {
   // the bonfire in front of you, the house behind it, the fireworks over the roof
   bonfire: { day: 308, hours: 19.75, weather: 'clear', pos: () => [bonfireAt().x - 1.5, 1.7, bonfireAt().z + 6], look: () => [bonfireAt().x - 5, 4.5, bonfireAt().z - 18] },
   // the lights, and snow falling
-  christmas: { day: 357, hours: 18.5, weather: 'snow', pos: [4.6, 1.7, 19.2], look: [2.5, 5, -6] },
+  christmas: { day: 357, hours: 16, weather: 'snow', pos: [4.6, 1.7, 19.2], look: [2.5, 5, -6] },
   // just after midnight: fireworks, and the new year written in the sky
   newyear: { day: 0, hours: 0.02, weather: 'clear', pos: [4.6, 1.7, 19.2], look: [4.5, 16, -20] },
   // the next night with the northern lights: up over the gate, looking north over the house at
   // them (they hang low; on the ground the gate and the house hide most of them)
   aurora: { day: () => nextAuroraNight(dayOfYear(new Date())), hours: 22, weather: 'clear', pos: [4.5, 24, 64], look: [4, 12, -30], orbit: true },
 };
-const bonfireAt = () => bonfire?.at ?? new THREE.Vector3(16, 0, 12);
+const bonfireAt = () => bonfire?.at ?? new THREE.Vector3(20, 0, 10);
 // L switches the room's lights (and the on-screen L key)
 window.addEventListener('keydown', (e) => {
   if (e.code !== 'KeyL' || e.repeat || mode === 'tour') return;

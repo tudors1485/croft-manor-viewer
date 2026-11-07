@@ -8,6 +8,22 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.30.0, 7 November 2026
+
+- The tour is always a clear midsummer afternoon, with the sun raking across the front and in at the windows. Your own time, date and weather come back when it ends.
+- *Through the gate* with seasons and weathers ticked has its own seasons, each where it belongs: winter outside the gate, Halloween at dusk as it goes through, summer near the house, a sunny afternoon as it comes in at the window, then in the hall, all at once, a thunderstorm with lightning lighting the room.
+- Bonfire Night: the bonfire is half as big again (about three metres high), out on the open lawn well clear of the oak it stood under.
+- Christmas Eve is at dusk (16:00), light enough to see the house in the snow, in its flyby and from the Holidays menu.
+- New Year:
+  - "Happy New Year" is written over 2027.
+  - The flyby's ending turns back and circles the house from high up, the fireworks bursting over it, rather than flying on into them.
+- Fireworks look more like the real thing:
+  - Sparks streak along their paths.
+  - They burn white-hot, then their colour, then die orange.
+  - They slow hard in the air.
+  - New kinds of burst: peonies with a heart of another colour, gold chrysanthemums, palms and crackling glitter.
+  - Sparks passing close to the camera stay thin.
+
 ## 0.29.0, 7 November 2026
 
 - Halloween at dusk, in a storm and fog (*Storm in the fog*, also in the Weather menu), light enough to see, dark enough to be eerie. The house is dark, and the front door stands ajar, stirring in the wind.
