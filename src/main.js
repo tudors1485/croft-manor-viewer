@@ -303,8 +303,15 @@ function placeDock() {
   const credits = document.querySelector('.sfx-game-credits-btn');
   document.body.classList.toggle('has-credits', !!credits);
   dock.classList.add('under-panel');
+  panel.style.maxHeight = '';
   const room = innerHeight - panel.getBoundingClientRect().bottom - 12 - 10 - (credits ? 34 : 0);
   dock.classList.toggle('under-panel', dock.offsetHeight <= room);
+  // on a narrow screen the keys in the corner would sit over the panel: the panel stops above them (and scrolls)
+  if (!dock.classList.contains('under-panel') && !dock.hidden) {
+    const p = panel.getBoundingClientRect();
+    const d = dock.getBoundingClientRect();
+    if (d.width && d.left < p.right && d.top < p.bottom) panel.style.maxHeight = `${Math.max(160, d.top - p.top - 10)}px`;
+  }
 }
 window.addEventListener('resize', placeDock);
 $('video-section').addEventListener('toggle', placeDock);

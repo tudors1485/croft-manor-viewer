@@ -242,7 +242,7 @@ export class Spooky {
     const outside = !this.houseBox.containsPoint(p);
     const strike = flash > 0.55 && this._flash <= 0.55;
     this._flash = flash;
-    const fwd = camera.getWorldDirection(new THREE.Vector3());
+    const fwd = camera.getWorldDirection((this._fwd ??= new THREE.Vector3()));
     // which way you are going along the front (the flyby times its moments by it)
     const vx = dt > 0 && this._lastX !== undefined ? (p.x - this._lastX) / dt : 0;
     this._lastX = p.x;
@@ -324,7 +324,7 @@ export class Spooky {
     if (this.gate && this.door) {
       const byDoor = Math.hypot(p.x - this.door.x, p.z - this.door.z) < 4.6 && p.y < this.door.y + 2.5;
       this.nearDoor = byDoor ? this.nearDoor + dt : 0;
-      const to = this.gateFigure.position.clone().sub(p);
+      const to = (this._to ??= new THREE.Vector3()).copy(this.gateFigure.position).sub(p);
       const dist = to.length();
       const seen = to.normalize().dot(fwd) > Math.cos(THREE.MathUtils.degToRad(14));
       if (this.gateState === 'waiting' && this.nearDoor > 4 && !seen) {

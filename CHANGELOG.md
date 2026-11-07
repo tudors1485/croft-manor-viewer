@@ -8,6 +8,25 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.33.1, 7 November 2026
+
+QA: speed, security, the interface.
+
+- Fixed:
+  - On a phone, the walking keys sat over the bottom of the panel. The panel now stops above them and scrolls.
+  - The line at the top (an Easter egg found) stays on one line on a narrow screen.
+- Quicker:
+  - The crow flocks, the Halloween effects and your light no longer make garbage every frame. That was a new vector and matrix for every bird, every frame.
+  - Your light does no work while it is off.
+- Checked:
+  - Speed: loading takes about 8 s from this machine. The flybys run at 45 to 60 fps at full Retina size, and night is about a third faster than in 0.31.0 (see 0.32.0).
+  - Videos export with the new scenes and sounds.
+  - Security: no dependency has a known vulnerability; the saved light choice is checked against the menu before use; nothing new writes HTML or reaches an outside service.
+  - Every camera path is clear of walls and trees.
+- Known:
+  - The Halloween flyby still stutters for about a second as it starts, while the dusk storm's shaders compile. Compiling them all before it moves was slower (3 s here), so it stays as it is.
+  - The page's script is 5.3 MB, about the same as before: 3.9 MB of it is the tree generator's own pictures, built into the library.
+
 ## 0.33.0, 7 November 2026
 
 - Wildlife, each at its own time of year and day, not every day and never many at once, with real recordings of their calls:

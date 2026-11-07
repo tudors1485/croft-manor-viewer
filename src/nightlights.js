@@ -189,8 +189,9 @@ export class MyLight {
     const want = walking && this.kind !== 'off' ? dark : 0;
     this.amount += (want - this.amount) * (1 - Math.exp(-dt * 4));
     const a = this.amount;
-    const fwd = camera.getWorldDirection(new THREE.Vector3());
-    const right = new THREE.Vector3().crossVectors(fwd, camera.up).normalize();
+    if (a < 0.001 && this.kind === 'off') return; // (nothing to light: no work)
+    const fwd = camera.getWorldDirection((this._fwd ??= new THREE.Vector3()));
+    const right = (this._right ??= new THREE.Vector3()).crossVectors(fwd, camera.up).normalize();
     const on = (k) => (this.kind === k ? a : 0);
     // the glow, a little above your head
     this.glow.position.copy(camera.position).add(new THREE.Vector3(0, 0.5, 0));

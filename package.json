@@ -1,7 +1,7 @@
 {
   "name": "croft-manor-viewer",
   "private": true,
-  "version": "0.33.0",
+  "version": "0.33.1",
   "type": "module",
   "scripts": {
     "build:model": "node scripts/build-model.mjs",

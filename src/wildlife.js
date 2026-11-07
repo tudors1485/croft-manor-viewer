@@ -25,6 +25,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 
 const ss = THREE.MathUtils.smoothstep;
+const UP = new THREE.Vector3(0, 1, 0);
 const hash = (n) => {
   const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
   return x - Math.floor(x);
@@ -129,10 +130,10 @@ class Flock {
     this._m.compose(p, this._q, this._one);
     this.bodies.setMatrixAt(i, this._m);
     this.tails.setMatrixAt(i, this._m);
-    this._w.makeRotationZ(beat);
-    this.wingsL.setMatrixAt(i, this._w.clone().premultiply(this._m));
-    this._w.makeRotationZ(-beat);
-    this.wingsR.setMatrixAt(i, this._w.clone().premultiply(this._m));
+    this._w.makeRotationZ(beat).premultiply(this._m);
+    this.wingsL.setMatrixAt(i, this._w);
+    this._w.makeRotationZ(-beat).premultiply(this._m);
+    this.wingsR.setMatrixAt(i, this._w);
   }
 
   show(n) {
@@ -332,10 +333,10 @@ export class Wildlife {
     f.t += dt;
     // the flock's middle: straight across the sky, or in to wheel round over the trees, then off
     if (f.wheel && f.t < f.life) {
-      const toAim = f.aim.clone().sub(f.centre);
+      const toAim = (this._toAim ??= new THREE.Vector3()).copy(f.aim).sub(f.centre);
       const d = toAim.length();
       if (d > f.radius) f.dir.lerp(toAim.normalize(), 1 - Math.exp(-dt * (f.radius < 40 ? 2 : 0.8))).normalize();
-      else f.dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), (dt * f.speed) / f.radius).normalize();
+      else f.dir.applyAxisAngle(UP, (dt * f.speed) / f.radius).normalize();
     }
     f.centre.addScaledVector(f.dir, f.speed * dt);
     f.centre.y += (f.aim.y + 6 * Math.sin(f.t * 0.2) - f.centre.y) * (1 - Math.exp(-dt * 0.5));
@@ -345,10 +346,10 @@ export class Wildlife {
       this.crows.show(0);
       return;
     }
-    // each bird about the middle, drifting in and out of place
+    // each bird about the middle, drifting in and out of place (scratch vectors: no garbage each frame)
+    const want = (this._want ??= new THREE.Vector3());
     f.birds.forEach((b, i) => {
-      const wob = new THREE.Vector3(Math.sin(this.t * 0.5 + b.phase) * 5, Math.sin(this.t * 0.7 + b.phase * 2) * 2, Math.cos(this.t * 0.4 + b.phase) * 5);
-      const want = f.centre.clone().add(b.off).add(wob);
+      want.set(Math.sin(this.t * 0.5 + b.phase) * 5, Math.sin(this.t * 0.7 + b.phase * 2) * 2, Math.cos(this.t * 0.4 + b.phase) * 5).add(f.centre).add(b.off);
       b.v.copy(want).sub(b.p).multiplyScalar(b.p.lengthSq() ? 1.2 : 0);
       if (!b.p.lengthSq()) b.p.copy(want);
       b.v.addScaledVector(f.dir, f.speed);
