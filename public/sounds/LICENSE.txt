@@ -1,0 +1,29 @@
+The wildlife's calls: real recordings, each trimmed to one call or phrase, made mono, and set
+to the same level (the clips are adaptations of the originals, under the same licences).
+
+crow-1, crow-2, crow-3   Carrion crow 1, 3 and 2, Le tiroir du fond, BigSoundBank        CC0 1.0
+                         https://bigsoundbank.com/carrion-crow-1-s3461.html (and -s3463, -s3462)
+crows                    Crows #1, Joseph SARDIN, BigSoundBank                           CC0 1.0
+                         https://bigsoundbank.com/crows-s0754.html
+robin-1, robin-2         Robin 7 and 2, Joseph SARDIN, BigSoundBank                      CC0 1.0
+                         https://bigsoundbank.com/robin-7-s1673.html (and robin-2-s1668)
+cat                      Meow cat 1, Joseph SARDIN, BigSoundBank                         CC0 1.0
+                         https://bigsoundbank.com/meow-cat-1-s1889.html
+woodpigeon               Ringeltaube (ruft), Jens Kraglund, Wikimedia Commons            public domain
+                         https://commons.wikimedia.org/wiki/File:Ringeltaube_(ruft).ogg
+magpie-1, magpie-2       Pica pica, Oona Räisänen, Wikimedia Commons                     public domain
+                         https://commons.wikimedia.org/wiki/File:Pica_pica.ogg
+dove                     Tourterelle, Alacave62, Wikimedia Commons                       CC BY-SA 4.0
+                         https://commons.wikimedia.org/wiki/File:Tourterelle.ogg
+kite                     Milvus milvus (XC576967), Pascal Christe (xeno-canto), Commons  CC BY-SA 4.0
+                         https://commons.wikimedia.org/wiki/File:Milvus_milvus_-_Red_Kite_XC576967.mp3
+mallard                  Anas platyrhynchos (XC62258), Jonathon Jongsma, Commons        CC BY-SA 3.0
+                         https://commons.wikimedia.org/wiki/File:Anas_platyrhynchos_-_Mallard_-_XC62258.ogg
+fox-scream-1, -2         FuchsSchreit, Livlandfahrer, Wikimedia Commons                  CC BY-SA 4.0
+                         https://commons.wikimedia.org/wiki/File:FuchsSchreit.mp3
+fox-bark                 Bellender Fuchs, Jugrü, Wikimedia Commons                       CC BY-SA 3.0
+                         https://commons.wikimedia.org/wiki/File:Bellender_Fuchs.ogg
+
+CC0 1.0: https://creativecommons.org/publicdomain/zero/1.0/
+CC BY-SA 3.0: https://creativecommons.org/licenses/by-sa/3.0/
+CC BY-SA 4.0: https://creativecommons.org/licenses/by-sa/4.0/

@@ -8,6 +8,21 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.33.0, 7 November 2026
+
+- Wildlife, each at its own time of year and day, not every day and never many at once, with real recordings of their calls:
+  - crows in autumn, flocks crossing the sky or wheeling over the trees, more towards evening
+  - a red kite circling high
+  - wood pigeons on the roof, cooing, and a collared dove
+  - a robin that comes down near you in the garden and sings
+  - magpies on the lawns
+  - rabbits at dawn and dusk in spring and summer, bolting when you come near
+  - a fox crossing the lawn at night, and foxes screaming or barking in the fields
+  - a black cat about the front of the house some mornings and evenings
+  - mallards on the fountain or the water by the assault course
+- Some May mornings one of the deer wanders up to graze just outside the gate.
+- New Sights in the Holidays menu: *Deer at dawn*, *A rainbow* and *Crows in autumn*.
+
 ## 0.32.0, 7 November 2026
 
 - Run, beside Walk, Orbit and Fly: you walk at a run, and Shift walks.

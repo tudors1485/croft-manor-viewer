@@ -1,6 +1,19 @@
-deer.glb  "Deer" by Quaternius, https://poly.pizza/m/T6Cs7tmMHJ
-stag.glb  "Stag" by Quaternius, https://poly.pizza/m/tQdzbZ1Cmw
+The animals' models. Changed here: trimmed to the animations the viewer uses (keyframes
+resampled), and some recoloured, as noted.
 
-Both CC0 1.0 (public domain dedication): https://creativecommons.org/publicdomain/zero/1.0/
-Changed here: trimmed to the animations the viewer uses (Eating, Walk, Idle, Idle_Headlow,
-Gallop), keyframes resampled.
+deer.glb    "Deer" by Quaternius, https://poly.pizza/m/T6Cs7tmMHJ            CC0 1.0
+stag.glb    "Stag" by Quaternius, https://poly.pizza/m/tQdzbZ1Cmw            CC0 1.0
+fox.glb     "Fox" by Quaternius, https://poly.pizza/m/Bc97C66HKi             CC0 1.0
+cat.glb     "Cat" from Quaternius's Animated Animals Low Poly pack,
+            https://opengameart.org/content/animated-animales-low-poly        CC0 1.0
+kite.glb    "Eagle" from the same pack, recoloured as a red kite              CC0 1.0
+duck.glb    "Rigged Duck" by weirdybeardyman, https://opengameart.org/content/rigged-duck   CC0 1.0
+rabbit.glb  "Rabbit" by Sherkiz, https://poly.pizza/m/Km89u3twcR             CC BY 3.0
+drake.glb   "Mallard duck" by Poly by Google, https://poly.pizza/m/frSLi6b6Vid   CC BY 3.0
+magpie.glb  "Sparrow" by Poly by Google, https://poly.pizza/m/70zu6VzQmL4    CC BY 3.0
+pigeon.glb  "Dove" by Poly by Google, https://poly.pizza/m/2jmH3trzPFf       CC BY 3.0 (tinted grey)
+robin.glb   "Robin" by jeremy, https://poly.pizza/m/53HOg-b1F4r              CC BY 3.0 (recoloured
+            as a European robin)
+
+CC0 1.0: https://creativecommons.org/publicdomain/zero/1.0/
+CC BY 3.0: https://creativecommons.org/licenses/by/3.0/

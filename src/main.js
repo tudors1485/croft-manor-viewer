@@ -13,7 +13,7 @@ import { installGrade } from './look.js';
 import { Quality, LOOKS } from './quality.js';
 import { tuneMaterials, GRASS_TINT, grassShader, TINTS, buildSkyMap } from './materials.js';
 import { Tour, FLYBYS, SCENES, TOUR_LIGHT, checkPath } from './tour.js';
-import { Soundscape } from './sound.js';
+import { Soundscape, loadSamples } from './sound.js';
 import { seasonAt, seasonUniforms, dateLabel, Snowfall } from './season.js';
 import { weatherAt, WEATHERS, Rainfall } from './weather.js';
 import { LiveWeather } from './liveweather.js';
@@ -25,7 +25,7 @@ import { Bonfire } from './bonfire.js';
 import { Storm } from './storm.js';
 import { Rainbow } from './rainbow.js';
 import { Footprints } from './footprints.js';
-import { Park } from './park.js';
+import { Park, wanderDay } from './park.js';
 import { Aurora, auroraAt, nextAuroraNight } from './aurora.js';
 import { VR } from './vr.js';
 import { Lanterns } from './lanterns.js';
@@ -35,6 +35,7 @@ import { installErrorLog, setupReport } from './report.js';
 import { LoadingBar, nextFrame } from './loading.js';
 import { Easter, nextEaster } from './easter.js';
 import { nightLights, MyLight } from './nightlights.js';
+import { Wildlife, WILD_SOUNDS } from './wildlife.js';
 
 installErrorLog();
 
@@ -120,6 +121,7 @@ let nightPools = null; // the floodlights' pools of light on the assault course 
 let nightPoolLight = null; // and the light they go on and off with
 let bonfire = null; // Bonfire Night (bonfire.js)
 let park = null; // deer at dawn, bats at summer dusk (park.js)
+let wildlife = null; // crows, the kite, pigeons, a robin, magpies, rabbits, a fox, a cat, ducks (wildlife.js)
 let pathProblems = null; // what the check of the camera paths found (for the console)
 let forcedWeather = null;
 const live = new LiveWeather(() => {
@@ -1180,7 +1182,17 @@ async function prepareWalking(ground) {
       const pt = mv.pos.getPointAt(i / 300);
       if (pt.y < 14) low.push(pt);
     }
-    park = new Park(scene, { ground: groundAt, avoid: low });
+    park = new Park(scene, { ground: groundAt, avoid: low, gate: landscape.gate });
+    wildlife = new Wildlife(scene, {
+      ground: groundAt,
+      isLawn: (x, z) => landscape._grassAt(x, z),
+      bvh: geo.boundsTree,
+      houseBox: lamps.houseBox,
+      waters: (water?.surfaces ?? []).filter((w) => w.outdoor).map((w) => w.mesh).filter(Boolean),
+      sound: wildSound,
+    });
+    wildlife.load().catch((err) => console.warn('the wildlife did not load:', err.message));
+    loadSamples(WILD_SOUNDS).then((n) => console.info(`wildlife sounds: ${n} of ${WILD_SOUNDS.length}`));
     park.load().catch((err) => console.warn('the deer did not load:', err.message));
     if (problems.length) console.warn(`camera paths touch walls or trees at ${problems.length} points`, JSON.stringify(problems.slice(0, 12)));
     else console.info('camera paths: clear of walls and trees');
@@ -1314,6 +1326,12 @@ const HOLIDAYS = {
   // the next night with the northern lights: up over the gate, looking north over the house at
   // them (they hang low; on the ground the gate and the house hide most of them)
   aurora: { day: () => nextAuroraNight(dayOfYear(new Date())), hours: 22, weather: 'clear', pos: [4.5, 24, 64], look: [4, 12, -30], orbit: true },
+  // a May morning when one of the deer wanders up to the gate: from inside the gateway, looking out at her and the herd beyond
+  deer: { day: () => wanderDay(), hours: 6.75, weather: 'clear', pos: [4.6, 1.7, 23.5], look: [2, 1.2, 40] },
+  // an April evening, the sun out after a shower, looking east, away from it
+  rainbow: { day: 118, hours: 18.2, weather: 'clear', wet: 1, pos: [-8, 1.7, 12], look: [50, 9, 10] },
+  // an autumn afternoon, the crows going over to roost
+  crows: { day: 300, hours: 15.6, weather: 'clear', pos: [4.6, 3, 3.5], look: [5.5, 32, -40], orbit: true, then: () => wildlife?.crowsNow() },
 };
 const bonfireAt = () => bonfire?.at ?? new THREE.Vector3(20, 0, 10);
 // L switches the room's lights (and the on-screen L key)
@@ -1347,7 +1365,9 @@ $('holiday').onchange = (e) => {
   setTime(h.hours);
   $('weather').value = h.weather;
   refreshWeather();
+  if (h.wet) wet = h.wet; // (the ground still wet from a shower)
   tod.update(true);
+  h.then?.();
   const v = (x) => new THREE.Vector3(...(typeof x === 'function' ? x() : x));
   if (h.orbit && mode !== 'orbit') {
     if (mode === 'tour') leaveTour();
@@ -1599,6 +1619,7 @@ function step(dt, exporting = false) {
     myLight.update(dt, camera, mode === 'walk' && !!walker, THREE.MathUtils.smoothstep(tod.night, 0.25, 0.7));
     if (nightPools) nightPools.opacity = (nightPoolLight?.on ?? 0) * (1 - lamps.cut);
     park?.update(dt, { sunDeg, hours: tod.hours, day: seasonDay, camera, onFoot: mode === 'walk' });
+    wildlife?.update(dt, { day: seasonDay, hours: tod.hours, sunDeg, camera, feet: mode === 'walk' && walker ? walker.feet : null, weather, inside: tod.inside, frozen: seasonUniforms.uIce.value });
     easter?.update(dt, { day: seasonDay, night: tod.night, snow: seasonUniforms.uSnow.value, wind: weather.wind, feet: mode === 'walk' && walker ? walker.feet : null });
     // Easter morning: the church bells across the fields, from a quarter past nine until half past eleven
     if (!exporting && Easter.sunday(seasonDay) && tod.hours > 9.25 && tod.hours < 11.5) sound.peal(CHURCH);
@@ -1689,6 +1710,10 @@ function soundEnv() {
 let exporting = false;
 let videoDoorEvents = []; // doors that open during a video frame, for its sound
 let videoSoundEvents = []; // the festivals' sounds during a video frame: [what, ...its arguments]
+// the wildlife's calls: played, or noted down for the video's soundtrack
+const wildSound = {
+  sample: (name, p, opts) => (exporting ? videoSoundEvents.push(['sample', name, p?.clone() ?? null, opts]) : sound.sample(name, p, opts)),
+};
 // The festivals' sounds (the bonfire, rockets and bangs, the thunder): played as they happen, or,
 // while a video is being made, noted down frame by frame for its soundtrack (video.js plays them back)
 const festSound = {
@@ -1916,6 +1941,9 @@ window.manor = {
   },
   get easter() {
     return easter;
+  },
+  get wildlife() {
+    return wildlife;
   },
   get storm() {
     return storm;

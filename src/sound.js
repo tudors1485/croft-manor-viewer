@@ -15,6 +15,22 @@ import * as THREE from 'three';
 const _fwd = new THREE.Vector3();
 const _up = new THREE.Vector3();
 
+// Recorded sounds (the wildlife's calls, public/sounds): decoded once and shared by every sound
+// context, the page's and a video's
+export const SAMPLES = {};
+export async function loadSamples(names, base = '') {
+  const ctx = new OfflineAudioContext(1, 1, 32000);
+  await Promise.all(
+    names.map(async (n) => {
+      try {
+        const r = await fetch(`${base}sounds/${n}.mp3`);
+        if (r.ok) SAMPLES[n] = await ctx.decodeAudioData(await r.arrayBuffer());
+      } catch {}
+    }),
+  );
+  return Object.keys(SAMPLES).length;
+}
+
 export class Soundscape {
   /** @param {{ context?: BaseAudioContext }} [opts] give a context to render offline */
   constructor(opts = {}) {
@@ -484,6 +500,18 @@ export class Soundscape {
       this._pealRow = k + 1;
       this._pealAt += 0.29 + (bell === 5 && (Math.floor(k / 6) % 2 === 1) ? 0.29 : 0);
     }
+  }
+
+  /** A recorded sound (SAMPLES) at `position` (or everywhere, if null). */
+  sample(name, position, { ref = 10, rolloff = 1, max = 400, gain = 1, rate = 1 } = {}) {
+    if (!this.on || !this.ctx || !Object.hasOwn(SAMPLES, name)) return;
+    const src = this.ctx.createBufferSource();
+    src.buffer = SAMPLES[name];
+    src.playbackRate.value = rate;
+    const g = this.ctx.createGain();
+    g.gain.value = Math.max(0, Math.min(2, gain));
+    src.connect(g).connect(position ? this._placed(position, { ref, rolloff, max }) : this.master);
+    src.start();
   }
 
   /** A little chime (an Easter egg found): two bright notes and a sparkle. */

@@ -5,7 +5,8 @@
 // from first light until a couple of hours after sunrise: heads down eating, looking up now and
 // then, walking a few steps to fresh grass. Come within about twenty metres on foot and they lift
 // their heads and bound away, settling again further off. They keep to their field, clear of
-// every camera path.
+// every camera path; except that some mornings in May one doe wanders off to graze on the verge
+// of the drive just outside the gate, where you can see her through the gateway.
 //
 // The bats are drawn here (a body and two wings, flapping): a dozen from late May to early
 // September, from just after sunset for about an hour, flitting fast and jinking round the front
@@ -17,6 +18,22 @@ import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 
 const ss = THREE.MathUtils.smoothstep;
 const HERD = { x: -18, z: 68, r: 14 }; // the field south-west of the gate, outside the walls
+const hash = (n) => {
+  const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+  return x - Math.floor(x);
+};
+
+/** Some mornings in May one doe wanders off from the herd to graze on the verge just outside the gate. */
+export function wanders(day) {
+  const d = Math.floor(day);
+  return d >= 121 && d <= 151 && hash(d * 3.1 + 5) < 0.5;
+}
+
+/** The next May day she does (for the Sights menu). */
+export function wanderDay() {
+  for (let d = 121; d <= 151; d++) if (wanders(d)) return d;
+  return 135;
+}
 
 export class Park {
   /**
@@ -25,8 +42,9 @@ export class Park {
    * @param {(x: number, z: number) => number} o.ground the ground's height
    * @param {THREE.Vector3[]} o.avoid points the camera paths pass low over (the deer keep clear)
    */
-  constructor(scene, { ground, avoid = [] }) {
+  constructor(scene, { ground, avoid = [], gate = null }) {
     this.scene = scene;
+    this.gate = gate;
     this.ground = ground;
     this.avoid = avoid.filter((p) => Math.hypot(p.x - HERD.x, p.z - HERD.z) < HERD.r + 30);
     this.deer = [];
@@ -109,6 +127,21 @@ export class Park {
     // dawn: from first light until the sun is about 20° up (or 10 o'clock), in the morning
     const dawn = hours < 12 && sunDeg > -7 && sunDeg < 20 && hours < 10.5;
     this.group.visible = dawn && this.deer.length > 0;
+    // a May morning: once it is light, she sets off for the gate
+    const w = this.deer[0];
+    if (w && this.gate && wanders(day) && dawn && sunDeg > -2 && !w.wandered && w.state === 'graze') {
+      w.wandered = true;
+      w.target = new THREE.Vector2(this.gate.x + 2.4, this.gate.z + 8);
+      w.state = 'walk';
+      w.timer = 120;
+      // (arriving later in the morning than she sets off, at first light: she is there already)
+      if (sunDeg > 4) {
+        w.holder.position.set(w.target.x, this.ground(w.target.x, w.target.y), w.target.y);
+        w.state = 'graze';
+        w.target = null;
+      }
+    }
+    if (w && !dawn) w.wandered = false;
     if (this.group.visible) this._updateDeer(dt, camera, onFoot);
     // bats: late May to early September, from just after sunset for about an hour
     const summer = day > 140 && day < 250;
