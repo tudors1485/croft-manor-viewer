@@ -27,6 +27,7 @@ import { Rainbow } from './rainbow.js';
 import { Footprints } from './footprints.js';
 import { Park } from './park.js';
 import { Aurora, auroraAt, nextAuroraNight } from './aurora.js';
+import { VR } from './vr.js';
 import { makeVideo, FORMATS, videoSupported } from './video.js';
 import { setupPool, poolUniforms } from './pool.js';
 import { installErrorLog, setupReport } from './report.js';
@@ -330,6 +331,45 @@ window.addEventListener('pointerup', () => {
   drag = null;
 });
 let dragged = 0;
+// VR (vr.js): the button only appears when the browser says there's a headset
+const vr = new VR(renderer, camera, {
+  hit: (origin, dir, far) => (walker ? firstHit(walker.bvh, origin, dir, far, passDoor) : null),
+  slide: (from, to, r) => walker && !throughWalls && moveSphere(walker.bvh, from, to, r, passDoor),
+});
+vr.check().then((ok) => ($('vr').hidden = !ok));
+$('vr').onclick = async (e) => {
+  e.currentTarget.blur();
+  wakeSound();
+  if (photo) setPhoto(false);
+  if (mode === 'tour') leaveTour();
+  // stand where you are (on the floor under you), or on the drive if you are up in the air
+  const fwd = camera.getWorldDirection(new THREE.Vector3());
+  let feet;
+  if (mode === 'walk' && walker) feet = walker.feet.clone().setY(walker.feet.y - 0.02);
+  else {
+    const below = walker && firstHit(walker.bvh, camera.position, new THREE.Vector3(0, -1, 0), 3, passDoor);
+    feet = below ? below.point.clone() : SPAWN.eye.clone().setY(SPAWN.eye.y - 1.62);
+    if (!below) fwd.subVectors(SPAWN.look, SPAWN.eye);
+  }
+  try {
+    await vr.enter(feet, Math.atan2(-fwd.x, -fwd.z));
+    document.body.classList.add('in-vr');
+  } catch (err) {
+    console.warn('VR did not start:', err.message);
+  }
+};
+vr.onEnd = () => {
+  document.body.classList.remove('in-vr');
+  camera.updateProjectionMatrix();
+  quality.apply();
+  // back on your feet where you took the headset off
+  if (walker) {
+    const fwd = camera.getWorldDirection(new THREE.Vector3()).setY(0);
+    setMode('walk');
+    walker.placeAt(camera.position.clone(), camera.position.clone().add(fwd));
+  }
+};
+
 // Photo mode: the panel and the keys hidden, a click to focus, a film look and a blur, then save.
 // A running flyby holds still while you take it.
 let photo = false;
@@ -1431,7 +1471,9 @@ function step(dt, exporting = false) {
   if (camSpeed > 60) camSpeed = 0; // a jump to a place, not flight
   lastCam.copy(camera.position);
   if (!exporting) sound.update(dt, camera, soundEnv());
-  if (mode === 'tour') {
+  if (vr.presenting) {
+    vr.update(dt); // (the headset moves the camera; the sticks move you)
+  } else if (mode === 'tour') {
     if (!tour.update(dt) && !exporting) leaveTour();
     else if (tour.lapse) applyLapse(tour.lapse);
   } else if (mode === 'orbit') {
@@ -1472,7 +1514,9 @@ function step(dt, exporting = false) {
   // sunbeams indoors by day: they fade in as you go inside and with the sun's height
   const sunUp = THREE.MathUtils.smoothstep(tod.sunDir.y, 0.02, 0.2) * (1 - tod.night);
   quality.beams.strength = BEAMS.strength * tod.inside * sunUp * Number($('sunbeams').checked);
-  quality.render(dt);
+  // (in the headset, drawn straight, two eyes; the post-processing is for the screen)
+  if (vr.presenting) renderer.render(scene, camera);
+  else quality.render(dt);
 }
 
 /** What the sound needs to know about this moment. */
@@ -1727,6 +1771,7 @@ window.manor = {
   aurora,
   setPhoto,
   focusAt,
+  vr,
   get park() {
     return park;
   },

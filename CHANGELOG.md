@@ -8,6 +8,10 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.26.0, 7 November 2026
+
+- VR: with a headset, *Enter VR* appears in the panel. You stand where you were; the left stick walks you, the right stick turns you in steps, and a trigger hops you forward. Walls stop you and you follow the stairs. Not yet tried on a real headset.
+
 ## 0.25.0, 7 November 2026
 
 - Photo mode: the panel and the hints go, you click on the picture to focus, set how much the rest blurs, and pick a film look (warm film, a faded print, teal and orange, black and white, sepia), then save it at full resolution. A flyby holds still while you take it.
