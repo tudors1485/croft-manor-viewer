@@ -841,10 +841,19 @@ export class Garden {
   _smoke() {
     // the stacks with a fire under them: the tall triple stack, the one by the porch, one at the back
     this.chimneys = [new THREE.Vector3(15.4, 14.6, -17.7), new THREE.Vector3(-4.0, 10.7, -13.4), new THREE.Vector3(7.6, 11.1, -29.5)];
-    this.smoke = new Particles(420, { additive: false, map: puffPicture(), max: 140, near: 7 });
+    this.smoke = new Particles(1100, { additive: false, map: puffPicture(), max: 140, near: 7 });
     this.smoke.points.renderOrder = 7;
     this.group.add(this.smoke.points);
     this._puff = this.chimneys.map(() => 0);
+  }
+
+  /** A jump in the date or the time: the smoke of before is gone. */
+  clearSmoke() {
+    const sm = this.smoke;
+    if (!sm) return;
+    sm.life.fill(0);
+    sm.alpha.fill(0);
+    sm.flush();
   }
 
   /**
@@ -864,7 +873,8 @@ export class Garden {
       this._puff[k] -= dt;
       if (this._puff[k] > 0) return;
       // (thick on a cold day: a puff every fraction of a second)
-      this._puff[k] = THREE.MathUtils.lerp(0.5, 0.11, fire) * (0.7 + Math.random() * 0.6);
+      // (many small, faint puffs, overlapping into a column)
+      this._puff[k] = THREE.MathUtils.lerp(0.2, 0.045, fire) * (0.7 + Math.random() * 0.6);
       const i = sm.spawn();
       sm.pos.set([c.x + (Math.random() - 0.5) * 0.3, c.y, c.z + (Math.random() - 0.5) * 0.3], i * 3);
       sm.vel.set([(Math.random() - 0.5) * 0.3, 1.1 + Math.random() * 0.5, (Math.random() - 0.5) * 0.3], i * 3);
@@ -887,8 +897,8 @@ export class Garden {
       // pale grey by day; at night a faint veil, a little darker than the sky (seen against the stars)
       const v = THREE.MathUtils.lerp(0.86, 0.09, night);
       sm.col.set([v, v * 1.03, v * 1.12], i * 3);
-      sm.size[i] = 1.2 + u * 8.5;
-      sm.alpha[i] = Math.min(1, u * 8) * (1 - u) * (1 - u) * THREE.MathUtils.lerp(0.62, 0.22, night) * sm.data[i * 4 + 1];
+      sm.size[i] = 0.7 + u * 6.5;
+      sm.alpha[i] = Math.min(1, u * 8) * (1 - u) * (1 - u) * THREE.MathUtils.lerp(0.3, 0.12, night) * sm.data[i * 4 + 1];
     }
     sm.flush();
   }

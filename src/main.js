@@ -152,7 +152,8 @@ function refreshWeather() {
   // how cold it is (fires lit, smoke from the chimneys): the real temperature, or the season's and
   // the hour's (Surrey: about 4 °C in January, 17 °C in July, coldest before dawn)
   {
-    const t = real?.temperature_2m ?? 10.5 - 6.5 * Math.cos((2 * Math.PI * (seasonDay - 25)) / 365) - 3.5 * Math.cos((2 * Math.PI * (tod.hours - 4)) / 24);
+    const h = Number($('time').value);
+    const t = real?.temperature_2m ?? 10.5 - 6.5 * Math.cos((2 * Math.PI * (seasonDay - 25)) / 365) - 3.5 * Math.cos((2 * Math.PI * (h - 4)) / 24);
     coldness = Math.max(THREE.MathUtils.smoothstep(13 - t, 0, 9), snowLies, weather.snowing ?? 0);
   }
   const lights = auroraAt(seasonDay, tod.hours) && weather.clouds < 0.35 && weather.fog < 0.2 ? ', northern lights' : '';
@@ -1539,6 +1540,7 @@ $('reset').onclick = (e) => {
 /** Moves the clock (off the real time). */
 function setTime(h) {
   setPlaying(false);
+  garden?.clearSmoke();
   $('time').value = String(h);
   clockMoved();
   updateSun();
@@ -1546,6 +1548,7 @@ function setTime(h) {
 /** Moves the calendar (off the real date). */
 function setDate(day) {
   setPlayingYear(false);
+  garden?.clearSmoke();
   seasonDay = day;
   $('season').value = String(day);
   clockMoved();

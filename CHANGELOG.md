@@ -8,6 +8,13 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.42.0, 7 November 2026
+
+The crows, and the chimney smoke.
+
+- **Crows in autumn** (Sights): over two hundred crows, a dense, dark mass over the house with ragged edges, already in the picture as the sight opens, coming in from the right and wheeling overhead for a minute and a half, with the din of a whole flock (a new recording: "Crows singing" by IgnasD, CC0) over the single caws. The evening flocks going to roost are bigger too (70 to 130).
+- **Chimney smoke**: thin wisps rising from the chimneys, many small faint puffs overlapping, instead of a string of round balls; a jump in the date or the time clears the smoke of before (it hung on from a cold night into an October afternoon).
+
 ## 0.41.0, 7 November 2026
 
 Animals, Santa on the roof, New Year towards the gate.

@@ -189,7 +189,7 @@ export class Wildlife {
     this.sound = sound;
     this.t = 0;
     this.ready = false;
-    this.crows = new Flock(scene, 80);
+    this.crows = new Flock(scene, 260);
     this.flock = null;
     this.nextFlock = rnd(15, 60);
     this.flockCall = 0;
@@ -308,24 +308,32 @@ export class Wildlife {
         // towards evening they gather to go to roost: more of them, more often
         const roost = hours > 14.5 && sunDeg > -2 && sunDeg < 18;
         const big = this._forceBig || roost;
-        const n = Math.floor(big ? rnd(45, 80) : rnd(12, 30));
-        const wheel = this._forceBig || Math.random() < (big ? 0.55 : 0.35);
         const sight = this._forceBig;
-        const from = new THREE.Vector3(Math.cos(rnd(0, 6.28)), 0, Math.sin(rnd(0, 6.28))).normalize();
+        // (the Sights menu's: a great mass of them, two hundred and more, dark over the house)
+        const n = Math.floor(sight ? rnd(210, 250) : big ? rnd(70, 130) : rnd(12, 30));
+        const wheel = this._forceBig || Math.random() < (big ? 0.55 : 0.35);
+        const from = sight ? new THREE.Vector3(1, 0, -0.45).normalize() : new THREE.Vector3(Math.cos(rnd(0, 6.28)), 0, Math.sin(rnd(0, 6.28))).normalize();
         const alt = rnd(30, 55);
-        // (for the Sights menu: wheeling over the house, in front of you, from not far off)
-        const c = sight ? new THREE.Vector3(6, 38, -24) : new THREE.Vector3(rnd(-30, 40), alt, rnd(-50, 30));
+        // (for the Sights menu: wheeling over the house in front of you, already in the picture,
+        // coming in from the right)
+        const c = sight ? new THREE.Vector3(6, 36, -24) : new THREE.Vector3(rnd(-30, 40), alt, rnd(-50, 30));
+        const spread = sight ? 30 : big ? 26 : 22;
         this.flock = {
           n,
           wheel,
-          radius: sight ? 30 : 60,
+          radius: sight ? 24 : 60,
           t: 0,
-          life: wheel ? rnd(45, 80) : 1e9,
-          centre: c.clone().addScaledVector(from, sight ? 160 : wheel ? 380 : 420),
-          dir: from.clone().negate(),
+          life: wheel ? (sight ? rnd(80, 100) : rnd(45, 80)) : 1e9,
+          centre: c.clone().addScaledVector(from, sight ? 32 : wheel ? 380 : 420),
+          dir: sight ? new THREE.Vector3(-0.3, 0, 1).normalize() : from.clone().negate(),
           aim: c,
           speed: rnd(9, 12),
-          birds: Array.from({ length: n }, () => ({ off: new THREE.Vector3(rnd(-1, 1) * 22, rnd(-1, 1) * 7, rnd(-1, 1) * 22), phase: rnd(0, 6.28), rate: rnd(4.2, 5.4), glide: 0, p: new THREE.Vector3(), v: new THREE.Vector3() })),
+          // (denser towards the middle, as a flock is, ragged at its edges)
+          birds: Array.from({ length: n }, () => {
+            const r = Math.pow(Math.random(), 0.7);
+            const a = rnd(0, 6.28);
+            return { off: new THREE.Vector3(Math.cos(a) * r * spread, rnd(-1, 1) * (sight ? 10 : 7), Math.sin(a) * r * spread), phase: rnd(0, 6.28), rate: rnd(4.2, 5.4), glide: 0, p: new THREE.Vector3(), v: new THREE.Vector3() };
+          }),
           bed: false,
         };
         this.nextFlock = roost ? rnd(30, 80) : rnd(80, 220);
@@ -376,7 +384,15 @@ export class Wildlife {
     if (this.flockCall <= 0 && near < 300) {
       const b = pick(f.birds);
       this._call(pick(['crow-1', 'crow-2', 'crow-3']), b.p, { ref: 30, rolloff: 1, max: 600, gain: 0.7, rate: rnd(0.9, 1.1) });
-      this.flockCall = rnd(0.4, 2.2) * (f.n > 40 ? 0.6 : 1);
+      this.flockCall = rnd(0.4, 2.2) * (f.n > 150 ? 0.25 : f.n > 40 ? 0.6 : 1);
+    }
+    // (a great flock: the din of it, again and again while it is overhead)
+    if (f.n > 150 && near < 200) {
+      f.din = (f.din ?? 0) - dt;
+      if (f.din <= 0) {
+        f.din = 7.5 + Math.random() * 2;
+        this._call('crows-flock', f.centre, { ref: 45, rolloff: 0.9, max: 800, gain: 0.8, rate: rnd(0.95, 1.05) });
+      }
     }
     if (!f.bed && near < 160 && f.n > 30) {
       f.bed = true;
