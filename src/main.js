@@ -32,6 +32,7 @@ import { Lanterns } from './lanterns.js';
 import { makeVideo, FORMATS, videoSupported } from './video.js';
 import { setupPool, poolUniforms } from './pool.js';
 import { installErrorLog, setupReport } from './report.js';
+import { LoadingBar, nextFrame } from './loading.js';
 
 installErrorLog();
 
@@ -864,10 +865,14 @@ function resizeWater() {
   renderer.getDrawingBufferSize(drawSize);
   water.setSize(drawSize.x, drawSize.y);
 }
+// the loading bar, at the real pace (loading.js); nothing is drawn behind it until everything is in
+const loadingBar = new LoadingBar({ cover: $('loading-cover'), text: $('loading-text'), bytes: 83_000_000 });
+let ready = false;
 const loader = new GLTFLoader();
 loader.load(
   '/manor.glb',
   (gltf) => {
+    loadingBar.begin('house', 'Building the house…');
     model = gltf.scene;
     console.info(`ivy pieces placed: ${placeIvy(model)}`);
     tuneMaterials(model);
@@ -948,18 +953,17 @@ loader.load(
     });
     modelTris = tris;
     $('stats-base').textContent = `${Math.round(tris).toLocaleString('en-GB')} triangles`;
-    setLoading(0.88, 'Getting ready to walk…');
     // you start on your feet on the drive, facing the house: the loading screen stays up
     // until walking is ready, so nothing moves under you
     setMode('walk');
   },
   (e) => {
-    const total = e.total || 83_000_000;
-    setLoading(0.85 * Math.min(1, e.loaded / total), `The manor: ${(e.loaded / 1e6).toFixed(0)} of ${(total / 1e6).toFixed(0)} MB`);
+    loadingBar.downloaded(e.loaded, e.total || 83_000_000);
+    if (e.total && e.loaded >= e.total && loadingBar.step === 'download') loadingBar.begin('unpack', 'Unpacking the house…');
   },
   (err) => {
     console.error(err);
-    $('loading-text').textContent = 'The model did not load. Run npm run build:model first, then reload.';
+    loadingBar.fail('The model did not load. Run npm run build:model first, then reload.');
   },
 );
 
@@ -982,16 +986,48 @@ function windowPanes(geo, box) {
   return out;
 }
 
-/** The loading bar (0..1) and the line under it. */
-function setLoading(f, text) {
-  $('loading-bar').style.clipPath = `inset(0 ${(100 - f * 100).toFixed(1)}% 0 0)`;
-  $('loading-text').textContent = text;
-}
 function doneLoading() {
-  setLoading(1, 'Ready');
+  if (ready) return;
+  ready = true;
+  loadingBar.finish();
   $('loading').classList.add('done');
   $('panel').hidden = false;
   placeDock();
+}
+
+/**
+ * Everything onto the graphics card before the loading screen goes: the shaders compiled (in the
+ * background where the browser can), the textures uploaded a few at a time, and a first frame
+ * drawn. Otherwise the first seconds after loading stutter while it all happens then.
+ */
+async function warmUp() {
+  loadingBar.begin('gpu', 'Lighting it…');
+  await nextFrame();
+  try {
+    await renderer.compileAsync(scene, camera);
+  } catch (err) {
+    console.warn('shaders compiled on first use instead:', err.message);
+  }
+  loadingBar.progress(0.45);
+  const textures = new Set();
+  scene.traverse((o) => {
+    for (const m of [o.material ?? []].flat()) for (const v of Object.values(m)) if (v?.isTexture) textures.add(v);
+  });
+  let i = 0;
+  let since = performance.now();
+  for (const tex of textures) {
+    renderer.initTexture(tex);
+    if (performance.now() - since > 40) {
+      loadingBar.progress(0.45 + 0.4 * (i / textures.size));
+      await nextFrame();
+      since = performance.now();
+    }
+    i++;
+  }
+  loadingBar.progress(0.9);
+  await nextFrame();
+  // the first frame in full: the water's reflections, the sunbeams, the ambient occlusion
+  step(1 / 60);
 }
 
 // Walking: everything solid in the estate plus the fields, but not the ivy or the water.
@@ -1009,8 +1045,9 @@ async function prepareWalking(ground) {
     if (o.material.transparent && !/glass/i.test(name)) return;
     solid.push(o);
   });
-  setLoading(0.92, 'Getting ready to walk…');
-  const geo = await buildCollider(solid);
+  loadingBar.begin('walk', 'Getting ready to walk…');
+  await nextFrame();
+  const geo = await buildCollider(solid, (p) => loadingBar.progress(p));
   walker = new Walker(camera, geo);
   doors = new Doors(scene, model, geo);
   walker.skipTriangle = passDoor;
@@ -1020,12 +1057,15 @@ async function prepareWalking(ground) {
     else sound.door(opening, d.centre);
   };
   console.info(`doors: ${doors.summary}`);
+  loadingBar.begin('trees', 'Planting the trees…');
+  await nextFrame();
 
   lamps?.addOutdoor(geo.boundsTree);
   console.info(`lights: ${lamps?.lightCount} point lights for ${lamps?.count} fittings`);
   landscape = new Landscape({ scene, renderer, model, lawn, bvh: geo.boundsTree, hillHeight });
-  setLoading(0.95, 'Planting the trees…');
-  landscape.build().then(async (st) => {
+  landscape.build((p) => loadingBar.progress(p)).then(async (st) => {
+    loadingBar.begin('extras', 'The finishing touches…');
+    await nextFrame();
     walker.obstacles = landscape.obstacles;
     // the snowman: on the front lawn, west of the fountain, looking towards the gate
     const spot = [
@@ -1062,7 +1102,8 @@ async function prepareWalking(ground) {
     }
     // the fountain's and the pool's reflections leave out the shrubs and the fallen leaves (costly, too small to see there)
     water?.notMirrored.push(...landscape.shrubs, leaves.mesh);
-    // everything is in place: off with the loading screen
+    // everything is in place: onto the graphics card, then off with the loading screen
+    await warmUp();
     doneLoading();
     // the tour and the flybys must not pass through walls or trees (doors that open are fine)
     const frontWindow = new THREE.Box3(new THREE.Vector3(-3.3, 4.3, -9.8), new THREE.Vector3(-0.4, 6.9, -9.0));
@@ -1449,7 +1490,7 @@ function step(dt, exporting = false) {
   footprints.update(dt, seasonUniforms.uSnow.value, weather.snowing, THREE.MathUtils.lerp(1, 0.3, tod.night));
   // the northern lights: on their nights, in the dark, while the sky is clear
   const auroraUp = auroraAt(seasonDay, tod.hours) ? 1 : 0;
-  aurora.update(dt, camera, auroraUp * THREE.MathUtils.smoothstep(tod.night, 0.6, 0.95) * (1 - THREE.MathUtils.smoothstep(weather.clouds, 0.25, 0.5)) * (1 - weather.fog) * (1 - weather.rain));
+  aurora.update(dt, camera, auroraUp * THREE.MathUtils.smoothstep(tod.night, 0.6, 0.95) * (1 - THREE.MathUtils.smoothstep(weather.clouds, 0.25, 0.5)) * (1 - weather.fog) * (1 - weather.rain), tod.compass);
   // lightning: its flash lights the sky, the fog and the house (sky.js), its thunder comes late
   tod.flash = storm.update(dt, { storm: weather.storm ?? 0, centre: modelCentre, inside: tod.inside });
   updateExposure(dt);
@@ -1692,6 +1733,8 @@ renderer.setAnimationLoop((time) => {
   timer.update(time);
   const dt = Math.min(timer.getDelta(), 0.1);
   if (exporting) return; // the video maker draws the frames itself
+  // (nothing runs behind the loading screen: the first frame is drawn once everything is in, in warmUp)
+  if (!ready) return;
   step(dt);
   if (wantPicture) {
     // read the canvas in the same task as the render, before the browser clears it

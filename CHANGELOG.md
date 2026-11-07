@@ -8,6 +8,13 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.28.0, 7 November 2026
+
+- The loading bar moves at the real pace, steadily to the end, with the time left under it. It had filled with the download and then sat near the end for most of the rest. Loading is also quicker: nothing is drawn behind the loading screen any more, which had slowed the collision tree from 1 s to 5 s.
+- The stars are the real ones (4,103 from the Yale Bright Star Catalogue), where they are over Surrey at that moment. They wheel round the Pole Star through the night and turn with the Compass slider. Orion, the Plough and Sirius are where they should be.
+- The pale band on the far hills at dusk is gone. It was the evening sky drawn in front of the farthest hills, and a grey haze lighter than the sky; the hills are now deep blue silhouettes. A moon still behind the hills no longer glows through them.
+- The moon fades while the date runs fast, rather than whirling round the sky. Its path is right (checked against astronomy-engine to 3°): this autumn it swings far north and south, so on some days it only skims the southern hills, and on Halloween evening it is just rising in the east-north-east.
+
 ## 0.27.2, 7 November 2026
 
 - A shorter pause as Bonfire Night or New Year begins: the bonfire's lights now stay in the scene all year (dark), so its arrival no longer recompiles every shader.

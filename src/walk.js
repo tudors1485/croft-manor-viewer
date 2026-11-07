@@ -126,11 +126,11 @@ export function moveSphere(bvh, from, to, radius, skip) {
 }
 
 /** Builds the BVH in a worker when it can, so the page keeps drawing meanwhile. */
-export async function buildCollider(meshes) {
+export async function buildCollider(meshes, onProgress = null) {
   const geo = mergeForCollision(meshes);
   try {
     const worker = new GenerateMeshBVHWorker();
-    geo.boundsTree = await worker.generate(geo, { targetLeafSize: 12 });
+    geo.boundsTree = await worker.generate(geo, { targetLeafSize: 12, onProgress });
     worker.dispose();
   } catch (err) {
     console.warn('BVH worker failed, building on the main thread', err);

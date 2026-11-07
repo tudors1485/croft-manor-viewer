@@ -32,16 +32,18 @@ export function nextAuroraNight(day) {
 export class Aurora {
   constructor(scene) {
     this.material = new THREE.ShaderMaterial({
-      uniforms: { uTime: { value: 0 }, uAmount: { value: 0 } },
+      uniforms: { uTime: { value: 0 }, uAmount: { value: 0 }, uCompass: { value: 0 } },
       vertexShader: /* glsl */ `
         varying vec3 vDir;
         void main() {
           vDir = (modelMatrix * vec4(position, 1.0)).xyz - cameraPosition;
           gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(position, 1.0);
+          gl_Position.z = gl_Position.w * 0.99999; // at the far plane: behind every hill, however far
         }`,
       fragmentShader: /* glsl */ `
         uniform float uTime;
         uniform float uAmount;
+        uniform float uCompass;
         varying vec3 vDir;
         float h1(float n) { return fract(sin(n * 127.1 + 311.7) * 43758.5453); }
         float n1(float x) {
@@ -53,7 +55,8 @@ export class Aurora {
         void main() {
           vec3 d = normalize(vDir);
           float el = degrees(asin(clamp(d.y, -1.0, 1.0)));
-          float az = atan(d.x, -d.z); // 0 towards the north (-z), the way the house faces from the drive
+          float az = atan(d.x, -d.z) - uCompass; // 0 towards the north (-z, turned by the compass), the way the house faces from the drive
+          az = mod(az + 3.14159265, 6.2831853) - 3.14159265;
           float t = uTime;
           // strongest due north, fading to the sides
           float north = 1.0 - smoothstep(0.55, 1.45, abs(az));
@@ -88,7 +91,8 @@ export class Aurora {
   }
 
   /** `want` 0..1: how strongly they show (they fade in and out slowly). */
-  update(dt, camera, want) {
+  update(dt, camera, want, compass = 0) {
+    this.material.uniforms.uCompass.value = compass;
     this.amount += (want - this.amount) * (1 - Math.exp(-dt * 0.4));
     this.mesh.visible = this.amount > 0.01;
     if (!this.mesh.visible) return;

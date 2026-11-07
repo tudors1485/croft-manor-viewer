@@ -3,6 +3,7 @@
 // further out, rolling hills on the horizon and the drive running on past the gate.
 
 import * as THREE from 'three';
+import { nextFrame } from './loading.js';
 import { Tree } from '@dgreenheck/ez-tree';
 import { seasonUniforms } from './season.js';
 import { snowShader, gravelShader } from './materials.js';
@@ -479,8 +480,15 @@ export class Landscape {
     return hits.length > 0 && hits[0].object.material.name === 'cm_grass';
   }
 
-  async build() {
+  /** Plants it all. `onProgress(0..1)` as it goes (it lets the page draw between the trees). */
+  async build(onProgress = null) {
     const t0 = performance.now();
+    let made = 0;
+    const grown = async (v) => {
+      onProgress?.(Math.min(0.85, ++made / 9));
+      await nextFrame();
+      return v;
+    };
     this._surfaces = [];
     this.model.traverse((o) => {
       if (o.isMesh && /^(cm_grass|cm_gravel)$/.test(o.material.name)) this._surfaces.push(o);
@@ -489,20 +497,20 @@ export class Landscape {
     // English parkland: oaks and ashes with full, dark crowns
     const full = { leafCount: 16, leafSize: 1.2 };
     const variants = [
-      makeVariant('Oak Large', 11, 17, this.wind, { ...full, tint: 0x9fb478 }),
-      makeVariant('Oak Medium', 23, 12, this.wind, { ...full, tint: 0x94ad6c }),
-      makeVariant('Ash Large', 37, 19, this.wind, { ...full, tint: 0xa6bc7c }),
-      makeVariant('Ash Medium', 41, 14, this.wind, { ...full, tint: 0x9db374 }),
-      makeVariant('Oak Large', 77, 15, this.wind, { ...full, tint: 0x8ea666 }),
+      await grown(makeVariant('Oak Large', 11, 17, this.wind, { ...full, tint: 0x9fb478 })),
+      await grown(makeVariant('Oak Medium', 23, 12, this.wind, { ...full, tint: 0x94ad6c })),
+      await grown(makeVariant('Ash Large', 37, 19, this.wind, { ...full, tint: 0xa6bc7c })),
+      await grown(makeVariant('Ash Medium', 41, 14, this.wind, { ...full, tint: 0x9db374 })),
+      await grown(makeVariant('Oak Large', 77, 15, this.wind, { ...full, tint: 0x8ea666 })),
     ];
     // shrubs: ez-tree's bush with twice its leaves, and bigger ones, so they read as dense,
     // round shrubs (they are the costly part of the planting, so not more than that)
     const bushes = [
-      makeVariant('Bush 1', 61, 1.8, this.wind, { tint: 0x8aa463, leafCount: 20, leafSize: 2.3, evergreen: true }),
-      makeVariant('Bush 1', 71, 1.2, this.wind, { tint: 0x7d9a58, leafCount: 22, leafSize: 2.6, evergreen: true }),
+      await grown(makeVariant('Bush 1', 61, 1.8, this.wind, { tint: 0x8aa463, leafCount: 20, leafSize: 2.3, evergreen: true })),
+      await grown(makeVariant('Bush 1', 71, 1.2, this.wind, { tint: 0x7d9a58, leafCount: 22, leafSize: 2.6, evergreen: true })),
     ];
     // the two trees inside the gate in TRJTA's renders: full, round oaks
-    const entrance = [makeVariant('Oak Medium', 91, 10.5, this.wind, { tint: 0x9fb478, leafCount: 32, leafSize: 1.45 })];
+    const entrance = [await grown(makeVariant('Oak Medium', 91, 10.5, this.wind, { tint: 0x9fb478, leafCount: 32, leafSize: 1.45 }))];
     const R = rng(20261105);
 
     // --- real trees: some on the lawns, a belt outside the walls ---
@@ -659,6 +667,8 @@ export class Landscape {
 
     // --- distant forest: billboards of the same trees, once their textures have loaded ---
     await texturesReady(variants.flatMap((v) => [v.leaves.map, v.bark.map]));
+    onProgress?.(0.9);
+    await nextFrame();
     // baked in full leaf, whatever the season slider says right now
     const day = seasonUniforms.uDay.value;
     seasonUniforms.uDay.value = 190;

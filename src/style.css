@@ -52,14 +52,21 @@ body {
   background: #000;
 }
 #loading-bar {
+  position: relative;
+  overflow: hidden;
   height: 100%;
   width: 100%;
-  clip-path: inset(0 100% 0 0);
   /* a lit tube: dark at the top and bottom edges, bright through the middle */
   background:
     linear-gradient(to bottom, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0) 38%, rgba(255, 255, 255, 0.12) 50%, rgba(0, 0, 0, 0) 62%, rgba(0, 0, 0, 0.6)),
     linear-gradient(to right, #06a806, #0cc23a 35%, #0ccf9a 70%, #0fd6dc);
-  transition: clip-path 0.2s;
+}
+/* the part still to fill: slid off to the right as it loads (a transform, so it keeps moving while the page is busy) */
+#loading-cover {
+  position: absolute;
+  inset: 0 -1px 0 0;
+  background: #000;
+  will-change: transform;
 }
 #loading-text {
   margin: 2px 0 0;

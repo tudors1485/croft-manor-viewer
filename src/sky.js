@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 // NASA's CGI Moon Kit colour map (LRO, 1024 x 512): credit NASA's Scientific Visualization Studio
 import moonMapUrl from './moon.jpg';
+import { STAR_COUNT, STAR_DATA } from './star-data.js';
 
 const LAT = THREE.MathUtils.degToRad(51.3);
 const LON = -0.3;
@@ -40,11 +41,39 @@ export function sunAt(hours, day = 145) {
  * (ecliptic longitude good to about a degree), with the hour angle from sidereal time, so it
  * rises and sets on the right days at the right times and is in the right part of the sky.
  */
-export function moonAt(hours, day, year) {
-  const rad = Math.PI / 180;
+/** Days since J2000 (noon, 1 January 2000) at `hours` local time on `day` of `year`. */
+function daysJ2000(hours, day, year) {
   const utc = hours - (isSummerTime(day) ? 1 : 0);
   const ms = Date.UTC(year, 0, 1) + (day + utc / 24) * 864e5;
-  const d = ms / 864e5 + 2440587.5 - 2451545; // days since J2000
+  return ms / 864e5 + 2440587.5 - 2451545;
+}
+
+/** Local sidereal time (radians): how far the Earth has turned under the stars, here and now. */
+export function siderealAt(hours, day, year) {
+  const rad = Math.PI / 180;
+  return rad * (280.16 + 360.9856235 * daysJ2000(hours, day, year)) + rad * LON;
+}
+
+// the sky's turn to the ground here: the celestial pole stands 51.3° up in the north
+// (columns: where the equator crosses the meridian, the east point, the pole; north is -z, east +x)
+const CELESTIAL = new THREE.Matrix4().set(0, 1, 0, 0, Math.cos(LAT), 0, Math.sin(LAT), 0, Math.sin(LAT), 0, -Math.cos(LAT), 0, 0, 0, 0, 1);
+const _spin = new THREE.Matrix4();
+const _turn = new THREE.Matrix4();
+
+/**
+ * The matrix that takes the sky's own frame (x towards the spring equinox, z towards the celestial
+ * pole) to the world here at this moment: the Earth's turn, the latitude, and the compass (which
+ * turns the whole sky round the house, as it turns the sun and the moon).
+ */
+export function skyFrame(hours, day, year, compass, out = new THREE.Matrix4()) {
+  _spin.makeRotationZ(-siderealAt(hours, day, year));
+  _turn.makeRotationY(-compass);
+  return out.copy(_turn).multiply(CELESTIAL).multiply(_spin);
+}
+
+export function moonAt(hours, day, year) {
+  const rad = Math.PI / 180;
+  const d = daysJ2000(hours, day, year); // days since J2000
   const L = rad * (218.316 + 13.176396 * d);
   const M = rad * (134.963 + 13.064993 * d);
   const F = rad * (93.272 + 13.22935 * d);
@@ -66,44 +95,60 @@ function dirFrom(elevation, azimuth, compass, out) {
   return out.set(Math.sin(a) * Math.cos(elevation), Math.sin(elevation), -Math.cos(a) * Math.cos(elevation)).normalize();
 }
 
-function makeStars(count = 3200) {
-  const pos = new Float32Array(count * 3);
-  const mag = new Float32Array(count);
-  const rnd = mulberry32(7);
-  for (let i = 0; i < count; i++) {
-    // uniform on the upper hemisphere, a few just below the horizon for hills
-    const u = rnd();
-    const v = rnd() * 0.97 + 0.03;
-    const th = u * Math.PI * 2;
-    const y = v;
-    const r = Math.sqrt(1 - y * y);
-    pos.set([Math.cos(th) * r * 1300, y * 1300, Math.sin(th) * r * 1300], i * 3);
-    mag[i] = Math.pow(rnd(), 3.2);
+/**
+ * The real stars, to magnitude 5.8, where they are in the sky's own frame: the object is turned
+ * with the Earth (skyFrame), so they wheel round the Pole Star through the night, rise and set,
+ * change with the seasons, and turn with the compass. Brighter ones bigger, hot ones blue-white,
+ * cool ones orange, and all of them dimmer and twinkling more low down, through more air.
+ */
+function makeStars() {
+  const bytes = Uint8Array.from(atob(STAR_DATA), (c) => c.charCodeAt(0));
+  const view = new DataView(bytes.buffer);
+  const pos = new Float32Array(STAR_COUNT * 3);
+  const mag = new Float32Array(STAR_COUNT);
+  const heat = new Float32Array(STAR_COUNT);
+  for (let i = 0; i < STAR_COUNT; i++) {
+    const ra = (view.getUint16(i * 6, true) / 65535) * Math.PI * 2;
+    const dec = (view.getInt16(i * 6 + 2, true) / 32767) * (Math.PI / 2);
+    const V = view.getUint8(i * 6 + 4) / 30 - 1.5;
+    const K = view.getUint8(i * 6 + 5) * 100;
+    pos.set([Math.cos(dec) * Math.cos(ra) * 1300, Math.cos(dec) * Math.sin(ra) * 1300, Math.sin(dec) * 1300], i * 3);
+    mag[i] = THREE.MathUtils.clamp((5.8 - V) / 7.3, 0, 1); // 0 the faintest .. 1 Sirius
+    heat[i] = THREE.MathUtils.clamp((K - 3500) / 7000, 0, 1);
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   geo.setAttribute('mag', new THREE.BufferAttribute(mag, 1));
+  geo.setAttribute('heat', new THREE.BufferAttribute(heat, 1));
   const mat = new THREE.ShaderMaterial({
     uniforms: { uFade: { value: 0 }, uTime: { value: 0 }, uScale: { value: 1 } },
     vertexShader: /* glsl */ `
       attribute float mag;
+      attribute float heat;
       uniform float uTime;
       uniform float uScale;
       varying float vBright;
+      varying vec3 vColour;
       void main() {
         vec4 mv = modelViewMatrix * vec4(position, 1.0);
         gl_Position = projectionMatrix * mv;
-        float tw = 0.75 + 0.25 * sin(uTime * (1.3 + mag * 3.1) + position.x * 0.37);
-        vBright = (0.25 + mag * 1.6) * tw;
-        gl_PointSize = (1.2 + mag * 2.6) * uScale;
+        gl_Position.z = gl_Position.w * 0.99999; // at the far plane: behind every hill, however far
+        float up = normalize(mat3(modelMatrix) * position).y;
+        // low down: dimmer (more air), twinkling harder; below the horizon, gone
+        float air = smoothstep(-0.01, 0.16, up);
+        float tw = 1.0 - (0.18 + 0.3 * (1.0 - air)) * (0.5 + 0.5 * sin(uTime * (1.3 + mag * 3.1) + position.x * 0.37 + position.z * 0.21));
+        vBright = (0.06 + 2.7 * pow(mag, 1.1)) * tw * air;
+        vColour = mix(vec3(1.0), mix(vec3(1.0, 0.74, 0.52), vec3(0.76, 0.85, 1.0), heat), 0.55);
+        gl_PointSize = (1.0 + 4.6 * pow(mag, 1.5)) * uScale;
       }`,
     fragmentShader: /* glsl */ `
       uniform float uFade;
       varying float vBright;
+      varying vec3 vColour;
       void main() {
         vec2 d = gl_PointCoord - 0.5;
         float a = smoothstep(0.5, 0.0, length(d));
-        gl_FragColor = vec4(vec3(0.85, 0.9, 1.0) * vBright * a * uFade, 1.0);
+        gl_FragColor = vec4(vColour * vBright * a * uFade, 1.0);
       }`,
     transparent: true,
     depthWrite: false,
@@ -111,8 +156,10 @@ function makeStars(count = 3200) {
     fog: false,
   });
   const pts = new THREE.Points(geo, mat);
+  pts.name = 'Stars';
   pts.frustumCulled = false;
   pts.renderOrder = -1;
+  pts.matrixAutoUpdate = false;
   return pts;
 }
 
@@ -124,6 +171,7 @@ function makeNightDome() {
       void main() {
         vDir = normalize(position);
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        gl_Position.z = gl_Position.w * 0.99999; // at the far plane: behind every hill, however far
       }`,
     fragmentShader: /* glsl */ `
       uniform float uFade;
@@ -187,6 +235,7 @@ function makeMoon() {
         vN = normalize(mat3(modelMatrix) * normal);
         vView = normalize(cameraPosition - wp.xyz);
         gl_Position = projectionMatrix * viewMatrix * wp;
+        gl_Position.z = gl_Position.w * 0.99999; // at the far plane: behind every hill, however far
       }`,
     fragmentShader: /* glsl */ `
       uniform sampler2D uMap;
@@ -234,21 +283,15 @@ function makeMoon() {
   const haloTex = new THREE.CanvasTexture(c);
   haloTex.colorSpace = THREE.SRGBColorSpace;
   const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex, depthWrite: false, fog: false, transparent: true, blending: THREE.AdditiveBlending }));
+  // (at the far plane too, so a moon still behind the hills doesn't glow through them)
+  halo.material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader.replace('#include <logdepthbuf_vertex>', '#include <logdepthbuf_vertex>\n  gl_Position.z = gl_Position.w * 0.99999;');
+  };
   halo.scale.setScalar(MOON_RADIUS * 9);
   halo.renderOrder = -0.5; // (glare is in our air, in front of the moon: drawn over it)
   group.add(halo);
   group.userData = { ball, halo, mat };
   return group;
-}
-
-function mulberry32(a) {
-  return () => {
-    a |= 0;
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
 }
 
 export class TimeOfDay {
@@ -326,6 +369,7 @@ export class TimeOfDay {
     this.year = new Date().getFullYear(); // the moon's place needs the year (the date is the slider's)
     this.moonUp = 0; // 0 below the horizon .. 1 a few degrees up
     this.moonPhase = 1; // how much of it is lit, 0 new .. 1 full
+    this.dayRate = 0; // how fast the date is running, days a second (tick works it out)
   }
 
   setBounds(centre, radius) {
@@ -402,6 +446,9 @@ export class TimeOfDay {
     this._hemiBase = THREE.MathUtils.lerp(0.14, 0.7, twilight) * (1 - 0.2 * this.dusk) * (1 + 0.45 * oc) * (1 - 0.5 * (w.storm ?? 0));
     this.applyAmbient(t);
 
+    // the stars where they are tonight, turned with the Earth and the compass
+    skyFrame(this.hours, this.day, this.year, this.compass, this.stars.matrix);
+    this.stars.matrixWorldNeedsUpdate = true;
     this.stars.material.uniforms.uFade.value = this.night * (1 - w.clouds * 0.95);
     this.nightDome.material.uniforms.uFade.value = this.night;
     const blueHour = THREE.MathUtils.smoothstep(-deg, 0.5, 3.5) * (1 - THREE.MathUtils.smoothstep(-deg, 7, 13));
@@ -416,13 +463,15 @@ export class TimeOfDay {
     md.mat.uniforms.uSunDir.value.copy(this.sunDir);
     md.mat.uniforms.uNight.value = this.night;
     md.mat.uniforms.uDark.value = THREE.MathUtils.smoothstep(-deg, 9, 15);
-    const moonOpacity = this.moonUp * (1 - oc * 0.92) * THREE.MathUtils.lerp(0.55, 1, this.night);
+    // (while the date runs fast, a year in a minute, it would whirl round the sky a dozen times: it fades)
+    const whirl = THREE.MathUtils.smoothstep(this.dayRate, 0.25, 1.2);
+    const moonOpacity = this.moonUp * (1 - oc * 0.92) * THREE.MathUtils.lerp(0.55, 1, this.night) * (1 - whirl);
     md.mat.uniforms.uOpacity.value = moonOpacity;
     // low down it is warmer, through more air
     const lowness = 1 - THREE.MathUtils.smoothstep(THREE.MathUtils.radToDeg(moon.elevation), 0, 14);
     md.mat.uniforms.uTint.value.setRGB(1, 1 - 0.3 * lowness, 1 - 0.55 * lowness);
     // the glare grows with how much of the moon is lit: a full moon dazzles, a thin crescent hardly at all
-    md.halo.material.opacity = this.night * this.moonUp * (1 - oc) * Math.pow(this.moonPhase, 1.5);
+    md.halo.material.opacity = this.night * this.moonUp * (1 - oc) * Math.pow(this.moonPhase, 1.5) * (1 - whirl);
     md.halo.scale.setScalar(MOON_RADIUS * (4 + 5 * this.moonPhase));
     this.moon.visible = moonOpacity > 0.01;
 
@@ -430,7 +479,12 @@ export class TimeOfDay {
     const day = new THREE.Color(0xc9d6e2).lerp(new THREE.Color(0xb9bfc6), oc).lerp(new THREE.Color(0xd0d4d8), w.fog).lerp(new THREE.Color(0x5d636c), 0.7 * (w.storm ?? 0));
     const duskC = new THREE.Color(0xd9a77f);
     const nightC = new THREE.Color(0x0b1224);
-    this.fog.color.copy(day).lerp(duskC, this.dusk * 0.6 * (1 - oc)).lerp(nightC, this.night);
+    // the blue hour: the far hills go a deep blue, a little darker than the sky behind them (a pale
+    // grey, from mixing the day's colour with the night's, made them lighter than the sky)
+    const blueC = new THREE.Color(0x34466b).lerp(new THREE.Color(0x383b42), oc);
+    const toBlue = THREE.MathUtils.smoothstep(-deg, -0.5, 3.5);
+    const toNight = THREE.MathUtils.smoothstep(-deg, 5, 11);
+    this.fog.color.copy(day).lerp(duskC, this.dusk * 0.6 * (1 - oc)).lerp(blueC, toBlue).lerp(nightC, toNight);
     // fog, rain and falling snow thicken the air
     this.fog.density = 0.00085 + 0.019 * w.fog + 0.004 * w.rain + 0.007 * w.snowing;
     // an overcast sky is a grey lid (with only a little of the cloud shapes showing through)
@@ -484,6 +538,10 @@ export class TimeOfDay {
   }
 
   tick(dt) {
+    // how fast the date runs (a jump from a menu isn't running: it's left out)
+    const moved = Math.abs(this.day - (this._tickDay ?? this.day));
+    this._tickDay = this.day;
+    if (dt > 0 && moved < 3) this.dayRate += (moved / dt - this.dayRate) * (1 - Math.exp(-dt * 3));
     this.sky.material.uniforms.time.value += dt;
     this.stars.material.uniforms.uTime.value += dt;
     this.stars.material.uniforms.uScale.value = this.renderer.getPixelRatio();
