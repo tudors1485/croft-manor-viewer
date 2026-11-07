@@ -8,7 +8,7 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
-## 0.50.0, 8 November 2026
+## 0.50.0, 7 November 2026
 
 Halloween: the lure, the graveyard, the house dressed, and every room haunted.
 
@@ -24,7 +24,7 @@ Halloween: the lure, the graveyard, the house dressed, and every room haunted.
 - Models: Quaternius's zombies and skeleton with a dance, his cauldron and cobweb; Poly Haven's trunk, jars and spinning wheel; a dress form, a doll; Poly by Google's birdcage, Don Carson's gramophone, J-Toastie's witch's hat (CC BY 3.0). Recordings: whispers, a giggle, a moan, a whistle, running feet, a music box, zombie groans, a waltz, a cauldron, a door (CC0). All loaded only on Halloween night (models) or when first heard (music).
 - Speed: 30 to 60 fps across the scenes (the Halloween pool 45, the graveyard 60).
 
-## 0.49.0, 8 November 2026
+## 0.49.0, 7 November 2026
 
 Six new sights (Scenes › Sights).
 
@@ -35,20 +35,20 @@ Six new sights (Scenes › Sights).
 - **Balloons at dawn**: on still summer mornings, now and then, five hot-air balloons in their own stripes drift low over the estate, their burners flaring (`src/sights2.js`).
 - **A summer garden party**: on Saturday evenings in June and July, on the east lawn, long tables laid with white cloths, candles and glasses, chairs, festoon lights strung between posts round it, and a gramophone.
 
-## 0.48.0, 8 November 2026
+## 0.48.0, 7 November 2026
 
 Christmas lights all round the house.
 
 - **Christmas**: the warm white string and the icicle lights now run along the top of the house all the way round (the front, both ends and the back), and on Christmas Eve the lights round the windows and the candles on their sills are on every side of the house, not only the front.
 
-## 0.47.0, 8 November 2026
+## 0.47.0, 7 November 2026
 
 The drone flight, and the view from high up.
 
 - **Drone flight** (Flybys): from 420 m up, looking straight down on the estate in its woods, a slow spiral down like a drone's, the house growing beneath you, down to the front of the house.
 - **From high up**: the far trees no longer show as streaks pointing at the house. Past a steep enough angle each one shows a picture of its crown from above, facing you, so from a height the woods are woods; their edges are ragged, with clearings, instead of solid blocks.
 
-## 0.46.0, 8 November 2026
+## 0.46.0, 7 November 2026
 
 The hall clock, its time-lapse, and the horse in the fountain's place.
 
@@ -56,7 +56,7 @@ The hall clock, its time-lapse, and the horse in the fountain's place.
 - **The hall clock, a day** (Scenes › Sights): a February day in the hall from half past seven to six, in about 25 seconds: the clock beside you, its hands spinning, the sun's patches crossing the floor and the walls, the lamps coming on at dusk.
 - **The view under the oak** (where you start, and *Place › Under the oak*): a great rearing horse in stone stands where the fountain is, on a round stepped sandstone plinth as wide as the basin, the leaves of an oak over the top of the picture and the porch in the middle. Anywhere else (another place, a scene, a flyby, the tour) the fountain is back; Reset brings back the horse. The horse is no longer on the lawn.
 
-## 0.45.0, 8 November 2026
+## 0.45.0, 7 November 2026
 
 Scenes, the places' arrows, sun in every room, climbers, snow on every plant, gilt frames.
 
