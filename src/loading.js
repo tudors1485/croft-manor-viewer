@@ -37,6 +37,7 @@ export const TIPS = [
   'The stars and the moon are where they really are, for that date and hour.',
   'The ▶ by the time runs a day in two minutes; the one by the season, a year in a minute.',
   'Holidays takes you to Easter, Halloween, Bonfire Night, Christmas Eve or New Year.',
+  'On Christmas Eve night, look up: Father Christmas crosses the sky. Or ride with him: the Santa’s sleigh flyby.',
   'Sights: the northern lights, deer at dawn (and the hunt), a rainbow, crows in autumn.',
   'The animals come and go with the season and the hour. Not every day.',
   'On Easter weekend, a dozen eggs are hidden on the lawns.',

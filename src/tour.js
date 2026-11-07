@@ -296,6 +296,30 @@ export const FLYBYS = {
       k([4.6, 22, 52], [4.6, 6, -10], { speed: 1 }),
     ],
   },
+  santa: {
+    label: "Santa's sleigh",
+    holiday: true,
+    // Christmas Eve, late, a clear night over the snow: you ride with Father Christmas, the sleigh's
+    // front below you and the eight reindeer galloping on ahead (santa.js). In from the south,
+    // high, down over the lit gate and up the drive over the fountain, up over the roofline and
+    // round above the house, a swoop past the big tree on the lawn, and away up into the night
+    lapse: { what: 'scenes', every: 1e9, fixed: true, scenes: [{ day: 357, hours: 21.5, weather: 'clear', boost: 1, santa: true }] },
+    keys: [
+      k([60, 70, 220], [32, 56, 150], { speed: 14 }),
+      k([26, 48, 128], [10, 30, 62], { speed: 13 }),
+      k([9, 26, 64], [5, 17, 28], { speed: 11 }),
+      k([4.6, 17, 31], [4.6, 17, 2], { speed: 9 }),
+      k([4.6, 19, 6], [3, 24, -20], { speed: 9 }),
+      k([1, 25, -12], [-10, 26, -30], { speed: 9 }),
+      k([-13, 27, -26], [-6, 27, -46], { speed: 9 }),
+      k([2, 28, -44], [20, 27, -40], { speed: 9 }),
+      k([22, 26, -32], [26, 20, -6], { speed: 9 }),
+      k([24, 15, -2], [12, 9, 12], { speed: 8 }),
+      k([8, 16, 20], [-12, 30, 50], { speed: 10 }),
+      k([-14, 34, 52], [-50, 60, 110], { speed: 12 }),
+      k([-46, 60, 104], [-90, 80, 170], { speed: 14 }),
+    ],
+  },
   newyear: {
     label: 'New Year',
     holiday: true,

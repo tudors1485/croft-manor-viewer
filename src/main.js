@@ -23,6 +23,7 @@ import { Festive } from './festive.js';
 import { Spooky } from './spooky.js';
 import { Bonfire } from './bonfire.js';
 import { Storm } from './storm.js';
+import { Santa } from './santa.js';
 import { Rainbow } from './rainbow.js';
 import { Footprints } from './footprints.js';
 import { Park, wanderDay } from './park.js';
@@ -607,6 +608,8 @@ function applyLapse(l) {
       spooky.flight = !!sc.halloween;
       if (sc.halloween) spooky.reset();
     }
+    // the Santa's sleigh flyby: you ride with him
+    santa.ride = !!sc.santa;
     if (sc.boost && bonfire) {
       bonfire.reset();
       bonfire.prime({ day: sc.day, hours: sc.hours, level: tod.lamps, wind, camera });
@@ -638,6 +641,7 @@ function applyScene(sc) {
 /** A holiday flyby's show (0 for none): more rockets and salvos, the ghosts back sooner, the lights chasing. */
 function setShow(boost) {
   if (!boost && spooky) spooky.flight = false;
+  if (!boost) santa.ride = false;
   if (bonfire) {
     bonfire.boost = Math.max(1, boost);
     if (!boost) bonfire.autoYear = true;
@@ -1204,6 +1208,22 @@ async function prepareWalking(ground) {
     festive = new Festive(scene, { bvh: geo.boundsTree, door: front, oaks, gate: landscape.gate });
     for (const pk of festive.pumpkins) landscape.obstacles.push({ x: pk.position.x, z: pk.position.z, r: 0.3, when: () => festive.halloween.visible });
     spooky = new Spooky(scene, { bvh: geo.boundsTree, materialAt: (fi) => meshAtFace(geo, fi)?.material.name || '', houseBox: lamps.houseBox, gate: landscape.gate, door: front?.centre ?? null, ground: (x, z) => landscape.groundHeight(x, z) });
+    // Christmas Eve's dressing: the windows' lights and candles, fairy lights in the trees round the
+    // lawns (not the gate's oaks, lit already), and the big tree on open lawn east of the fountain
+    {
+      const oak = (c) => oaks.some((o) => Math.hypot(o.x - c.x, o.z - c.z) < 1);
+      const crowns = landscape.crowns.filter((c) => !oak(c) && Math.hypot(c.x - 5, c.z - 2) < 45);
+      const clear = (x, z) => landscape._grassAt(x, z) && landscape.crowns.every((c) => Math.hypot(c.x - x, c.z - z) - c.r > 2) && landscape.obstacles.every((o) => o.when || Math.hypot(o.x - x, o.z - z) > (o.r ?? 0) + 2.5);
+      const spot = [
+        [14.5, 6],
+        [15, 9],
+        [-10, 9],
+        [-9, 4],
+      ].find(([x, z]) => clear(x, z));
+      const treeAt = spot ? new THREE.Vector3(spot[0], landscape.groundHeight(spot[0], spot[1]) ?? 0, spot[1]) : null;
+      festive.decorate({ windows: spooky.windows, crowns, treeAt });
+      if (treeAt) landscape.obstacles.push({ x: treeAt.x, z: treeAt.z, r: 1.8, when: () => !!festive.eve?.visible });
+    }
     await part(0.9, 'Building the bonfire');
     // the bonfire: on open lawn in front of the house, clear of the trees and shrubs
     // (well clear of the trees' crowns: a big fire under an oak looks wrong)
@@ -1251,6 +1271,7 @@ async function prepareWalking(ground) {
     wildlife.load().catch((err) => console.warn('the wildlife did not load:', err.message));
     loadSamples([...WILD_SOUNDS, ...MORE_SOUNDS]).then((n) => console.info(`recorded sounds: ${n} of ${WILD_SOUNDS.length + MORE_SOUNDS.length}`));
     park.load().catch((err) => console.warn('the deer did not load:', err.message));
+    santa.load().catch((err) => console.warn('the sleigh did not load:', err.message));
     if (problems.length) console.warn(`camera paths touch walls or trees at ${problems.length} points`, JSON.stringify(problems.slice(0, 12)));
     else console.info('camera paths: clear of walls and trees');
     console.info(`landscape: ${st.trees} trees, ${st.bushes} bushes, ${st.billboards} far trees, ${Math.round(st.triangles / 1000)}k triangles, ${st.ms} ms`);
@@ -1770,6 +1791,8 @@ function step(dt, exporting = false) {
   } else if (!stepFlight(dt)) {
     moveFly(dt);
   }
+  // (after the camera has moved: riding in the sleigh, it must not lag a frame behind)
+  santa.update(dt, { day: seasonDay, night: tod.night, camera, scale: lamps?.glowMat.uniforms.uScale.value ?? 800 });
   elapsed += dt;
   // the pool: caustics move, brighter by day (the sun through the glass roof), the pool light by night
   poolUniforms.uPoolTime.value += dt;
@@ -1837,6 +1860,8 @@ const festSound = {
 };
 
 storm = new Storm(scene, festSound);
+// Father Christmas over the estate on Christmas Eve, and the ride with him (santa.js)
+const santa = new Santa(scene, wildSound);
 
 // Making a video of a flyby (video.js): the viewer, as the video maker sees it
 const videoApp = {
@@ -2063,6 +2088,7 @@ window.manor = {
   get park() {
     return park;
   },
+  santa,
   get sight() {
     return sight;
   },

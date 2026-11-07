@@ -8,6 +8,19 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.38.0, 7 November 2026
+
+Tudor's notes of 7 November, the fifth part: Christmas Eve.
+
+- From Christmas Eve to Twelfth Night the house is dressed more:
+  - a wreath on the front door;
+  - light strings round the front windows, with a candle on each sill;
+  - a tall fir on the lawn with coloured lights wound round it and a gold star on top, and small lit firs in tubs either side of the door;
+  - fairy lights in more of the trees;
+  - lights wound up the gate's pillars and along the wall either side of the gate.
+- On Christmas Eve night Father Christmas crosses the sky every few minutes: his sleigh, eight galloping reindeer, the lead one's nose glowing red, and a trail of sparkles. His sleigh bells and his "ho ho ho" come from far off as he passes.
+- A new flyby, *Santa's sleigh*: ride with him, the reindeer galloping on ahead of you, over the lit gate, the drive, the roofline, round above the house and past the tree, then up into the night.
+
 ## 0.37.0, 7 November 2026
 
 Tudor's notes of 7 November, the fourth part: Deer at dawn.

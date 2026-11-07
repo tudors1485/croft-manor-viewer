@@ -5,7 +5,10 @@
 // house (warm white, or a red, green and gold chase, changing every so often) with icicle
 // lights dripping below, over the gate, and coloured ones twinkling in the two oaks at the
 // entrance. They are lit from dusk to half past midnight, and from Christmas Eve to New Year's
-// Eve all day and all night.
+// Eve all day and all night. From Christmas Eve the house is dressed more: a wreath on the front
+// door, light strings round the front windows with a candle on each sill, a tall decorated tree
+// on the lawn with a star on top, small lit trees in tubs either side of the door, fairy lights
+// in more of the trees, lights wound up the gate's pillars and along the wall either side of it.
 
 import * as THREE from 'three';
 
@@ -200,6 +203,45 @@ function bulbs(list, size, kind = 'twinkle') {
   return pts;
 }
 
+/** A fir tree `h` tall: tiers of dark green cones on a trunk. */
+function fir(h) {
+  const t = new THREE.Group();
+  const needles = new THREE.MeshStandardMaterial({ color: 0x173a22, roughness: 0.9 });
+  const bark = new THREE.MeshStandardMaterial({ color: 0x3a2a1c, roughness: 0.95 });
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(h * 0.025, h * 0.035, h * 0.2, 8).translate(0, h * 0.1, 0), bark);
+  t.add(trunk);
+  const tiers = 5;
+  for (let k = 0; k < tiers; k++) {
+    const f = k / tiers;
+    const r = h * 0.29 * (1 - f * 0.78);
+    const tall = h * 0.34 * (1 - f * 0.35);
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(r, tall, 14, 1, true), needles);
+    cone.position.y = h * 0.12 + f * h * 0.7 + tall / 2;
+    cone.rotation.y = k * 0.7;
+    t.add(cone);
+  }
+  needles.side = THREE.DoubleSide;
+  t.traverse((o) => {
+    if (!o.isMesh) return;
+    o.castShadow = true;
+    o.receiveShadow = true;
+  });
+  return t;
+}
+
+/** A five-pointed star, `outer` and `inner` radii, `depth` thick, facing +z. */
+function starGeometry(outer, inner, depth) {
+  const shape = new THREE.Shape();
+  for (let k = 0; k < 10; k++) {
+    const a = (k / 10) * Math.PI * 2 + Math.PI / 2;
+    const r = k % 2 ? inner : outer;
+    if (k === 0) shape.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+    else shape.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+  }
+  shape.closePath();
+  return new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false }).translate(0, 0, -depth / 2);
+}
+
 export class Festive {
   /**
    * @param {THREE.Scene} scene
@@ -320,7 +362,166 @@ export class Festive {
     this.treeLights = bulbs(tree, 0.15);
     this.christmas.add(this.treeLights);
     this.show = 0; // 1 in the Christmas flyby: the roofline chases red, green and gold all the way
+    this._traceTop = traceTop;
+    this._outline = outline;
+    this._bvh = bvh;
+    this._door = door;
+    this._gate = gate;
+    this._groundAt = groundAt;
+    this.extra = []; // (the dressing from Christmas Eve: decorate)
     this.update(0, 0, 145, 12, true);
+  }
+
+  /**
+   * The dressing for Christmas Eve to Twelfth Night, once the windows and the trees are known.
+   * @param {object} o
+   * @param {{x0:number, x1:number, bottom:number, top:number, z:number}[]} o.windows the front windows
+   * @param {{x:number, z:number, r:number}[]} o.crowns the trees' crowns (fairy lights in some)
+   * @param {THREE.Vector3|null} o.treeAt where the big tree stands, on the lawn
+   */
+  decorate({ windows = [], crowns = [], treeAt = null }) {
+    this.eve = new THREE.Group();
+    this.eve.name = 'Christmas Eve';
+    this.christmas.add(this.eve);
+    const ray = new THREE.Ray();
+    const bvh = this._bvh;
+    const warm = [1, 0.78, 0.45];
+    const colours = [
+      [1, 0.15, 0.1],
+      [0.15, 0.9, 0.25],
+      [0.2, 0.4, 1],
+      [1, 0.7, 0.15],
+      [1, 0.85, 0.6],
+    ];
+    // light strings round the front windows, and a candle on each sill
+    const frames = [];
+    const candles = [];
+    for (const w of windows) {
+      const z = w.z + 0.12;
+      const edge = (ax, ay, bx, by) => {
+        const n = Math.max(2, Math.round(Math.hypot(bx - ax, by - ay) / 0.2));
+        for (let k = 0; k < n; k++) frames.push({ pos: [ax + ((bx - ax) * k) / n, ay + ((by - ay) * k) / n, z], colour: warm, phase: Math.random() });
+      };
+      const x0 = w.x0 - 0.12;
+      const x1 = w.x1 + 0.12;
+      const y0 = w.bottom - 0.1;
+      const y1 = w.top + 0.1;
+      edge(x0, y0, x1, y0);
+      edge(x1, y0, x1, y1);
+      edge(x1, y1, x0, y1);
+      edge(x0, y1, x0, y0);
+      candles.push({ pos: [(w.x0 + w.x1) / 2, w.bottom + 0.16, w.z - 0.12], colour: [1, 0.62, 0.22], phase: Math.random() });
+    }
+    this.extra.push(bulbs(frames, 0.11), bulbs(candles, 0.32));
+    // fairy lights in the trees round the lawns (warm white) and the one outside the gate
+    const fairy = [];
+    for (const c of crowns) {
+      const h = 11;
+      const n = Math.round(c.r * 45);
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const u = Math.random() * 2 - 1;
+        const r = Math.pow(Math.random(), 0.3);
+        const sq = Math.sqrt(1 - u * u);
+        fairy.push({ pos: [c.x + Math.cos(a) * sq * r * c.r * 0.85, h * 0.6 + u * r * h * 0.32, c.z + Math.sin(a) * sq * r * c.r * 0.85], colour: i % 4 ? [1, 0.86, 0.6] : [0.85, 0.92, 1], phase: Math.random() });
+      }
+    }
+    this.extra.push(bulbs(fairy, 0.12));
+    // the gate's pillars: lights wound up them; and along the top of the wall either side
+    const g = this._gate;
+    if (g) {
+      const spiral = [];
+      for (const dir of [-1, 1]) {
+        ray.set(new THREE.Vector3(g.x, 1.4, g.z + 0.3), new THREE.Vector3(dir, 0, 0));
+        const hit = bvh.raycastFirst(ray, THREE.DoubleSide, 0, 6);
+        if (!hit) continue;
+        const cx = hit.point.x + dir * 0.42;
+        ray.set(new THREE.Vector3(cx, 12, g.z + 0.3), new THREE.Vector3(0, -1, 0));
+        const top = bvh.raycastFirst(ray, THREE.DoubleSide, 0, 14)?.point.y ?? 3.5;
+        for (let y = 0.3, a = 0; y < top - 0.1; y += 0.035, a += 0.32) spiral.push({ pos: [cx + Math.cos(a) * 0.56, y, g.z + 0.3 + Math.sin(a) * 0.56], colour: colours[Math.floor(a / 1.2) % 4], phase: Math.random(), along: y * 10 });
+      }
+      this.extra.push(bulbs(spiral, 0.1));
+      this._traceTop(g.x - 22, g.x - 3.6, g.z + 6, g.z + 2.5, g.z - 2, 5, 0.16);
+      this._traceTop(g.x + 3.6, g.x + 22, g.z + 6, g.z + 2.5, g.z - 2, 5, 0.16);
+      // (the roofline's string grows by these: rebuilt with them)
+      this.christmas.remove(this.outline);
+      this.outline = bulbs(this._outline, 0.18, 'chase');
+      this.christmas.add(this.outline);
+    }
+    // a wreath on the front door
+    const door = this._door;
+    if (door) {
+      const out = door.normal.clone();
+      if (out.z < 0) out.negate();
+      const wreath = new THREE.Group();
+      const green = new THREE.MeshStandardMaterial({ color: 0x1c4425, roughness: 0.85 });
+      const red = new THREE.MeshStandardMaterial({ color: 0xa3120f, roughness: 0.45, emissive: 0x200202 });
+      wreath.add(new THREE.Mesh(new THREE.TorusGeometry(0.33, 0.1, 10, 28), green));
+      // (sprigs round it, berries, and a bow at the bottom)
+      const sprig = new THREE.ConeGeometry(0.05, 0.16, 5);
+      for (let k = 0; k < 36; k++) {
+        const a = (k / 36) * Math.PI * 2;
+        const m = new THREE.Mesh(sprig, green);
+        m.position.set(Math.cos(a) * (0.33 + (k % 2 ? 0.07 : -0.05)), Math.sin(a) * (0.33 + (k % 2 ? 0.07 : -0.05)), 0.05);
+        m.rotation.z = a + (k % 3) * 0.6;
+        wreath.add(m);
+      }
+      for (let k = 0; k < 14; k++) {
+        const a = Math.random() * Math.PI * 2;
+        const b = new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 4), red);
+        b.position.set(Math.cos(a) * 0.33, Math.sin(a) * 0.33, 0.1);
+        wreath.add(b);
+      }
+      for (const s of [-1, 1]) {
+        const loop = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.16, 4), red);
+        loop.position.set(s * 0.08, -0.33, 0.1);
+        loop.rotation.z = (s * Math.PI) / 2;
+        wreath.add(loop);
+      }
+      wreath.position.copy(door.centre).addScaledVector(out, 0.14).setY(door.y0 + 2.05);
+      wreath.lookAt(wreath.position.clone().add(out));
+      wreath.traverse((o) => o.isMesh && (o.castShadow = true));
+      this.eve.add(wreath);
+      // small trees in tubs either side of the door, white lights on them
+      const side = new THREE.Vector3(out.z, 0, -out.x);
+      const tubLights = [];
+      for (const s of [-1.6, 1.6]) {
+        const p = door.centre.clone().addScaledVector(side, s).addScaledVector(out, 1.5);
+        const y = this._groundAt(p.x, p.z, door.y0 + 1.5) ?? door.y0;
+        const t = fir(1.7);
+        t.position.set(p.x, y, p.z);
+        this.eve.add(t);
+        for (let k = 0; k < 60; k++) {
+          const f = k / 60;
+          const a = f * Math.PI * 2 * 6;
+          const r = 0.42 * (1 - f) + 0.04;
+          tubLights.push({ pos: [p.x + Math.cos(a) * r, y + 0.45 + f * 1.2, p.z + Math.sin(a) * r], colour: [1, 0.88, 0.65], phase: Math.random() });
+        }
+      }
+      this.extra.push(bulbs(tubLights, 0.08));
+    }
+    // the big tree on the lawn: a tall fir, coloured lights wound round it, a star on top
+    if (treeAt) {
+      const H = 6.2;
+      const t = fir(H);
+      t.position.copy(treeAt);
+      this.eve.add(t);
+      const lights = [];
+      for (let k = 0; k < 420; k++) {
+        const f = k / 420;
+        const a = f * Math.PI * 2 * 11;
+        const r = 1.7 * (1 - f) * 0.98 + 0.1;
+        lights.push({ pos: [treeAt.x + Math.cos(a) * r, treeAt.y + 0.7 + f * (H - 1.1), treeAt.z + Math.sin(a) * r], colour: colours[k % colours.length], phase: Math.random() });
+      }
+      this.extra.push(bulbs(lights, 0.13));
+      const star = new THREE.Mesh(starGeometry(0.34, 0.14, 0.07), new THREE.MeshStandardMaterial({ color: 0xffd36a, emissive: 0xffb830, emissiveIntensity: 1.2, metalness: 0.6, roughness: 0.3 }));
+      star.position.set(treeAt.x, treeAt.y + H + 0.2, treeAt.z);
+      this.star = star;
+      this.eve.add(star);
+      this.extra.push(bulbs([{ pos: [treeAt.x, treeAt.y + H + 0.2, treeAt.z], colour: [1, 0.85, 0.45], phase: 0 }], 1.1));
+      this.treeAt = treeAt.clone();
+    }
+    for (const b of this.extra) this.christmas.add(b);
   }
 
   /**
@@ -355,17 +556,20 @@ export class Festive {
       const allDay = inRange(Math.floor(day), ALL_DAY);
       const late = hours > 0.5 && hours < 6.5;
       const on = !houseOn ? 0 : allDay ? Math.max(level, 0.75) : late ? 0 : level;
-      for (const p of [this.outline, this.icicles, this.treeLights]) {
+      for (const p of [this.outline, this.icicles, this.treeLights, ...this.extra]) {
         p.material.uniforms.uOn.value = on;
         p.material.uniforms.uTime.value = t;
         p.material.uniforms.uShow.value = this.show;
         p.visible = on > 0.01;
       }
+      // the dressing from Christmas Eve (the wreath, the trees) to Twelfth Night
+      if (this.eve) this.eve.visible = inRange(Math.floor(day), [357, 5]);
+      if (this.star) this.star.rotation.y = t * 0.3;
     }
   }
 
   /** Points need the screen's size to size their bulbs in metres. */
   setScale(scale) {
-    for (const p of [this.pumpkinGlow, this.outline, this.icicles, this.treeLights]) if (p) p.material.uniforms.uScale.value = scale;
+    for (const p of [this.pumpkinGlow, this.outline, this.icicles, this.treeLights, ...this.extra]) if (p) p.material.uniforms.uScale.value = scale;
   }
 }
