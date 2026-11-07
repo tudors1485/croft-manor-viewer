@@ -8,6 +8,11 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.22.0, 7 November 2026
+
+- A rainbow when the sun comes out after a shower, opposite the sun, with a fainter second bow above it. It needs the sun lower than 42°, so look for one in the morning or late afternoon after rain. *With seasons and weathers* has one among its cuts.
+- Footprints in the snow: walking leaves a trail of boot prints behind you, which fade after a couple of minutes, sooner while it snows.
+
 ## 0.21.0, 7 November 2026
 
 - Thunderstorms: a new weather in the panel, the real thing when Open-Meteo reports one in Surrey, and a few hot summer afternoons of the season's own. A dark sky, heavy rain and wind, and lightning every few seconds: mostly far off, flickering in the clouds, some nearer with a branching bolt, now and then close. The flashes light the sky and the house, and the thunder rolls in late by the distance, a crack and a boom when it is close, a long low roll when far.

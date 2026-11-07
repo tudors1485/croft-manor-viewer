@@ -23,6 +23,8 @@ import { Festive } from './festive.js';
 import { Spooky } from './spooky.js';
 import { Bonfire } from './bonfire.js';
 import { Storm } from './storm.js';
+import { Rainbow } from './rainbow.js';
+import { Footprints } from './footprints.js';
 import { makeVideo, FORMATS, videoSupported } from './video.js';
 import { setupPool, poolUniforms } from './pool.js';
 import { installErrorLog, setupReport } from './report.js';
@@ -89,6 +91,8 @@ let weather = weatherAt(145, 15, 0);
 let wet = 0; // the ground stays wet for a while after the rain stops
 let wind = 0.2; // eased towards the weather's wind, for the trees and the sound
 const rainfall = new Rainfall(scene);
+const rainbow = new Rainbow(scene); // when the sun comes out after a shower
+const footprints = new Footprints(scene); // yours, in the snow
 let storm = null; // thunder and lightning (storm.js), made once the festivals' sounds are wired up
 let snowman = null;
 let leaves = null; // fallen leaves under the trees in autumn (leaves.js)
@@ -436,9 +440,10 @@ function applyLapse(l) {
     tod.hours = sc.hours;
     forcedWeather = sc.weather;
     updateSeason(true);
-    wet = Math.min(1, weather.rain * 3);
+    wet = sc.wet ?? Math.min(1, weather.rain * 3);
+    rainbow.snap = true; // (a cut: a rainbow is there at once, or gone)
     $('time-label').textContent = tod.label();
-    $('bar-clock').textContent = `${dateLabel(sc.day)} · ${WEATHERS[sc.weather]}`;
+    $('bar-clock').textContent = `${dateLabel(sc.day)} · ${sc.label ?? WEATHERS[sc.weather]}`;
     // a holiday flyby puts on a show: the bonfire already burning, more fireworks, the lights chasing
     setShow(sc.boost ?? 0);
     if (sc.boost && bonfire) {
@@ -954,7 +959,15 @@ async function prepareWalking(ground) {
     const name = hit?.object.material.name ?? 'cm_grass';
     return /grass|sand/.test(name) ? 'grass' : /gravel/.test(name) ? 'gravel' : 'stone';
   };
-  walker.onFootstep = (speed) => sound.on && sound.footstep(underFeet(), speed);
+  walker.onFootstep = (speed) => {
+    const surface = underFeet();
+    if (sound.on) sound.footstep(surface, speed);
+    // a footprint, outdoors, where snow lies (not in the water or on the ice)
+    if (seasonUniforms.uSnow.value > 0.35 && !lamps?.houseBox.containsPoint(walker.feet) && surface !== 'water' && surface !== 'ice') {
+      const fwd = camera.getWorldDirection(new THREE.Vector3());
+      footprints.step(walker.feet, Math.atan2(-fwd.x, -fwd.z));
+    }
+  };
   walker.onJump = () => sound.on && sound.jump(underFeet());
   walker.onLand = (air) => sound.on && sound.land(underFeet(), air);
   const secs = ((performance.now() - t0) / 1000).toFixed(1);
@@ -1274,6 +1287,12 @@ function step(dt, exporting = false) {
   seasonUniforms.uWet.value = wet;
   snowfall.update(dt, camera, weather.snowing * (1 - tod.inside), renderer.getPixelRatio());
   rainfall.update(dt, camera, weather.rain * (1 - tod.inside));
+  // a rainbow: the ground still wet, the rain easing off, the sun out and lower than 42°
+  const sunDeg = THREE.MathUtils.radToDeg(Math.asin(THREE.MathUtils.clamp(tod.sunDir.y, -1, 1)));
+  const afterRain = THREE.MathUtils.smoothstep(wet, 0.2, 0.6) * (1 - THREE.MathUtils.smoothstep(weather.rain, 0.25, 0.6));
+  const sunOut = THREE.MathUtils.smoothstep(sunDeg, 0.5, 4) * (1 - THREE.MathUtils.smoothstep(weather.overcast, 0.45, 0.85)) * (1 - weather.fog) * (1 - weather.snowing) * (1 - (weather.storm ?? 0));
+  rainbow.update(dt, camera, tod.sunDir, afterRain * sunOut * (1 - THREE.MathUtils.smoothstep(sunDeg, 39, 42)) * (1 - tod.inside));
+  footprints.update(dt, seasonUniforms.uSnow.value, weather.snowing, THREE.MathUtils.lerp(1, 0.3, tod.night));
   // lightning: its flash lights the sky, the fog and the house (sky.js), its thunder comes late
   tod.flash = storm.update(dt, { storm: weather.storm ?? 0, centre: modelCentre, inside: tod.inside });
   updateExposure(dt);
@@ -1593,6 +1612,8 @@ window.manor = {
   get storm() {
     return storm;
   },
+  rainbow,
+  footprints,
   get pathProblems() {
     return pathProblems;
   },

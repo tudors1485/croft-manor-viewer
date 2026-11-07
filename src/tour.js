@@ -107,6 +107,7 @@ export const SCENES = {
   scenes: [
     { day: 95, hours: 12, weather: 'overcast' }, // early spring, grey
     { day: 112, hours: 13, weather: 'rain' }, // an April shower
+    { day: 118, hours: 18.2, weather: 'clear', wet: 1, label: 'After the rain' }, // the sun out after an April shower: a rainbow
     { day: 128, hours: 13, weather: 'clouds' }, // spring, fluffy clouds
     { day: 165, hours: 14, weather: 'clear' }, // early summer
     { day: 196, hours: 19.5, weather: 'clear' }, // a summer evening
