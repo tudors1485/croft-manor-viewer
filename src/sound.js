@@ -268,7 +268,7 @@ export class Soundscape {
     if (!this.on) return;
     const ctx = this.ctx;
     const t = ctx.currentTime + 0.05;
-    const out = this._placed(position, { ref: 4, rolloff: 1.2 });
+    const out = this._placed(position, { ref: 8, rolloff: 1.1 }); // (it carries across the lawn in the fog)
     const o = ctx.createOscillator();
     o.type = 'sawtooth';
     const f0 = 140 + Math.random() * 60;
@@ -283,7 +283,7 @@ export class Soundscape {
     // an "oo" vowel: two narrow resonances
     const e = ctx.createGain();
     e.gain.setValueAtTime(0, t);
-    e.gain.linearRampToValueAtTime(0.1, t + 0.8);
+    e.gain.linearRampToValueAtTime(0.32, t + 0.8);
     e.gain.linearRampToValueAtTime(0.0001, t + 2.9);
     o.connect(this._filter('bandpass', 450, 7)).connect(e);
     o.connect(this._filter('bandpass', 880, 9)).connect(e);
