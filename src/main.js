@@ -28,6 +28,7 @@ import { Footprints } from './footprints.js';
 import { Park } from './park.js';
 import { Aurora, auroraAt, nextAuroraNight } from './aurora.js';
 import { VR } from './vr.js';
+import { Lanterns } from './lanterns.js';
 import { makeVideo, FORMATS, videoSupported } from './video.js';
 import { setupPool, poolUniforms } from './pool.js';
 import { installErrorLog, setupReport } from './report.js';
@@ -97,6 +98,10 @@ const rainfall = new Rainfall(scene);
 const rainbow = new Rainbow(scene); // when the sun comes out after a shower
 const footprints = new Footprints(scene); // yours, in the snow
 const aurora = new Aurora(scene); // the northern lights, a few clear winter nights
+// other visitors as lanterns (lanterns.js): only where the site has the server for it, and off until ticked
+const lanterns = new Lanterns(scene);
+Lanterns.available().then((ok) => (document.getElementById('visitors-row').hidden = !ok));
+lanterns.onCount = (n) => (document.getElementById('visitors-count').textContent = n ? `(${n} out walking)` : '');
 let storm = null; // thunder and lightning (storm.js), made once the festivals' sounds are wired up
 let snowman = null;
 let leaves = null; // fallen leaves under the trees in autumn (leaves.js)
@@ -1349,6 +1354,10 @@ $('walls').addEventListener('change', (e) => {
   if (walker) walker.ghost = throughWalls;
   e.target.blur();
 });
+$('visitors').addEventListener('change', (e) => {
+  lanterns.setOn(e.target.checked);
+  e.target.blur();
+});
 $('shadows').addEventListener('change', (e) => {
   tod.light.castShadow = e.target.checked;
 });
@@ -1451,6 +1460,10 @@ function step(dt, exporting = false) {
       festive.setScale(lamps.glowMat.uniforms.uScale.value);
     }
     spooky?.update(dt, camera, seasonDay, tod.night);
+    // your lantern at hand height while you walk (and in the headset)
+    const walking = (mode === 'walk' && walker) || vr.presenting;
+    const hand = walking ? (vr.presenting ? camera.position.clone().setY(camera.position.y - 0.65) : walker.feet.clone().setY(walker.feet.y + 0.95)) : null;
+    lanterns.update(dt, hand, tod.night, lamps.glowMat.uniforms.uScale.value);
     park?.update(dt, { sunDeg, hours: tod.hours, day: seasonDay, camera, onFoot: mode === 'walk' });
     if (bonfire) {
       bonfire.update(dt, { day: seasonDay, hours: tod.hours, level: tod.lamps, wind, camera, exporting });
@@ -1772,6 +1785,7 @@ window.manor = {
   setPhoto,
   focusAt,
   vr,
+  lanterns,
   get park() {
     return park;
   },
