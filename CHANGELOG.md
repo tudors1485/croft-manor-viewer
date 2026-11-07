@@ -8,6 +8,10 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.24.0, 7 November 2026
+
+- The northern lights on a few clear winter nights (7 November, 19 January, 2 and 12 February): green along the northern horizon over the house, red and violet rays above, the curtains drifting and folding. The weather label says so while they are up, and *Holidays… › Sights › Northern lights* takes you to the next of those nights. Tonight, 7 November, is one of them.
+
 ## 0.23.0, 7 November 2026
 
 - Deer at dawn: a small herd grazes in the field south-west of the gate from first light until a couple of hours after sunrise. Walk up to them and they look up and bound away. (Quaternius's Deer and Stag, CC0.)

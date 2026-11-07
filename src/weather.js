@@ -10,6 +10,7 @@
 // Rain itself: streaks falling round the camera, outdoors.
 
 import * as THREE from 'three';
+import { auroraAt } from './aurora.js';
 
 const ss = THREE.MathUtils.smoothstep;
 const hash = (n) => {
@@ -110,6 +111,8 @@ export function weatherAt(day, hours, snow, choice = 'auto', live = null) {
     w.wind = THREE.MathUtils.clamp(gusty * (0.15 + 1.5 * luck * luck), 0, 1);
     w.wind *= 0.5 + 0.5 * ss(hours, 7, 13) * (1 - ss(hours, 18, 23));
     w.wind = Math.max(w.wind, 0.45 * w.rain, 0.75 * w.storm) * (1 - 0.85 * w.fog);
+    // the northern lights' nights are clear (aurora.js), from a little before they come out
+    if (auroraAt(day, hours) || auroraAt(day, hours + 1.5)) Object.assign(w, { clouds: Math.min(w.clouds, 0.1), overcast: 0, fog: 0, rain: 0, snowing: 0, storm: 0, wind: Math.min(w.wind, 0.2) });
   } else if (choice === 'clear') {
     w = { ...w, clouds: 0.02, density: 0.4, wind: 0.1 };
   } else if (choice === 'clouds') {

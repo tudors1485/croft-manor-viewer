@@ -26,6 +26,7 @@ import { Storm } from './storm.js';
 import { Rainbow } from './rainbow.js';
 import { Footprints } from './footprints.js';
 import { Park } from './park.js';
+import { Aurora, auroraAt, nextAuroraNight } from './aurora.js';
 import { makeVideo, FORMATS, videoSupported } from './video.js';
 import { setupPool, poolUniforms } from './pool.js';
 import { installErrorLog, setupReport } from './report.js';
@@ -94,6 +95,7 @@ let wind = 0.2; // eased towards the weather's wind, for the trees and the sound
 const rainfall = new Rainfall(scene);
 const rainbow = new Rainbow(scene); // when the sun comes out after a shower
 const footprints = new Footprints(scene); // yours, in the snow
+const aurora = new Aurora(scene); // the northern lights, a few clear winter nights
 let storm = null; // thunder and lightning (storm.js), made once the festivals' sounds are wired up
 let snowman = null;
 let leaves = null; // fallen leaves under the trees in autumn (leaves.js)
@@ -124,7 +126,8 @@ function refreshWeather() {
   leaves?.update();
   tod.weather = weather;
   tod.windy = weather.wind;
-  $('weather-label').textContent = real && live.temperature(real) ? `${weather.label}, ${live.temperature(real)}` : weather.label;
+  const lights = auroraAt(seasonDay, tod.hours) && weather.clouds < 0.35 && weather.fog < 0.2 ? ', northern lights' : '';
+  $('weather-label').textContent = (real && live.temperature(real) ? `${weather.label}, ${live.temperature(real)}` : weather.label) + lights;
   const src = $('weather-source');
   if (forcedWeather) src.textContent = '';
   else if (choice !== 'live') src.textContent = '';
@@ -1059,6 +1062,9 @@ const HOLIDAYS = {
   christmas: { day: 357, hours: 18.5, weather: 'snow', pos: [4.6, 1.7, 19.2], look: [2.5, 5, -6] },
   // just after midnight: fireworks, and the new year written in the sky
   newyear: { day: 0, hours: 0.02, weather: 'clear', pos: [4.6, 1.7, 19.2], look: [4.5, 16, -20] },
+  // the next night with the northern lights: up over the gate, looking north over the house at
+  // them (they hang low; on the ground the gate and the house hide most of them)
+  aurora: { day: () => nextAuroraNight(dayOfYear(new Date())), hours: 22, weather: 'clear', pos: [4.5, 24, 64], look: [4, 12, -30], orbit: true },
 };
 const bonfireAt = () => bonfire?.at ?? new THREE.Vector3(16, 0, 12);
 // L switches the room's lights (and the on-screen L key)
@@ -1088,12 +1094,16 @@ $('holiday').onchange = (e) => {
   }
   if (!h) return;
   wakeSound();
-  setDate(h.day);
+  setDate(typeof h.day === 'function' ? h.day() : h.day);
   setTime(h.hours);
   $('weather').value = h.weather;
   refreshWeather();
   tod.update(true);
   const v = (x) => new THREE.Vector3(...(typeof x === 'function' ? x() : x));
+  if (h.orbit && mode !== 'orbit') {
+    if (mode === 'tour') leaveTour();
+    setMode('orbit');
+  }
   goTo(v(h.pos), v(h.look));
 };
 
@@ -1303,6 +1313,9 @@ function step(dt, exporting = false) {
   const sunOut = THREE.MathUtils.smoothstep(sunDeg, 0.5, 4) * (1 - THREE.MathUtils.smoothstep(weather.overcast, 0.45, 0.85)) * (1 - weather.fog) * (1 - weather.snowing) * (1 - (weather.storm ?? 0));
   rainbow.update(dt, camera, tod.sunDir, afterRain * sunOut * (1 - THREE.MathUtils.smoothstep(sunDeg, 39, 42)) * (1 - tod.inside));
   footprints.update(dt, seasonUniforms.uSnow.value, weather.snowing, THREE.MathUtils.lerp(1, 0.3, tod.night));
+  // the northern lights: on their nights, in the dark, while the sky is clear
+  const auroraUp = auroraAt(seasonDay, tod.hours) ? 1 : 0;
+  aurora.update(dt, camera, auroraUp * THREE.MathUtils.smoothstep(tod.night, 0.6, 0.95) * (1 - THREE.MathUtils.smoothstep(weather.clouds, 0.25, 0.5)) * (1 - weather.fog) * (1 - weather.rain));
   // lightning: its flash lights the sky, the fog and the house (sky.js), its thunder comes late
   tod.flash = storm.update(dt, { storm: weather.storm ?? 0, centre: modelCentre, inside: tod.inside });
   updateExposure(dt);
@@ -1625,6 +1638,7 @@ window.manor = {
   },
   rainbow,
   footprints,
+  aurora,
   get park() {
     return park;
   },
