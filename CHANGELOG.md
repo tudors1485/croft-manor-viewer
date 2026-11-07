@@ -8,6 +8,13 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.47.0, 8 November 2026
+
+The drone flight, and the view from high up.
+
+- **Drone flight** (Flybys): from 420 m up, looking straight down on the estate in its woods, a slow spiral down like a drone's, the house growing beneath you, down to the front of the house.
+- **From high up**: the far trees no longer show as streaks pointing at the house. Past a steep enough angle each one shows a picture of its crown from above, facing you, so from a height the woods are woods; their edges are ragged, with clearings, instead of solid blocks.
+
 ## 0.46.0, 8 November 2026
 
 The hall clock, its time-lapse, and the horse in the fountain's place.

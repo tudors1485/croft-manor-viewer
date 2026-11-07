@@ -395,10 +395,10 @@ export function makeVariant(preset, seed, height, wind, { tint, leafCount, leafS
   return { preset, height, bGeo, lGeo, bark, leaves, leavesDepth, width: Math.max(size.x, size.z), tree, season };
 }
 
-/** Renders a variant from the side into a texture, for distant billboards (bare: branches only). */
-function makeImpostor(renderer, v, bare = false) {
+/** Renders a variant from the side (or from above: `top`) into a texture, for distant billboards (bare: branches only). */
+function makeImpostor(renderer, v, bare = false, top = false) {
   const W = 256;
-  const H = Math.round((W * v.height) / v.width);
+  const H = top ? W : Math.round((W * v.height) / v.width);
   const target = new THREE.WebGLRenderTarget(W, Math.min(512, H), { samples: 4 });
   target.texture.colorSpace = THREE.SRGBColorSpace;
   const scene = new THREE.Scene();
@@ -411,9 +411,17 @@ function makeImpostor(renderer, v, bare = false) {
   scene.add(b);
   if (!bare) scene.add(l);
   const half = v.width / 2;
-  const cam = new THREE.OrthographicCamera(-half, half, v.height, 0, -100, 100);
-  cam.position.set(0, 0, 10);
-  cam.lookAt(0, 0, 0);
+  const cam = top ? new THREE.OrthographicCamera(-half, half, half, -half, -100, 100) : new THREE.OrthographicCamera(-half, half, v.height, 0, -100, 100);
+  if (top) {
+    // (looking straight down on the crown)
+    cam.position.set(0, v.height + 5, 0);
+    cam.up.set(0, 0, -1);
+    cam.lookAt(0, 0, 0);
+    sun.position.set(3, 8, 2);
+  } else {
+    cam.position.set(0, 0, 10);
+    cam.lookAt(0, 0, 0);
+  }
   const prevTarget = renderer.getRenderTarget();
   const prevClear = renderer.getClearColor(new THREE.Color());
   const prevAlpha = renderer.getClearAlpha();
@@ -437,7 +445,7 @@ function billboardMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: THREE.UniformsUtils.merge([
       THREE.UniformsLib.fog,
-      { uMap: { value: null }, uMapBare: { value: null }, uLight: { value: new THREE.Color(1, 1, 1) }, uSnow: seasonUniforms.uSnow },
+      { uMap: { value: null }, uMapBare: { value: null }, uMapTop: { value: null }, uMapTopBare: { value: null }, uLight: { value: new THREE.Color(1, 1, 1) }, uSnow: seasonUniforms.uSnow },
     ]),
     vertexShader: /* glsl */ `
       #include <common>
@@ -445,16 +453,27 @@ function billboardMaterial() {
       uniform float uDay;
       varying vec2 vUv;
       varying vec3 vSeason; // in leaf, autumn colour, this tree's own random number
+      varying float vTop; // seen from above: the picture of the crown from above, facing you
       void main() {
         vUv = uv;
         vec3 base = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
         float sx = length(instanceMatrix[0].xyz);
         float sy = length(instanceMatrix[1].xyz);
-        vec3 toCam = cameraPosition - base;
+        float r = fract(sin(dot(base.xz, vec2(12.9898, 78.233))) * 43758.5453);
+        vec3 toCam3 = cameraPosition - base;
+        float steep = toCam3.y / max(length(toCam3), 1e-3);
+        // (from above, a side picture would stand edge-on to you as a streak: so past a steep
+        // enough angle, each tree at its own, the picture from above, facing you, at its crown)
+        vTop = step(0.56 + 0.12 * r, steep);
+        vec3 toCam = toCam3;
         toCam.y = 0.0;
         vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), normalize(toCam + vec3(1e-4))));
         vec3 world = base + right * position.x * sx + vec3(0.0, position.y * sy, 0.0);
-        float r = fract(sin(dot(base.xz, vec2(12.9898, 78.233))) * 43758.5453);
+        if (vTop > 0.5) {
+          vec3 camRight = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
+          vec3 camUp = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
+          world = base + vec3(0.0, sy * 0.72, 0.0) + camRight * position.x * sx + camUp * (position.y - 0.5) * sx;
+        }
         float d = uDay + (r - 0.5) * 18.0;
         vSeason = vec3(smoothstep(98.0, 136.0, d) * (1.0 - smoothstep(292.0, 330.0, d)), smoothstep(262.0, 304.0, d), fract(r * 17.13));
         vec4 mvPosition = viewMatrix * vec4(world, 1.0);
@@ -466,13 +485,18 @@ function billboardMaterial() {
       #include <fog_pars_fragment>
       uniform sampler2D uMap;
       uniform sampler2D uMapBare;
+      uniform sampler2D uMapTop;
+      uniform sampler2D uMapTopBare;
       uniform vec3 uLight;
       uniform float uSnow;
       varying vec2 vUv;
       varying vec3 vSeason;
+      varying float vTop;
       void main() {
         bool inLeaf = vSeason.z < vSeason.x;
-        vec4 t = inLeaf ? texture2D(uMap, vUv) : texture2D(uMapBare, vUv);
+        vec4 t = vTop > 0.5 ? (inLeaf ? texture2D(uMapTop, vUv) : texture2D(uMapTopBare, vUv)) : (inLeaf ? texture2D(uMap, vUv) : texture2D(uMapBare, vUv));
+        // (a crown from above is its sunlit top: lighter than its side)
+        if (vTop > 0.5) t.rgb *= 1.45;
         if (t.a < 0.5) discard;
         if (inLeaf) {
           // green pixels are leaves: turn them with the season
@@ -773,6 +797,8 @@ export class Landscape {
     seasonUniforms.uDay.value = 190;
     const impostors = variants.map((v) => makeImpostor(this.renderer, v));
     const bareImpostors = variants.map((v) => makeImpostor(this.renderer, v, true));
+    const topImpostors = variants.map((v) => makeImpostor(this.renderer, v, false, true));
+    const topBareImpostors = variants.map((v) => makeImpostor(this.renderer, v, true, true));
     seasonUniforms.uDay.value = day;
     const bbSpots = variants.map(() => []);
     let bb = 0;
@@ -783,6 +809,8 @@ export class Landscape {
       if (inLawn(x, z, 10) || onDrive(x, z)) continue;
       // (in front of the house, a few clumps; the sides and the back, solid)
       if (z > L.max.z + 4 && R() > 0.25) continue;
+      // (ragged, with clearings: from above a wood isn't a block)
+      if (woodAt(x, z) < 0.47 && R() < 0.6) continue;
       if (!taken.every(([tx, tz]) => Math.hypot(tx - x, tz - z) > 5)) continue;
       const vi = Math.floor(R() * variants.length);
       bbSpots[vi].push([x, this.hillHeight(x, z) - 0.3, z, 0.8 + R() * 0.5]);
@@ -810,6 +838,8 @@ export class Landscape {
       const mat = billboardMaterial();
       mat.uniforms.uMap.value = impostors[vi];
       mat.uniforms.uMapBare.value = bareImpostors[vi];
+      mat.uniforms.uMapTop.value = topImpostors[vi];
+      mat.uniforms.uMapTopBare.value = topBareImpostors[vi];
       mat.uniforms.uDay = seasonUniforms.uDay;
       const im = new THREE.InstancedMesh(quad, mat, list.length);
       list.forEach(([x, y, z, s], i) => {

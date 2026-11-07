@@ -383,6 +383,22 @@ export const FLYBYS = {
       k([-1.85, 17, 8], [-1.85, 9, -16], { speed: 2 }),
     ],
   },
+  drone: {
+    label: 'Drone flight',
+    // from high above the fields, looking straight down on the estate in its woods, a slow spiral
+    // down like a drone's, the house growing beneath you, and down to the front of the house
+    keys: [
+      k([5, 420, -13], [5, 0, -21.5], { speed: 24 }),
+      k([40, 300, -8], [5, 0, -21], { speed: 24 }),
+      k([32, 180, 30], [5, 0, -21], { speed: 20 }),
+      k([-8, 110, 42], [5, 2, -21], { speed: 14 }),
+      k([-20, 60, 32], [4, 3, -18], { speed: 9 }),
+      k([-6, 32, 30], [3, 5, -14], { speed: 6 }),
+      k([2, 18, 22], [0, 6, -12], { speed: 4 }),
+      k([2, 11, 10], [-1.85, 6, -12], { speed: 2 }),
+      k([0, 9.5, 4], [-1.85, 5.5, -12], { speed: 0.8 }),
+    ],
+  },
   grounds: {
     label: 'The grounds',
     keys: [
