@@ -301,18 +301,25 @@ export const FLYBYS = {
     holiday: true,
     // Christmas Eve, late, a clear night over the snow: you ride with Father Christmas, the sleigh's
     // front below you and the eight reindeer galloping on ahead (santa.js). In from the south,
-    // high, down over the lit gate and up the drive over the fountain, up over the roofline and
-    // round above the house, a swoop past the big tree on the lawn, and away up into the night
+    // high, down over the lit gate and up the drive over the fountain, round to the west end of the
+    // roof and down onto its ridge (a stop there, the team standing), off along it and round
+    // above the house, a swoop past the big tree on the lawn, and away up into the night
     lapse: { what: 'scenes', every: 1e9, fixed: true, scenes: [{ day: 357, hours: 21.5, weather: 'clear', boost: 1, santa: true }] },
     keys: [
       k([60, 70, 220], [32, 56, 150], { speed: 14 }),
       k([26, 48, 128], [10, 30, 62], { speed: 13 }),
       k([9, 26, 64], [5, 17, 28], { speed: 11 }),
       k([4.6, 17, 31], [4.6, 17, 2], { speed: 9 }),
-      k([4.6, 19, 6], [3, 24, -20], { speed: 9 }),
-      k([1, 25, -12], [-10, 26, -30], { speed: 9 }),
-      k([-13, 27, -26], [-6, 27, -46], { speed: 9 }),
-      k([2, 28, -44], [20, 27, -40], { speed: 9 }),
+      k([4.6, 19, 6], [-6, 18, -16], { speed: 9 }),
+      // round to the west end of the roof, and down onto its ridge: landed, a few seconds standing
+      // there (the team at rest, his "ho ho ho"), then off along it and up
+      k([-8, 20, -11], [-16, 15, -22], { speed: 7 }),
+      k([-18, 16.5, -21], [0, 12.8, -19.9], { speed: 4.5 }),
+      k([-10.5, 13.6, -19.9], [10, 12.6, -19.9], { speed: 1.6 }),
+      k([-7.4, 13.26, -19.9], [10, 12.6, -19.9], { speed: 0.2 }),
+      k([-6.6, 13.27, -19.9], [10, 12.8, -19.9], { speed: 0.25 }),
+      k([-3.5, 14.6, -19.9], [20, 18, -21], { speed: 4 }),
+      k([8, 22, -26], [22, 25, -38], { speed: 8 }),
       k([22, 26, -32], [26, 20, -6], { speed: 9 }),
       k([24, 15, -2], [12, 9, 12], { speed: 8 }),
       k([8, 16, 20], [-12, 30, 50], { speed: 10 }),
@@ -323,28 +330,31 @@ export const FLYBYS = {
   newyear: {
     label: 'New Year',
     holiday: true,
-    // 31 December, ten seconds to midnight, the clock running: still on the drive by the fountain
-    // as the last seconds count down, then up into the midnight fireworks as "Happy New Year" and
-    // the year are written in the sky, on towards them, through the year, then turning back to
-    // circle the house from high up with the fireworks bursting over it
+    // 31 December, ten seconds to midnight, the clock running: by the porch, looking out past the
+    // fountain to the gate, as the last seconds count down; then up and out towards the gate, into
+    // the midnight fireworks going up in the fields beyond it as "Happy New Year" and the year are
+    // written in the sky over the drive, on towards them and through the year; then turning back,
+    // round the house from high up, and over the roof towards the gate and the fireworks again
     // (years: the seconds into the flyby at which the year is written: just after midnight, and as
     // the camera comes up to where it hangs, so it flies through it)
     lapse: { what: 'scenes', every: 1e9, fixed: true, scenes: [{ day: 364, hours: 24 - 11 / 3600, weather: 'clear', run: true, boost: 2.2, years: [12.8, 27, 42.2] }] },
     keys: [
-      k([4.6, 1.7, 18], [4.6, 5, -10], { speed: 0.34 }),
-      k([4.6, 1.9, 14], [4.6, 8, -10], { speed: 0.4 }),
-      k([4.6, 6, 11], [4.8, 26, -40], { speed: 3.5 }),
-      k([4.7, 20, 7], [5, 36, -44], { speed: 4.5 }),
-      k([4.9, 31, -2], [5, 36, -44], { speed: 2.2 }),
-      k([5, 34.5, -22], [5, 36, -60], { speed: 1.6 }),
-      k([5, 36, -44], [5, 40, -70], { speed: 2.6 }),
-      // then turning back, and round the house from high up, the fireworks bursting over it
-      k([-6, 40, -68], [7, 8, -21], { speed: 3.4 }),
-      k([-40, 31, -54], [7, 8, -21], { speed: 4.2 }),
-      k([-57, 27, -15], [7, 8, -21], { speed: 4.2 }),
-      k([-42, 25, 26], [7, 8, -21], { speed: 4.2 }),
-      k([-6, 23, 42], [7, 9, -21], { speed: 3.4 }),
-      k([22, 21, 38], [8, 11, -24], { speed: 1 }),
+      k([4.6, 1.7, 0], [4.6, 5, 28], { speed: 0.34 }),
+      k([4.6, 1.9, 4], [4.6, 8, 28], { speed: 0.4 }),
+      k([4.6, 7, 7], [4.4, 26, 58], { speed: 3.5 }),
+      k([4.5, 20, 11], [4.4, 36, 62], { speed: 4.5 }),
+      k([4.4, 31, 20], [4.4, 36, 62], { speed: 2.2 }),
+      k([4.4, 34.5, 40], [4.4, 36, 78], { speed: 1.6 }),
+      k([4.4, 36, 62], [4.4, 40, 88], { speed: 2.6 }),
+      // then turning back, round the house from high up, and over its roof towards the gate and
+      // the fireworks beyond it
+      k([-6, 40, 84], [7, 8, -21], { speed: 3.4 }),
+      k([-40, 32, 60], [7, 8, -21], { speed: 4.2 }),
+      k([-60, 29, 10], [7, 8, -21], { speed: 4.2 }),
+      k([-50, 29, -50], [7, 8, -21], { speed: 4.2 }),
+      k([-14, 27, -68], [5, 12, 20], { speed: 3.4 }),
+      k([3, 23, -42], [5, 14, 60], { speed: 2.2 }),
+      k([4.5, 20, -12], [4.6, 12, 70], { speed: 1 }),
     ],
   },
   hall: {

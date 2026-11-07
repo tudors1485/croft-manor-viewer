@@ -1567,8 +1567,9 @@ const HOLIDAYS = {
   bonfire: { day: 308, hours: 19.75, weather: 'clear', pos: () => [bonfireAt().x - 1.5, 1.7, bonfireAt().z + 6], look: () => [bonfireAt().x - 5, 4.5, bonfireAt().z - 18] },
   // the lights, and snow falling
   christmas: { day: 357, hours: 16, weather: 'snow', pos: [4.6, 1.7, 19.2], look: [2.5, 5, -6] },
-  // just after midnight: fireworks, and the new year written in the sky
-  newyear: { day: 0, hours: 0.02, weather: 'clear', pos: [4.6, 1.7, 19.2], look: [4.5, 16, -20] },
+  // just after midnight, by the porch looking out to the gate: the fireworks going up beyond it, and
+  // the new year written in the sky over the drive
+  newyear: { day: 0, hours: 0.02, weather: 'clear', pos: [4.6, 1.7, 0], look: [4.5, 18, 60] },
   // the next night with the northern lights: up over the gate, looking north over the house at
   // them (they hang low; on the ground the gate and the house hide most of them)
   aurora: { day: () => nextAuroraNight(dayOfYear(new Date())), hours: 22, weather: 'clear', pos: [4.5, 24, 64], look: [4, 12, -30], orbit: true },
@@ -2033,7 +2034,9 @@ const festSound = {
 
 storm = new Storm(scene, festSound);
 // Father Christmas over the estate on Christmas Eve, and the ride with him (santa.js)
-const santa = new Santa(scene, wildSound);
+// (he lands on the ridge of the front range's roof: its stone cap, 11.35 m up, z -19.9, the sleigh
+// at the west end and the team along it to the east, short of the chimneys)
+const santa = new Santa(scene, wildSound, { roof: { at: new THREE.Vector3(-6.6, 11.36, -19.9), dir: new THREE.Vector3(1, 0, 0) } });
 
 // Making a video of a flyby (video.js): the viewer, as the video maker sees it
 const videoApp = {

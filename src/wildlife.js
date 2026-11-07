@@ -15,13 +15,14 @@
 //   a miaow if you come close
 // - mallards on the fountain's basin or the water by the assault course, spring to autumn, dabbling and quacking
 //
-// The models: Quaternius (fox, cat, the eagle recoloured as a red kite: CC0), Sherkiz (rabbit), the
+// The models: Quaternius (fox, cat, the eagle recoloured as a red kite: CC0), CDmir (rabbit: CC0), the
 // Poly by Google mallard drake, magpie and pigeon, jeremy (robin, recoloured as a European one),
 // weirdybeardyman (the duck: CC0). The flocks (crows) are drawn here. Credits in
 // public/animals/LICENSE.txt and public/sounds/LICENSE.txt.
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { easterDay, nextEaster } from './easter.js';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 
 const ss = THREE.MathUtils.smoothstep;
@@ -231,7 +232,8 @@ export class Wildlife {
     if (g.pigeon) this.pigeons = this.perches.map(() => add(animal(g.pigeon, 0.36, { axis: 'xz', tint: new THREE.Color(0.4, 0.42, 0.48) })));
     if (g.robin) this.robin = add(animal(g.robin, 0.14, { axis: 'xz', yaw: -Math.PI / 2 }));
     if (g.magpie) this.magpies = [0, 1].map(() => add(animal(g.magpie, 0.46, { axis: 'xz', yaw: -Math.PI / 2 })));
-    if (g.rabbit) this.rabbits = [0, 1, 2, 3, 4].map(() => add(animal(g.rabbit, 0.42, { axis: 'xz', yaw: Math.PI })));
+    // (nine: five on an ordinary evening, all of them about the front lawns on Easter Sunday)
+    if (g.rabbit) this.rabbits = [0, 1, 2, 3, 4, 5, 6, 7, 8].map(() => add(animal(g.rabbit, 0.3, { axis: 'xz' })));
     if (g.fox) this.fox = add(animal(g.fox, 0.5));
     if (g.cat) this.cat = add(animal(g.cat, 0.5, { axis: 'xz', yaw: -Math.PI / 2 }));
     // (the terrier that chases the cat, and the mouse the cat chases)
@@ -569,68 +571,102 @@ export class Wildlife {
   _rabbits(dt, cam, day, sunDeg, hours, ok, feet) {
     if (!this.rabbits) return;
     const time = (hours < 12 ? sunDeg > -5 && sunDeg < 14 : sunDeg < 12 && sunDeg > -5) ? 1 : 0;
-    const out = ok && season(day, 80, 262) && time && this._luck(day, 5, 0.8, 'rabbits');
-    // their places: the edges of the side lawns, and the fields outside the gate
-    const SPOTS = [
-      [-30, 6],
-      [-27, 26],
-      [36, 8],
-      [33, 30],
-      [18, 46],
-      [-6, 50],
-      [26, 52],
-    ];
+    // Easter Sunday: out all day on the front lawns, hopping about among the eggs
+    const d = Math.floor(day);
+    const easter = (d === easterDay(new Date().getFullYear()) || d === nextEaster()) && sunDeg > 2 && ok;
+    const out = easter || (ok && season(day, 80, 262) && time && this._luck(day, 5, 0.8, 'rabbits'));
+    if (easter !== this._easterRabbits) {
+      // (a new set of places: everyone starts again)
+      this._easterRabbits = easter;
+      for (const rb of this.rabbits) rb.state = null;
+    }
+    // their places: the edges of the side lawns and the fields outside the gate; at Easter, the
+    // lawns either side of the fountain and along the front
+    const SPOTS = easter
+      ? [
+          [-12, 8],
+          [-15, 15],
+          [14, 4],
+          [18, 13],
+          [-6, 15],
+          [12, 16],
+          [-22, 2],
+          [24, 1],
+          [-2, 4],
+        ]
+      : [
+          [-30, 6],
+          [-27, 26],
+          [36, 8],
+          [33, 30],
+          [18, 46],
+          [-6, 50],
+          [26, 52],
+        ];
+    const count = easter ? 9 : 5;
     this.rabbits.forEach((rb, i) => {
       const s = (rb.state ??= { home: SPOTS[i % SPOTS.length], p: null });
-      if (!out) {
+      if (!out || i >= count) {
         rb.holder.visible = false;
         s.p = null;
         return;
       }
       if (!s.p) {
         const [hx, hz] = s.home;
-        const x = hx + rnd(-3, 3);
-        const z = hz + rnd(-3, 3);
+        let x = hx;
+        let z = hz;
+        for (let k = 0; k < 12; k++) {
+          x = hx + rnd(-3, 3);
+          z = hz + rnd(-3, 3);
+          if (!easter || this.isLawn(x, z)) break;
+        }
         s.p = new THREE.Vector3(x, this.ground(x, z), z);
-        Object.assign(s, { heading: rnd(0, 6.28), next: rnd(1, 5), move: 0, flee: 0, gone: false });
+        Object.assign(s, { heading: rnd(0, 6.28), next: rnd(0.5, 4), move: 0, flee: 0, gone: 0, sit: rnd(0, 1) < 0.3 });
         rb.mixer?.update(Math.random() * 2);
       }
-      if (s.gone) {
+      if (s.gone > 0) {
         rb.holder.visible = false;
+        // (at Easter they come back out after a while, somewhere near their place)
+        if (easter && (s.gone -= dt) <= 0) s.p = null;
         return;
       }
       rb.holder.visible = true;
       const near = feet ? Math.hypot(feet.x - s.p.x, feet.z - s.p.z) : 99;
-      if (!s.flee && near < 12) {
+      if (!s.flee && near < (easter ? 7 : 12)) {
         s.flee = 0.001;
         s.heading = Math.atan2(s.p.x - feet.x, s.p.z - feet.z) + rnd(-0.4, 0.4);
       }
       let speed = 0;
+      let clip = s.sit ? 'Sitting' : 'Guarding';
       if (s.flee) {
         s.flee += dt;
         speed = 6.5;
-        // (into the hedge or the long grass: gone)
-        if (s.flee > 2.2) s.gone = true;
+        // (into the hedge or the long grass: gone; at Easter, back in half a minute or so)
+        if (s.flee > 2.2) s.gone = easter ? rnd(20, 40) : 1e9;
       } else {
         s.next -= dt;
         if (s.next <= 0) {
           s.heading += rnd(-1.5, 1.5);
-          s.move = rnd(0.4, 1.2);
-          s.next = rnd(2, 7);
+          s.move = easter ? rnd(0.6, 2.2) : rnd(0.4, 1.2);
+          s.next = easter ? rnd(1.2, 4) : rnd(2, 7);
+          s.sit = Math.random() < 0.35;
         }
         if (s.move > 0) {
           s.move -= dt;
-          speed = 1.4;
+          speed = easter ? 1.9 : 1.4;
         }
-        // (back towards its place if it strays)
-        if (Math.hypot(s.p.x - s.home[0], s.p.z - s.home[1]) > 7) s.heading = Math.atan2(s.home[0] - s.p.x, s.home[1] - s.p.z);
+        // (back towards its place if it strays, and off the drive)
+        const far = Math.hypot(s.p.x - s.home[0], s.p.z - s.home[1]) > 7;
+        if (far || (easter && speed > 0 && !this.isLawn(s.p.x + Math.sin(s.heading) * 0.8, s.p.z + Math.cos(s.heading) * 0.8))) s.heading = Math.atan2(s.home[0] - s.p.x, s.home[1] - s.p.z) + rnd(-0.3, 0.3);
       }
+      if (speed > 0) clip = 'Running';
       s.p.x += Math.sin(s.heading) * speed * dt;
       s.p.z += Math.cos(s.heading) * speed * dt;
-      s.p.y = this.ground(s.p.x, s.p.z) + (speed > 0 ? Math.abs(Math.sin(this.t * (speed > 3 ? 14 : 9))) * 0.08 : 0);
+      s.p.y = this.ground(s.p.x, s.p.z);
       rb.holder.position.copy(s.p);
       rb.holder.rotation.y = s.heading;
-      play(rb, speed > 0 ? 'Bunny_walk' : 'Bunny_idle', 0.15, speed > 3 ? 2 : 1);
+      // (the hop is the model's own: slow and bouncy at a lope, flat out when it runs)
+      play(rb, clip, 0.15, speed > 3 ? 1.7 : speed > 0 ? 0.75 : 1);
       rb.mixer?.update(dt);
     });
   }

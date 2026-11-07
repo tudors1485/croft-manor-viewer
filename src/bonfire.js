@@ -423,6 +423,7 @@ export class Bonfire {
     // fireworks: 18:30 to 22:00 on Bonfire Night; at New Year a few in the last two minutes of the
     // old year, then from midnight a lot
     const d = Math.floor(day);
+    this._newYear = newYear;
     const beforeMidnight = newYear && d === 364;
     const showtime = this._priming ? false : bonfireNight ? hours > 18.5 && hours < 22 && level > 0.5 : newYear && (beforeMidnight ? hours > 23.966 : hours < 0.67);
     const b = this.boost;
@@ -447,7 +448,8 @@ export class Bonfire {
   }
 
   _launch(delay = 0) {
-    const from = new THREE.Vector3(-18 + Math.random() * 46, 0, -62 + Math.random() * 14);
+    // (Bonfire Night's go up behind the house; New Year's in the fields beyond the gate, over the drive)
+    const from = this._newYear ? new THREE.Vector3(-26 + Math.random() * 62, 0, 74 + Math.random() * 18) : new THREE.Vector3(-18 + Math.random() * 46, 0, -62 + Math.random() * 14);
     const to = from.clone().add(new THREE.Vector3((Math.random() - 0.5) * 10, 38 + Math.random() * 30, (Math.random() - 0.5) * 8));
     // a mix, as a real display has: mostly peonies (some with a heart of another colour), gold
     // chrysanthemums, willows hanging long, palms, rings, and crackling glitter
@@ -620,7 +622,7 @@ export class Bonfire {
     }
   }
 
-  /** "Happy New Year" and the coming year (2027 in 2026), written in gold sparks high over the house, facing the drive. */
+  /** "Happy New Year" and the coming year (2027 in 2026), written in gold sparks high over the drive beyond the gate, facing the house. */
   writeYear() {
     this._writeYear();
   }
@@ -644,15 +646,16 @@ export class Bonfire {
     g.fillText(String(year), Wpx / 2, 205);
     const px = g.getImageData(0, 0, Wpx, Hpx).data;
     const sp = this.sparks;
-    const centre = new THREE.Vector3(5, 36, -44); // where the year hangs (the flyby flies through it)
+    const centre = new THREE.Vector3(4.4, 36, 62); // where the year hangs, over the drive beyond the gate (the flyby flies through it)
     const W = 74; // metres across
+    // (read from the house, looking south: east is on the left)
     for (let y = 0; y < Hpx; y += 3) {
       const words = y < 130;
       if (!words && y % 4) continue; // (the year's big strokes need fewer sparks)
       for (let x = 0; x < Wpx; x += words ? 3 : 4) {
         if (px[(y * Wpx + x) * 4 + 3] < 128) continue;
         const i = sp.spawn();
-        const tx = centre.x + (x / Wpx - 0.5) * W;
+        const tx = centre.x - (x / Wpx - 0.5) * W;
         const ty = centre.y - ((y - 205) / Wpx) * W;
         // each spark flies out from the middle to its place in the letters, then hangs and falls
         sp.pos.set([centre.x, centre.y, centre.z], i * 3);

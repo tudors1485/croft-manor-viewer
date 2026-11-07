@@ -608,12 +608,13 @@ export class Landscape {
         // close in, either side of the gateway, their crowns over the wall (TRJTA's view over the
         // gate): the nearest lawn to that, clear of the path and the wall
         let best = null;
-        for (let dx = 3.5; dx <= 8; dx += 0.5) {
+        for (let dx = 5.0; dx <= 8; dx += 0.5) {
           for (let dz = 2.5; dz <= 7; dz += 0.5) {
             const x = this.gate.x + side * dx;
             const z = this.gate.z - dz;
             if (!this._clearLawn(x, z, 1.2)) continue;
-            const d = Math.hypot(dx - 4.6, dz - 3.4);
+            // (not too close to the path: the camera comes through the gate under their crowns)
+            const d = Math.hypot(dx - 5.6, dz - 3.4);
             if (!best || d < best[2]) best = [x, z, d];
           }
         }
@@ -626,7 +627,7 @@ export class Landscape {
     // an oak on the west of the front lawn, its crown over where you start: the picture of the
     // front Tudor liked, the house seen from under a tree (main.js: the opening view)
     this.frontOak = null;
-    for (const [x, z] of [[-8, 13.5], [-8.5, 12], [-7.5, 15], [-9, 10.5]]) {
+    for (const [x, z] of [[-10.5, 15], [-11, 13.5], [-10, 16.5], [-11.5, 12]]) {
       if (!this._clearLawn(x, z, 1.6)) continue;
       entranceSpots.push([1, x, z, 1, 4.1]);
       taken.push([x, z, 9]);
@@ -708,8 +709,10 @@ export class Landscape {
     ]) {
       for (const [v, x, z, s] of list) {
         this.obstacles.push({ x, z, r: 0.35 * s * (vs[v].height / 14) });
-        // the crown, roughly, for keeping camera paths out of the leaves
-        this.crowns.push({ x, z, r: (vs[v].width * s) / 2, y0: vs[v].height * s * 0.22, y1: vs[v].height * s });
+        // the crown, roughly, for keeping camera paths out of the leaves (the trees by the gate and
+        // the front lawn's oak are lifted clear of the head, as parkland trees are)
+        const lifted = list === entranceSpots ? 0.3 : 0.22;
+        this.crowns.push({ x, z, r: (vs[v].width * s) / 2, y0: vs[v].height * s * lifted, y1: vs[v].height * s });
         this.treeSpots.push({ x, z, r: (vs[v].width * s) / 2, inside: inLawn(x, z) });
       }
     }

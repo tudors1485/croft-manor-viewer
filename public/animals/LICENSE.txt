@@ -1,14 +1,14 @@
 The animals' models. Changed here: trimmed to the animations the viewer uses (keyframes
 resampled), and some recoloured, as noted.
 
-deer.glb    "Deer" by Quaternius, https://poly.pizza/m/T6Cs7tmMHJ            CC0 1.0
-stag.glb    "Stag" by Quaternius, https://poly.pizza/m/tQdzbZ1Cmw            CC0 1.0
+(rigs and animations) "Deer" by Quaternius, https://poly.pizza/m/T6Cs7tmMHJ, and "Stag" by
+            Quaternius, https://poly.pizza/m/tQdzbZ1Cmw, in red-hind.glb, red-stag.glb and
+            reindeer.glb                                                      CC0 1.0
 fox.glb     "Fox" by Quaternius, https://poly.pizza/m/Bc97C66HKi             CC0 1.0
 cat.glb     "Cat" from Quaternius's Animated Animals Low Poly pack,
             https://opengameart.org/content/animated-animales-low-poly        CC0 1.0
 kite.glb    "Eagle" from the same pack, recoloured as a red kite              CC0 1.0
 duck.glb    "Rigged Duck" by weirdybeardyman, https://opengameart.org/content/rigged-duck   CC0 1.0
-rabbit.glb  "Rabbit" by Sherkiz, https://poly.pizza/m/Km89u3twcR             CC BY 3.0
 drake.glb   "Mallard duck" by Poly by Google, https://poly.pizza/m/frSLi6b6Vid   CC BY 3.0
 magpie.glb  "Sparrow" by Poly by Google, https://poly.pizza/m/70zu6VzQmL4    CC BY 3.0
 pigeon.glb  "Dove" by Poly by Google, https://poly.pizza/m/2jmH3trzPFf       CC BY 3.0 (tinted grey)
@@ -23,10 +23,18 @@ terrier.glb "Shiba Inu" by Quaternius, https://poly.pizza/m/y4wdQpg767, recolour
             white and tan                                                     CC0 1.0
 mouse.glb   "Rat" by Quaternius, https://poly.pizza/m/iltq5bVNaV, recoloured
             brown-grey and made mouse-sized                                   CC0 1.0
-horse.glb   "Horse" by Quaternius, https://poly.pizza/m/qvTrSG9pZF            CC0 1.0
+horse.glb   the horse of "Realtime Rancher's 3D Model Pack" by Lyndon Daniels,
+            https://opengameart.org/content/realtime-ranchers-3d-model-pack (via ChadM's
+            https://opengameart.org/content/rigged-horse), on the rig and animations of
+            "Horse" by Quaternius, https://poly.pizza/m/qvTrSG9pZF               CC0 1.0
 red-stag.glb "Old deer male" by CDmir (Čestmír Dammer),
-            https://opengameart.org/content/old-deer-male (textures shrunk)   CC0 1.0
-red-hind.glb "Deer female" by CDmir, https://opengameart.org/content/deer-female  CC0 1.0
+            https://opengameart.org/content/old-deer-male (textures shrunk), on the rig
+            and animations of Quaternius's "Stag" (above)                      CC0 1.0
+red-hind.glb "Deer female" by CDmir, https://opengameart.org/content/deer-female, on
+            the rig and animations of Quaternius's "Deer" (above)              CC0 1.0
+reindeer.glb CDmir's "Old deer male", recoloured grey-brown, on Quaternius's "Stag"
+            rig and animations                                                 CC0 1.0
+rabbit.glb  "Rabbit" by CDmir, https://opengameart.org/content/rabbit-0         CC0 1.0
 sleigh.glb  "SLED" from "Basic assets: Christmas" by Tribus Games Indie,
             https://opengameart.org/content/basic-assets-christmas (made from
             its MagicaVoxel file)                                             CC0 1.0

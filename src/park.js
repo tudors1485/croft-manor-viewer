@@ -240,7 +240,7 @@ export class Park {
       const c = f.getCenter(new THREE.Vector3());
       route.push(new THREE.Vector3(c.x + 0.6, 0, f.min.z - 0.45));
       this.drinkAt = new THREE.Vector3(c.x + 0.6, 0, f.min.z);
-    } else if (i === 3) route.push(new THREE.Vector3(door.x + 3.4, 0, door.z + 2.6));
+    } else if (i === 3) route.push(new THREE.Vector3(door.x - 3.6, 0, door.z + 3.2)); // (the horse stands the other side)
     else route.push(new THREE.Vector3(door.x + (i === 0 ? -0.75 : 0.85), 0, door.z + 1.0));
     return route;
   }
@@ -270,7 +270,8 @@ export class Park {
 
   _play(d, name, fade = 0.5) {
     // (the red deer's own clips stand in for the herd's names; the walk is their run, slowed)
-    const [clip, rate] = Object.hasOwn(CLIP, name) ? CLIP[name] : [name, 1];
+    // (the herd's own names first: the deer now have a walk of their own; else CDmir's clips)
+    const [clip, rate] = Object.hasOwn(d.actions, name) ? [name, 1] : Object.hasOwn(CLIP, name) ? CLIP[name] : [name, 1];
     const next = d.actions[clip];
     if (!next) return;
     next.timeScale = rate;
@@ -391,9 +392,11 @@ export class Park {
     // the horse at the door, waiting: shifting its weight, head down now and then, a snort
     const hr = this.horse;
     if (hr) {
-      const at = this.door.clone().add(new THREE.Vector3(3.6, 0, 1.6));
+      // (out on the gravel in front of the porch, side-on to the house, its head towards the door:
+      // clear of the walls and the pots)
+      const at = this.door.clone().add(new THREE.Vector3(4.6, 0, 3.5));
       hr.holder.position.set(at.x, this.ground(at.x, at.z), at.z);
-      hr.holder.rotation.y = -Math.PI / 2 + 0.25;
+      hr.holder.rotation.y = -Math.PI / 2 - 0.12;
       const phase = Math.sin(this.huntT * 0.13);
       this._playH(hr, phase > 0.55 ? 'Idle_Headlow' : phase < -0.7 ? 'Idle_2' : 'Idle', 1);
       hr.mixer.update(dt);

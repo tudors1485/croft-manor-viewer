@@ -12,7 +12,7 @@
 
 import * as THREE from 'three';
 import { addTreeShader } from './landscape.js';
-import { Particles, softDot } from './bonfire.js';
+import { Particles } from './bonfire.js';
 import { seasonUniforms } from './season.js';
 
 function rng(seed) {
@@ -179,6 +179,32 @@ function paddlePicture() {
     g.lineTo(118, y - 22);
     g.stroke();
   }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+/** A puff of smoke: dense in the middle, fading away to nothing with no edge, a little lumpy. */
+function puffPicture() {
+  const S = 128;
+  const c = document.createElement('canvas');
+  c.width = c.height = S;
+  const g = c.getContext('2d');
+  const img = g.createImageData(S, S);
+  const R = rng(9);
+  const lumps = Array.from({ length: 7 }, () => [S / 2 + (R() - 0.5) * S * 0.35, S / 2 + (R() - 0.5) * S * 0.35, S * (0.16 + R() * 0.12)]);
+  for (let y = 0; y < S; y++) {
+    for (let x = 0; x < S; x++) {
+      let a = 0;
+      for (const [lx, ly, lr] of lumps) a += Math.exp(-((x - lx) ** 2 + (y - ly) ** 2) / (2 * lr * lr));
+      const r = Math.hypot(x - S / 2, y - S / 2) / (S / 2);
+      a = Math.min(1, a * 0.45) * Math.max(0, 1 - r * r);
+      const k = (y * S + x) * 4;
+      img.data[k] = img.data[k + 1] = img.data[k + 2] = 255;
+      img.data[k + 3] = Math.round(a * 255);
+    }
+  }
+  g.putImageData(img, 0, 0);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
@@ -815,7 +841,7 @@ export class Garden {
   _smoke() {
     // the stacks with a fire under them: the tall triple stack, the one by the porch, one at the back
     this.chimneys = [new THREE.Vector3(15.4, 14.6, -17.7), new THREE.Vector3(-4.0, 10.7, -13.4), new THREE.Vector3(7.6, 11.1, -29.5)];
-    this.smoke = new Particles(360, { additive: false, map: softDot(0.3), max: 220 });
+    this.smoke = new Particles(420, { additive: false, map: puffPicture(), max: 140, near: 7 });
     this.smoke.points.renderOrder = 7;
     this.group.add(this.smoke.points);
     this._puff = this.chimneys.map(() => 0);
@@ -858,11 +884,11 @@ export class Garden {
       sm.vel[i * 3 + 2] += (-drift * 0.5 - sm.vel[i * 3 + 2]) * dt * 0.4;
       sm.vel[i * 3 + 1] *= 1 - dt * 0.12;
       for (let k = 0; k < 3; k++) sm.pos[i * 3 + k] += sm.vel[i * 3 + k] * dt;
-      // pale grey by day, a blue-grey ghost at night
-      const v = THREE.MathUtils.lerp(0.86, 0.22, night);
-      sm.col.set([v, v * 1.0, v * 1.03], i * 3);
+      // pale grey by day; at night a faint veil, a little darker than the sky (seen against the stars)
+      const v = THREE.MathUtils.lerp(0.86, 0.09, night);
+      sm.col.set([v, v * 1.03, v * 1.12], i * 3);
       sm.size[i] = 1.2 + u * 8.5;
-      sm.alpha[i] = Math.min(1, u * 8) * (1 - u) * (1 - u) * 0.72 * sm.data[i * 4 + 1];
+      sm.alpha[i] = Math.min(1, u * 8) * (1 - u) * (1 - u) * THREE.MathUtils.lerp(0.62, 0.22, night) * sm.data[i * 4 + 1];
     }
     sm.flush();
   }

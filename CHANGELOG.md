@@ -8,6 +8,20 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.41.0, 7 November 2026
+
+Animals, Santa on the roof, New Year towards the gate.
+
+- **Father Christmas lands on the roof**: every other time he comes over on Christmas Eve (the first time of the evening too), he turns in along the ridge of the front roof and lands, the reindeer standing there for half a minute, now and then one with its head down, the bells shaken and a "ho ho ho"; then off along the ridge and up. In the *Santa's sleigh* flyby the sleigh lands on the ridge too, a few seconds' stop, before going on.
+- **Reindeer**: CDmir's realistic deer, made grey-brown, on Quaternius's gallop (CC0), instead of the low-poly stag.
+- **The horse**: a realistic horse (Lyndon Daniels's, CC0) on Quaternius's animations. At the door after the hunt it now stands out on the gravel in front of the porch, side-on, instead of with its head in the wall; the hound that noses about moved to the other side.
+- **Red deer**: they now walk (their own models on Quaternius's walk and gallop) instead of a slowed run.
+- **Rabbits**: CDmir's realistic rabbit (CC0), which hops, sits up and sits; it replaces the low-poly one and its credit.
+- **Easter Sunday**: nine rabbits out all day on the lawns either side of the fountain and along the front, hopping about among the daffodils and the eggs; they scatter as you come close and come back out half a minute later.
+- **New Year towards the gate**: the fireworks now go up in the fields beyond the gate, and "Happy New Year" and the year are written over the drive outside it, reading from the house. The *New Year* flyby starts by the porch looking out past the fountain to the gate for the countdown, then rises and flies out over the gate through the year, turns back round the house high up, and ends over the roof looking out to the gate and the fireworks. *Holidays › New Year* stands you by the porch facing the gate.
+- The camera paths are clear of walls and trees (the trees by the gate moved a little away from the path, and the front oak a little west).
+- The chimney smoke at night is a faint veil instead of grey puffs.
+
 ## 0.40.0, 7 November 2026
 
 The opening view, Reset, the outdoor lights' switch, and darker glass.
