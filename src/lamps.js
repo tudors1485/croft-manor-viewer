@@ -93,6 +93,8 @@ export class Lamps {
     this.level = 0;
     this.windowsGlow = 0;
     this.houseOn = true; // the panel's switch for the whole house
+    this.dark = false; // Halloween: the house dark (seen from outside; inside, the lights still come on)
+    this.cut = 0; // the lights failing in a storm (spooky.js): 0 on .. 1 all out
     this.houseBox = new THREE.Box3(new THREE.Vector3(-14.6, -1, -32.2), new THREE.Vector3(29.4, 13, -9.3));
 
     const flames = []; // [x, y, z, size, phase, kind]
@@ -383,14 +385,15 @@ export class Lamps {
       // in bed from its bedtime until half past six, unless you are in the house (then the lights
       // inside come back on: nobody wants to walk round a dark house)
       const asleep = l.bedtime != null && now >= sinceNoon(l.bedtime) && now < sinceNoon(6.5) && !(inside && !l.outdoor);
-      const auto = (this.houseOn !== false || l.outdoor) && !asleep ? level : 0;
+      const dark = this.dark && !l.outdoor && !inside;
+      const auto = (this.houseOn !== false || l.outdoor) && !asleep && !dark ? level : 0;
       // a light switched on by hand shines by day too
       const want = l.manual === true ? 1 : l.manual === false ? 0 : auto;
       this._want[i] = want;
       l.on += (want - l.on) * (1 - Math.exp(-dt * 3.5));
       if (Math.abs(want - l.on) < 0.002) l.on = want;
-      u.uOn.value[i] = l.on;
-      l.light.intensity = l.power * l.on;
+      u.uOn.value[i] = l.on * (1 - this.cut);
+      l.light.intensity = l.power * l.on * (1 - this.cut);
       lit = Math.max(lit, l.on);
       if (l.kind === 'tube') tubes = Math.max(tubes, l.on);
       if (!l.outdoor) {

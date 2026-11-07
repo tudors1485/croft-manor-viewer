@@ -264,7 +264,7 @@ export async function makeVideo(app, formatId, { onProgress, preview, signal } =
     cam.updateMatrixWorld();
     sound.update(1 / FPS, cam, { ...(fr.env ?? env), inside: fr.inside, speed: fr.speed, flyby: true });
     for (const d of fr.doors) sound.door(d.opening, d.at);
-    // the festivals': moans, the bonfire, rockets and bangs, as they were heard while the frame was drawn
+    // the festivals': the bonfire, rockets and bangs, the thunder, as they were heard while the frame was drawn
     for (const [what, ...args] of fr.sounds ?? []) if (typeof sound[what] === 'function') sound[what](...args);
   };
   apply(0);

@@ -187,10 +187,12 @@ export const FLYBYS = {
   halloween: {
     label: 'Halloween night',
     holiday: true,
-    // 31 October, near midnight, in the fog: through the gate past the ghosts on the lawn, down to
-    // the pumpkins at the door, then along the front at the height of the windows, where figures
-    // stand for a moment, and away over the garden (the seasons tick box doesn't apply)
-    lapse: { what: 'scenes', every: 1e9, fixed: true, scenes: [{ day: 303, hours: 23.3, weather: 'fog', boost: 1.8 }] },
+    // 31 October at dusk, a storm in the fog: through the gate and down the drive to the pumpkins
+    // by the front door, standing ajar, then up along the front at the height of the windows: the
+    // house is dark, but someone walks the upstairs rooms with a candle, a figure stands at a
+    // window ahead for a moment, and as the candle goes the lightning strikes close and the
+    // lights fail; then away over the garden (the seasons tick box doesn't apply)
+    lapse: { what: 'scenes', every: 1e9, fixed: true, scenes: [{ day: 303, hours: 16.6, weather: 'eerie', halloween: true, label: 'Storm in the fog' }] },
     keys: [
       k([4.6, 1.8, 30], [4.6, 2.2, 10], { speed: 2.4 }),
       k([4.6, 2.0, 20.7], [0, 1.8, 8], { speed: 3 }),

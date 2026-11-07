@@ -263,37 +263,6 @@ export class Soundscape {
     slosh.start(t, Math.random() * 2, len * 1.35 + 0.05);
   }
 
-  /** A ghost's moan at `position`: a low, wavering "ooh", rising a little, then sliding away. */
-  moan(position) {
-    if (!this.on) return;
-    const ctx = this.ctx;
-    const t = ctx.currentTime + 0.05;
-    const out = this._placed(position, { ref: 8, rolloff: 1.1 }); // (it carries across the lawn in the fog)
-    const o = ctx.createOscillator();
-    o.type = 'sawtooth';
-    const f0 = 140 + Math.random() * 60;
-    o.frequency.setValueAtTime(f0, t);
-    o.frequency.linearRampToValueAtTime(f0 * 1.12, t + 0.9);
-    o.frequency.linearRampToValueAtTime(f0 * 0.8, t + 2.7);
-    const vib = ctx.createOscillator();
-    vib.frequency.value = 5 + Math.random();
-    const vg = ctx.createGain();
-    vg.gain.value = f0 * 0.025;
-    vib.connect(vg).connect(o.frequency);
-    // an "oo" vowel: two narrow resonances
-    const e = ctx.createGain();
-    e.gain.setValueAtTime(0, t);
-    e.gain.linearRampToValueAtTime(0.32, t + 0.8);
-    e.gain.linearRampToValueAtTime(0.0001, t + 2.9);
-    o.connect(this._filter('bandpass', 450, 7)).connect(e);
-    o.connect(this._filter('bandpass', 880, 9)).connect(e);
-    e.connect(out);
-    o.start(t);
-    vib.start(t);
-    o.stop(t + 3);
-    vib.stop(t + 3);
-  }
-
   /** The bonfire: a low roar and the crackle of the wood, at `position` (level 0 puts it out). */
   setBonfire(position, level) {
     if (!this.on || !this.ctx) return;

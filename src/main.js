@@ -107,7 +107,8 @@ let storm = null; // thunder and lightning (storm.js), made once the festivals' 
 let snowman = null;
 let leaves = null; // fallen leaves under the trees in autumn (leaves.js)
 let festive = null; // pumpkins at Halloween, lights at Christmas (festive.js)
-let spooky = null; // Halloween night's figures and ghosts (spooky.js)
+let spooky = null; // Halloween evening: the figure at a window, the one in the gateway, the candle, the lights failing (spooky.js)
+let frontDoor = null; // (Halloween leaves it ajar)
 let bonfire = null; // Bonfire Night (bonfire.js)
 let park = null; // deer at dawn, bats at summer dusk (park.js)
 let pathProblems = null; // what the check of the camera paths found (for the console)
@@ -577,6 +578,11 @@ function applyLapse(l) {
     $('bar-clock').textContent = `${dateLabel(sc.day)} · ${sc.label ?? WEATHERS[sc.weather]}`;
     // a holiday flyby puts on a show: the bonfire already burning, more fireworks, the lights chasing
     setShow(sc.boost ?? 0);
+    // the Halloween flyby: the candle upstairs, one figure at a window ahead, the lights failing
+    if (spooky) {
+      spooky.flight = !!sc.halloween;
+      if (sc.halloween) spooky.reset();
+    }
     if (sc.boost && bonfire) {
       bonfire.reset();
       bonfire.prime({ day: sc.day, hours: sc.hours, level: tod.lamps, wind, camera });
@@ -593,11 +599,11 @@ function applyLapse(l) {
 let lapseSeconds = 0;
 /** A holiday flyby's show (0 for none): more rockets and salvos, the ghosts back sooner, the lights chasing. */
 function setShow(boost) {
+  if (!boost && spooky) spooky.flight = false;
   if (bonfire) {
     bonfire.boost = Math.max(1, boost);
     if (!boost) bonfire.autoYear = true;
   }
-  if (spooky) spooky.boost = Math.max(1, boost);
   if (festive) festive.show = boost ? 1 : 0;
   countdown = '';
 }
@@ -1084,9 +1090,10 @@ async function prepareWalking(ground) {
     // Halloween's pumpkins by the front door, Christmas lights on the house, the gate and the two oaks inside it
     const front = doors.usable.find((d) => d.centre.z > -12 && d.centre.z < -8 && Math.abs(d.centre.x + 1.85) < 1.5);
     const oaks = landscape.gate ? landscape.treeSpots.filter((t) => Math.abs(t.z - (landscape.gate.z - 6.5)) < 1 && Math.abs(Math.abs(t.x - landscape.gate.x) - 5.4) < 1) : [];
+    frontDoor = front ?? null;
     festive = new Festive(scene, { bvh: geo.boundsTree, door: front, oaks, gate: landscape.gate });
     for (const pk of festive.pumpkins) landscape.obstacles.push({ x: pk.position.x, z: pk.position.z, r: 0.3, when: () => festive.halloween.visible });
-    spooky = new Spooky(scene, { bvh: geo.boundsTree, materialAt: (fi) => meshAtFace(geo, fi)?.material.name || '', isLawn: (x, z) => landscape._grassAt(x, z), houseBox: lamps.houseBox, sound: festSound });
+    spooky = new Spooky(scene, { bvh: geo.boundsTree, materialAt: (fi) => meshAtFace(geo, fi)?.material.name || '', houseBox: lamps.houseBox, gate: landscape.gate, door: front?.centre ?? null, ground: (x, z) => landscape.groundHeight(x, z) });
     // the bonfire: on open lawn in front of the house, clear of the trees and shrubs
     const fireSpot = [
       [16, 12],
@@ -1225,8 +1232,8 @@ function goTo(pos, look) {
 }
 // The holidays, from the menu: the date, the time and the weather for each, and a good place to stand
 const HOLIDAYS = {
-  // pumpkins at the door, figures at the windows, ghosts in the fog
-  halloween: { day: 303, hours: 22.5, weather: 'fog', pos: [-1.85, 1.7, -2.4], look: [-1.85, 0.7, -9] },
+  // dusk in a storm and fog: pumpkins by the door left ajar, the house dark (stay by the door a while…)
+  halloween: { day: 303, hours: 16.6, weather: 'eerie', pos: [-1.85, 1.7, -7.6], look: [-1.85, 1.3, -12] },
   // the bonfire in front of you, the house behind it, the fireworks over the roof
   bonfire: { day: 308, hours: 19.75, weather: 'clear', pos: () => [bonfireAt().x - 1.5, 1.7, bonfireAt().z + 6], look: () => [bonfireAt().x - 5, 4.5, bonfireAt().z - 18] },
   // the lights, and snow falling
@@ -1500,7 +1507,19 @@ function step(dt, exporting = false) {
       festive.update(dt, tod.lamps, seasonDay, tod.hours, true);
       festive.setScale(lamps.glowMat.uniforms.uScale.value);
     }
-    spooky?.update(dt, camera, seasonDay, tod.night);
+    if (spooky) {
+      spooky.update(dt, camera, seasonDay, tod.night, tod.flash);
+      // Halloween evening: the house dark, the lights outside failing in the storm, the front door ajar (and stirring in the wind)
+      const hallowe = Spooky.isOn(seasonDay, tod.night);
+      lamps.dark = hallowe;
+      lamps.cut = spooky.cut;
+      // (0.27 of the way is about 16°: the swing eases in, so the first part of it is small)
+      if (frontDoor) frontDoor.ajar = hallowe ? 0.27 + 0.03 * Math.sin(elapsed * 0.6) * Math.sin(elapsed * 0.23 + 1) * (0.4 + wind) : 0;
+      if (spooky.wantStrike) {
+        spooky.wantStrike = false;
+        storm.strike(modelCentre, 230 + Math.random() * 150, true);
+      }
+    }
     // your lantern at hand height while you walk (and in the headset)
     const walking = (mode === 'walk' && walker) || vr.presenting;
     const hand = walking ? (vr.presenting ? camera.position.clone().setY(camera.position.y - 0.65) : walker.feet.clone().setY(walker.feet.y + 0.95)) : null;
@@ -1593,10 +1612,9 @@ function soundEnv() {
 let exporting = false;
 let videoDoorEvents = []; // doors that open during a video frame, for its sound
 let videoSoundEvents = []; // the festivals' sounds during a video frame: [what, ...its arguments]
-// The festivals' sounds (ghosts' moans, the bonfire, rockets and bangs): played as they happen, or,
+// The festivals' sounds (the bonfire, rockets and bangs, the thunder): played as they happen, or,
 // while a video is being made, noted down frame by frame for its soundtrack (video.js plays them back)
 const festSound = {
-  moan: (p) => (exporting ? videoSoundEvents.push(['moan', p.clone()]) : sound.moan(p)),
   rocket: (p, time) => (exporting ? videoSoundEvents.push(['rocket', p.clone(), time]) : sound.rocket(p, time)),
   bang: (p, distance) => (exporting ? videoSoundEvents.push(['bang', p.clone(), distance]) : sound.bang(p, distance)),
   thunder: (p, distance, bolt) => (exporting ? videoSoundEvents.push(['thunder', p.clone(), distance, bolt]) : sound.thunder(p, distance, bolt)),

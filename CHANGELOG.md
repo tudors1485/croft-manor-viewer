@@ -8,6 +8,15 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.29.0, 7 November 2026
+
+- Halloween at dusk, in a storm and fog (*Storm in the fog*, also in the Weather menu), light enough to see, dark enough to be eerie. The house is dark, and the front door stands ajar, stirring in the wind.
+- The ghosts are gone. Nothing is a show that repeats now; each thing happens once in a while, for a moment:
+  - A figure at a window: only one at a time, and the next comes a long while later, at another window.
+  - Stand by the front door a little while and a dark figure is standing in the gateway behind you. Look at it, or wait for the lightning, and it is gone.
+  - After a close strike the lights outside may fail for a few seconds. The pumpkins' candles stay lit.
+- The *Halloween night* flyby: a figure at a window ahead as you fly along the front, then someone walking the upstairs rooms with a candle. As the candle goes, the lightning strikes close and the lights fail.
+
 ## 0.28.0, 7 November 2026
 
 - The loading bar moves at the real pace, steadily to the end, with the time left under it. It had filled with the download and then sat near the end for most of the rest. Loading is also quicker: nothing is drawn behind the loading screen any more, which had slowed the collision tree from 1 s to 5 s.

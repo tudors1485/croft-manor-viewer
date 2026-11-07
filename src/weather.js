@@ -37,6 +37,7 @@ export const WEATHERS = {
   overcast: 'Overcast',
   rain: 'Rain',
   storm: 'Thunderstorm',
+  eerie: 'Storm in the fog',
   fog: 'Fog',
   snow: 'Snow',
 };
@@ -123,6 +124,9 @@ export function weatherAt(day, hours, snow, choice = 'auto', live = null) {
     w = { ...w, clouds: 1, density: 0.9, overcast: 0.95, rain: 1, wind: 0.6 };
   } else if (choice === 'storm') {
     w = { ...w, clouds: 1, density: 0.95, overcast: 1, rain: 1, wind: 0.8, storm: 1 };
+  } else if (choice === 'eerie') {
+    // Halloween's: thunder and lightning in a gale, a thin rain, fog lying on the lawns
+    w = { ...w, clouds: 1, density: 0.95, overcast: 0.9, rain: 0.3, wind: 0.85, storm: 0.75, fog: 0.42 };
   } else if (choice === 'fog') {
     w = { ...w, clouds: 0.9, density: 0.7, overcast: 0.7, fog: 1, wind: 0 };
   } else if (choice === 'snow') {
@@ -137,7 +141,7 @@ function finish(w) {
     w.overcast = Math.max(w.overcast, 0.75);
   }
   w.storm = w.storm ?? 0;
-  w.label = w.storm > 0.3 ? 'thunderstorm' : w.rain > 0.2 ? 'rain' : w.snowing > 0.2 ? 'snow' : w.fog > 0.3 ? 'fog' : w.overcast > 0.6 ? 'overcast' : w.clouds > 0.3 ? 'cloudy' : 'clear';
+  w.label = w.storm > 0.3 && w.fog > 0.3 ? 'storm in the fog' : w.storm > 0.3 ? 'thunderstorm' : w.rain > 0.2 ? 'rain' : w.snowing > 0.2 ? 'snow' : w.fog > 0.3 ? 'fog' : w.overcast > 0.6 ? 'overcast' : w.clouds > 0.3 ? 'cloudy' : 'clear';
   if (w.wind > 0.6 && w.label !== 'fog') w.label += ', windy';
   return w;
 }

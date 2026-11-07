@@ -452,7 +452,8 @@ export class TimeOfDay {
     this.stars.material.uniforms.uFade.value = this.night * (1 - w.clouds * 0.95);
     this.nightDome.material.uniforms.uFade.value = this.night;
     const blueHour = THREE.MathUtils.smoothstep(-deg, 0.5, 3.5) * (1 - THREE.MathUtils.smoothstep(-deg, 7, 13));
-    this.nightDome.material.uniforms.uTwilight.value = blueHour;
+    // (under storm cloud or overcast there's no blue hour: the sky just goes grey, then dark)
+    this.nightDome.material.uniforms.uTwilight.value = blueHour * (1 - 0.85 * oc);
     this.nightDome.visible = this.night > 0.001 || blueHour > 0.001;
     // the moon: up when it is above the horizon, by day too (pale), hidden behind thick cloud
     const md = this.moon.userData;

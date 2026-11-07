@@ -317,7 +317,9 @@ export class Doors {
       const lead = Math.min(4, speed * 0.55);
       if (level && dist < 2.3 + lead) d.want = 1;
       else if (!level || dist > 3.8 + lead) d.want = 0;
-      if (d.want && d.open < 0.02) {
+      // a door left ajar (Halloween's front door) rests a little open, not shut
+      const rest = d.ajar ?? 0;
+      if ((d.want || rest > 0) && d.open < 0.02) {
         // outside doors swing into the house; inside ones swing away from you
         const mine = Math.sign((p.x - d.centre.x) * d.normal.x + (p.z - d.centre.z) * d.normal.z) || 1;
         d.side = d.inside || -mine;
@@ -328,8 +330,9 @@ export class Doors {
         }
       }
       const before = d.open;
-      const rate = d.want ? 1.5 : 1.1;
-      d.open = THREE.MathUtils.clamp(d.open + Math.sign(d.want - d.open) * rate * dt, 0, 1);
+      const goal = d.want ? 1 : rest;
+      const rate = d.want ? 1.5 : rest > 0 ? 0.35 : 1.1;
+      d.open = THREE.MathUtils.clamp(d.open + THREE.MathUtils.clamp(goal - d.open, -rate * dt, rate * dt), 0, 1);
       if (before === 0 && d.open > 0) this.onSound?.(true, d, dist);
       if (before > 0 && d.open === 0) this.onSound?.(false, d, dist);
       const k = d.open * d.open * (3 - 2 * d.open);
