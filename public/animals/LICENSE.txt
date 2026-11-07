@@ -15,5 +15,23 @@ pigeon.glb  "Dove" by Poly by Google, https://poly.pizza/m/2jmH3trzPFf       CC 
 robin.glb   "Robin" by jeremy, https://poly.pizza/m/53HOg-b1F4r              CC BY 3.0 (recoloured
             as a European robin)
 
+hound-1.glb "Wolf" by Quaternius, https://poly.pizza/m/P1gU3Qkr9r, recoloured as a
+            tan-and-white hound                                               CC0 1.0
+hound-2.glb "Husky" by Quaternius, https://poly.pizza/m/wcWiuEqwzq, recoloured as a
+            black-and-tan hound                                               CC0 1.0
+terrier.glb "Shiba Inu" by Quaternius, https://poly.pizza/m/y4wdQpg767, recoloured
+            white and tan                                                     CC0 1.0
+mouse.glb   "Rat" by Quaternius, https://poly.pizza/m/iltq5bVNaV, recoloured
+            brown-grey and made mouse-sized                                   CC0 1.0
+horse.glb   "Horse" by Quaternius, https://poly.pizza/m/qvTrSG9pZF            CC0 1.0
+red-stag.glb "Old deer male" by CDmir (Čestmír Dammer),
+            https://opengameart.org/content/old-deer-male (textures shrunk)   CC0 1.0
+red-hind.glb "Deer female" by CDmir, https://opengameart.org/content/deer-female  CC0 1.0
+sleigh.glb  "SLED" from "Basic assets: Christmas" by Tribus Games Indie,
+            https://opengameart.org/content/basic-assets-christmas (made from
+            its MagicaVoxel file)                                             CC0 1.0
+santa.glb   "Mall Santa" by Grunion, https://opengameart.org/content/mall-santa (the
+            sitting pose)                                                     CC0 1.0
+
 CC0 1.0: https://creativecommons.org/publicdomain/zero/1.0/
 CC BY 3.0: https://creativecommons.org/licenses/by/3.0/

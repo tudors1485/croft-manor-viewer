@@ -13,7 +13,7 @@ import { installGrade } from './look.js';
 import { Quality, LOOKS } from './quality.js';
 import { tuneMaterials, GRASS_TINT, grassShader, TINTS, buildSkyMap } from './materials.js';
 import { Tour, FLYBYS, SCENES, TOUR_LIGHT, checkPath } from './tour.js';
-import { Soundscape, loadSamples } from './sound.js';
+import { Soundscape, loadSamples, MORE_SOUNDS } from './sound.js';
 import { seasonAt, seasonUniforms, dateLabel, Snowfall } from './season.js';
 import { weatherAt, WEATHERS, Rainfall } from './weather.js';
 import { LiveWeather } from './liveweather.js';
@@ -1248,7 +1248,7 @@ async function prepareWalking(ground) {
       sound: wildSound,
     });
     wildlife.load().catch((err) => console.warn('the wildlife did not load:', err.message));
-    loadSamples(WILD_SOUNDS).then((n) => console.info(`wildlife sounds: ${n} of ${WILD_SOUNDS.length}`));
+    loadSamples([...WILD_SOUNDS, ...MORE_SOUNDS]).then((n) => console.info(`recorded sounds: ${n} of ${WILD_SOUNDS.length + MORE_SOUNDS.length}`));
     park.load().catch((err) => console.warn('the deer did not load:', err.message));
     if (problems.length) console.warn(`camera paths touch walls or trees at ${problems.length} points`, JSON.stringify(problems.slice(0, 12)));
     else console.info('camera paths: clear of walls and trees');

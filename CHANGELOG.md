@@ -8,6 +8,16 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.36.0, 7 November 2026
+
+Tudor's notes of 7 November, the third part: real fireworks, and the cat's adventures.
+
+- The fireworks sound real: recorded bangs, some with their crackling tail, glitter after some, and rockets whistling as they climb. Near ones are loud, further ones muffled, and far ones are a dull thud with an echo, all arriving late by the distance.
+- The cat now and then:
+  - chases a mouse: it breaks from the foot of the wall, the cat crouches, then goes after it, and the mouse escapes into the shrubs with a squeak;
+  - is chased by a terrier, which comes galloping across the lawn barking. The cat hisses and bolts round the corner of the house; the dog sniffs where it went, barks once more and trots off down the drive. The cat stays away a while.
+- New models and recordings for this and the next releases, all CC0, credited in `public/animals/LICENSE.txt` and `public/sounds/LICENSE.txt`: hounds, a terrier, a mouse, a horse, red deer, Santa's sleigh and Santa; fireworks, a shot, hounds, a horse, sleigh bells and "ho ho ho".
+
 ## 0.35.0, 7 November 2026
 
 Tudor's notes of 7 November, the second part: Halloween and the lightning.

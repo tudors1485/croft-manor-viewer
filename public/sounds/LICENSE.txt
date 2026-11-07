@@ -24,6 +24,37 @@ fox-scream-1, -2         FuchsSchreit, Livlandfahrer, Wikimedia Commons         
 fox-bark                 Bellender Fuchs, Jugrü, Wikimedia Commons                       CC BY-SA 3.0
                          https://commons.wikimedia.org/wiki/File:Bellender_Fuchs.ogg
 
+The festivals', the hunt's and the farmyard's (cut, made mono and levelled the same way; some
+with a filter and an echo added for distance, as noted):
+
+fw-whistle               Fireworks #2 (a rocket's whistle), Pierre SIBANARCO, BigSoundBank  CC0 1.0
+                         https://bigsoundbank.com/fireworks-2-s2672.html
+fw-bang-1, -2, -3,       25 CC0 bang / firework SFX (fw_01, fw_06, fw_03, fw_02),
+fw-crackle, fw-far       rubberduck, OpenGameArt (fw-far muffled, with an echo)       CC0 1.0
+                         https://opengameart.org/content/25-cc0-bang-firework-sfx
+terrier                  Barking of a spitz, Joseph SARDIN, BigSoundBank              CC0 1.0
+                         https://bigsoundbank.com/barking-of-a-spitz-s0682.html
+cat-hiss                 Cat roar #1, Joseph SARDIN, BigSoundBank                     CC0 1.0
+                         https://bigsoundbank.com/cat-roar-1-s1881.html
+mouse-1, mouse-2         Mouse screams, Joseph SARDIN, BigSoundBank                   CC0 1.0
+                         https://bigsoundbank.com/mouse-screams-s0459.html
+gunshot                  Rifle: shot #1, Joseph SARDIN, BigSoundBank (muffled, with   CC0 1.0
+                         an echo across the fields) https://bigsoundbank.com/rifle-shot-1-s2853.html
+hounds                   Pack of dogs, Joseph SARDIN, BigSoundBank                    CC0 1.0
+                         https://bigsoundbank.com/pack-of-dogs-s2953.html
+hound-bark               Old dog barking #2, Joseph SARDIN, BigSoundBank              CC0 1.0
+                         https://bigsoundbank.com/old-dog-barking-2-s2353.html
+panting                  Dogs breathing, Joseph SARDIN, BigSoundBank                  CC0 1.0
+                         https://bigsoundbank.com/dogs-breathing-s1547.html
+horse-neigh              Neighing horse #2, Joseph SARDIN, BigSoundBank               CC0 1.0
+                         https://bigsoundbank.com/neighing-horse-2-s0859.html
+horse-snort              Breath of a horse #2, DenisChardonnet, BigSoundBank          CC0 1.0
+                         https://bigsoundbank.com/breath-of-a-horse-2-s0286.html
+sleigh-bells             Bells of Santa Claus #2, Joseph SARDIN, BigSoundBank         CC0 1.0
+                         https://bigsoundbank.com/bells-of-santa-claus-2-s1124.html
+hohoho-1, hohoho-2       Santa Claus, oh oh oh #1 and #5, Joseph SARDIN, BigSoundBank CC0 1.0
+                         https://bigsoundbank.com/santa-claus-oh-oh-oh-1-s2074.html (and -5-s2078)
+
 CC0 1.0: https://creativecommons.org/publicdomain/zero/1.0/
 CC BY-SA 3.0: https://creativecommons.org/licenses/by-sa/3.0/
 CC BY-SA 4.0: https://creativecommons.org/licenses/by-sa/4.0/

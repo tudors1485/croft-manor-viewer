@@ -18,6 +18,8 @@ const _up = new THREE.Vector3();
 // Recorded sounds (the wildlife's calls, public/sounds): decoded once and shared by every sound
 // context, the page's and a video's
 export const SAMPLES = {};
+// the recordings the festivals, the animals and the hunt use (public/sounds, credited there)
+export const MORE_SOUNDS = ['fw-whistle', 'fw-bang-1', 'fw-bang-2', 'fw-bang-3', 'fw-crackle', 'fw-far', 'terrier', 'cat-hiss', 'mouse-1', 'mouse-2', 'gunshot', 'hounds', 'hound-bark', 'panting', 'horse-neigh', 'horse-snort', 'sleigh-bells', 'hohoho-1', 'hohoho-2'];
 export async function loadSamples(names, base = '') {
   const ctx = new OfflineAudioContext(1, 1, 32000);
   await Promise.all(
@@ -309,6 +311,8 @@ export class Soundscape {
   /** A rocket going up from `position`: a rising whistle over `time` seconds, and its rush. */
   rocket(position, time) {
     if (!this.on) return;
+    // most rockets whistle as they climb (a real recording, its pitch a little different each time)
+    if (this.has('fw-whistle') && Math.random() < 0.65) this.sample('fw-whistle', position, { ref: 25, rolloff: 0.7, max: 700, gain: 0.5, rate: 0.85 + Math.random() * 0.35, delay: 0.15 });
     const ctx = this.ctx;
     const t = ctx.currentTime;
     const out = this._placed(position, { ref: 20, rolloff: 0.7, max: 600 });
@@ -317,7 +321,7 @@ export class Soundscape {
     o.frequency.exponentialRampToValueAtTime(2200 + Math.random() * 900, t + time);
     const e = ctx.createGain();
     e.gain.setValueAtTime(0, t);
-    e.gain.linearRampToValueAtTime(Math.random() < 0.5 ? 0.025 : 0, t + 0.1);
+    e.gain.linearRampToValueAtTime(Math.random() < 0.5 && !this.has('fw-whistle') ? 0.025 : 0, t + 0.1);
     e.gain.linearRampToValueAtTime(0.0001, t + time);
     o.connect(e).connect(out);
     o.start(t);
@@ -334,6 +338,19 @@ export class Soundscape {
   /** A burst at `position`, `distance` metres away: heard that much later, a deep boom and a crack, and sometimes a crackle. */
   bang(position, distance) {
     if (!this.on) return;
+    // real bursts, recorded: near, a boom (sometimes with its crackling tail, sometimes glitter
+    // after); far off, a muffled thud with its echo (heard that much later)
+    if (this.has('fw-bang-1')) {
+      const delay = distance / 343;
+      if (distance > 700) {
+        this.sample('fw-far', position, { ref: 300, rolloff: 0.8, max: 4000, gain: 0.8, rate: 0.9 + Math.random() * 0.2, delay });
+        return;
+      }
+      const which = ['fw-bang-1', 'fw-bang-2', 'fw-bang-3'][Math.floor(Math.random() * 3)];
+      this.sample(which, position, { ref: 40, rolloff: 0.6, max: 900, gain: 1.4, rate: 0.85 + Math.random() * 0.3, delay, lowpass: distance > 250 ? 2500 : 0 });
+      if (Math.random() < 0.35) this.sample('fw-crackle', position, { ref: 40, rolloff: 0.6, max: 900, gain: 0.8, rate: 0.9 + Math.random() * 0.2, delay: delay + 0.35 + Math.random() * 0.3 });
+      return;
+    }
     const ctx = this.ctx;
     const t = ctx.currentTime + distance / 343;
     const out = this._placed(position, { ref: 30, rolloff: 0.6, max: 800 });
@@ -487,15 +504,23 @@ export class Soundscape {
   }
 
   /** A recorded sound (SAMPLES) at `position` (or everywhere, if null). */
-  sample(name, position, { ref = 10, rolloff = 1, max = 400, gain = 1, rate = 1 } = {}) {
+  sample(name, position, { ref = 10, rolloff = 1, max = 400, gain = 1, rate = 1, delay = 0, lowpass = 0 } = {}) {
     if (!this.on || !this.ctx || !Object.hasOwn(SAMPLES, name)) return;
     const src = this.ctx.createBufferSource();
     src.buffer = SAMPLES[name];
     src.playbackRate.value = rate;
     const g = this.ctx.createGain();
     g.gain.value = Math.max(0, Math.min(2, gain));
-    src.connect(g).connect(position ? this._placed(position, { ref, rolloff, max }) : this.master);
-    src.start();
+    // (far off, the highs are lost on the way: `lowpass` muffles it)
+    const out = position ? this._placed(position, { ref, rolloff, max }) : this.master;
+    if (lowpass > 0) src.connect(this._filter('lowpass', lowpass, 0.7)).connect(g).connect(out);
+    else src.connect(g).connect(out);
+    src.start(this.ctx.currentTime + Math.max(0, delay));
+  }
+
+  /** Whether a recording is loaded (otherwise the synthesised sound is used). */
+  has(name) {
+    return Object.hasOwn(SAMPLES, name);
   }
 
   /** A little chime (an Easter egg found): two bright notes and a sparkle. */

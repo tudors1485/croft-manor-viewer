@@ -218,7 +218,7 @@ export class Wildlife {
   /** Loads the models and the sounds (the estate works without them if they don't load). */
   async load(base = '') {
     const loader = new GLTFLoader();
-    const names = ['fox', 'rabbit', 'cat', 'duck', 'kite', 'robin', 'magpie', 'pigeon', 'drake'];
+    const names = ['fox', 'rabbit', 'cat', 'duck', 'kite', 'robin', 'magpie', 'pigeon', 'drake', 'terrier', 'mouse'];
     const got = await Promise.all(names.map((n) => loader.loadAsync(`${base}animals/${n}.glb`).catch(() => null)));
     const g = Object.fromEntries(names.map((n, i) => [n, got[i]]));
     const add = (a) => {
@@ -234,6 +234,9 @@ export class Wildlife {
     if (g.rabbit) this.rabbits = [0, 1, 2, 3, 4].map(() => add(animal(g.rabbit, 0.42, { axis: 'xz', yaw: Math.PI })));
     if (g.fox) this.fox = add(animal(g.fox, 0.5));
     if (g.cat) this.cat = add(animal(g.cat, 0.5, { axis: 'xz', yaw: -Math.PI / 2 }));
+    // (the terrier that chases the cat, and the mouse the cat chases)
+    if (g.terrier) this.terrier = add(animal(g.terrier, 0.62, { axis: 'xz' }));
+    if (g.mouse) this.mouse = add(animal(g.mouse, 0.15, { axis: 'xz' }));
     this.ducks = [];
     if (g.duck) for (let k = 0; k < 2; k++) this.ducks.push(add(animal(g.duck, 0.55, { axis: 'xz', yaw: -Math.PI / 2 })));
     if (g.drake) this.ducks.push(add(animal(g.drake, 0.58, { axis: 'xz' })));
@@ -701,25 +704,40 @@ export class Wildlife {
     }
   }
 
-  // --- the cat about the front of the house ---
+  // --- the cat about the front of the house; now and then a mouse for it to chase, or a dog to chase it ---
 
   _cat(dt, cam, day, hours, ok, feet) {
     const c = this.cat;
     if (!c) return;
     const time = (hours > 7 && hours < 9.5) || (hours > 17 && hours < 22.5);
-    const out = ok && time && this._luck(day, 7, 0.5, 'cat');
-    const s = (this.catState ??= { p: null });
-    c.holder.visible = out;
-    if (!out) {
+    const s = (this.catState ??= { p: null, goneFor: 0, nextChase: rnd(40, 100) });
+    s.goneFor = Math.max(0, s.goneFor - dt);
+    const out = ok && time && this._luck(day, 7, 0.5, 'cat') && s.goneFor <= 0;
+    c.holder.visible = out && !s.hidden;
+    if (!out && !s.chase) {
       s.p = null;
+      this._hideChasers();
       return;
     }
     if (!s.p) {
       const x = rnd(-12, 24);
       s.p = new THREE.Vector3(x, this.ground(x, -8.2), -8.2);
-      Object.assign(s, { dir: Math.random() < 0.5 ? 1 : -1, sit: rnd(2, 8), walking: false, mewed: false });
+      Object.assign(s, { dir: Math.random() < 0.5 ? 1 : -1, sit: rnd(2, 8), walking: false, mewed: false, heading: null, hidden: false });
     }
     const near = feet ? Math.hypot(feet.x - s.p.x, feet.z - s.p.z) : 99;
+    const seen = Math.hypot(cam.x - s.p.x, cam.z - s.p.z) < 32;
+    // a chase, now and then, while you are near enough to see it
+    s.nextChase -= dt;
+    if (!s.chase && seen && (s.nextChase <= 0 || this.always.chase)) {
+      const kind = this.always.chase ?? (Math.random() < 0.55 ? 'mouse' : 'dog');
+      this.always.chase = undefined;
+      if (kind === 'mouse' ? this.mouse : this.terrier) this._startChase(kind, s);
+      s.nextChase = rnd(150, 300);
+    }
+    if (s.chase) {
+      this._chase(dt, s, c);
+      return;
+    }
     if (near < 3.5 && !s.mewed) {
       s.mewed = true;
       s.sit = rnd(3, 5);
@@ -742,6 +760,143 @@ export class Wildlife {
     c.holder.position.copy(s.p);
     c.holder.rotation.y = s.dir > 0 ? Math.PI / 2 : -Math.PI / 2;
     play(c, s.walking ? 'Walking' : 'Idle', 0.3);
+    c.mixer.update(dt);
+  }
+
+  /** Moves `p` towards `to` at `speed`; returns the heading, or null when it is there. */
+  _toward(p, to, speed, dt) {
+    const dx = to.x - p.x;
+    const dz = to.z - p.z;
+    const d = Math.hypot(dx, dz);
+    if (d < 0.05) return null;
+    const step = Math.min(d, speed * dt);
+    p.x += (dx / d) * step;
+    p.z += (dz / d) * step;
+    p.y = this.ground(p.x, p.z);
+    return Math.atan2(dx, dz);
+  }
+
+  _hideChasers() {
+    if (this.terrier) this.terrier.holder.visible = false;
+    if (this.mouse) this.mouse.holder.visible = false;
+  }
+
+  _startChase(kind, s) {
+    const dir = s.dir;
+    if (kind === 'mouse') {
+      // a mouse breaks from the foot of the wall a few metres ahead of the cat, and runs for the shrubs
+      const m = new THREE.Vector3(s.p.x + dir * 3.2, 0, -8.6);
+      m.y = this.ground(m.x, m.z);
+      const to = [new THREE.Vector3(m.x + dir * 3, 0, -8.4), new THREE.Vector3(m.x + dir * 6.5, 0, -6.2), new THREE.Vector3(m.x + dir * 8, 0, -4.8)];
+      s.chase = { kind, t: 0, m, to, crouch: 1.4, done: false };
+      this._call('mouse-1', m.clone().setY(m.y + 0.1), { ref: 4, rolloff: 1.4, max: 40, gain: 0.7 });
+    } else {
+      // a terrier comes galloping across the lawn at the cat, barking
+      const side = s.p.x < 6 ? 1 : -1;
+      const d = new THREE.Vector3(THREE.MathUtils.clamp(s.p.x + side * 9, -12, 25), 0, 3.5);
+      if (d.x > -1 && d.x < 10) d.x = side > 0 ? 11 : -2; // (round the fountain, not through it)
+      d.y = this.ground(d.x, d.z);
+      // the cat runs away from it along the front and round the corner of the house
+      const away = side > 0 ? -1 : 1;
+      s.chase = { kind, t: 0, d, catTo: new THREE.Vector3(away > 0 ? 29 : -16, 0, -8.2), barked: 0, hissed: false, sniff: 0, leaving: false, done: false, away };
+      this._call('terrier', d.clone().setY(d.y + 0.4), { ref: 10, rolloff: 1.1, max: 120, gain: 0.9 });
+    }
+  }
+
+  _chase(dt, s, c) {
+    const ch = s.chase;
+    ch.t += dt;
+    if (ch.kind === 'mouse') {
+      const m = this.mouse;
+      m.holder.visible = !ch.done;
+      // the cat: still, low, watching; then after it
+      if (ch.crouch > 0) {
+        ch.crouch -= dt;
+        play(c, 'Idle', 0.2);
+        c.holder.rotation.y = Math.atan2(ch.m.x - s.p.x, ch.m.z - s.p.z);
+        play(m, 'Rat_Idle', 0.1);
+      } else if (!ch.done) {
+        const target = ch.to[0];
+        const h = this._toward(ch.m, target, 3.2, dt);
+        if (h === null) ch.to.shift();
+        else m.holder.rotation.y = h;
+        play(m, 'Rat_Run', 0.1, 1.6);
+        const hc = this._toward(s.p, ch.m, 2.7, dt);
+        if (hc !== null) c.holder.rotation.y = hc;
+        play(c, 'Walking', 0.15, 3);
+        if (!ch.to.length) {
+          // into the shrubs: gone
+          ch.done = true;
+          ch.after = 3 + Math.random() * 2;
+          this._call('mouse-2', ch.m.clone().setY(ch.m.y + 0.1), { ref: 4, rolloff: 1.4, max: 40, gain: 0.6 });
+        }
+      } else {
+        // the cat sits where it lost it, then goes back to its walk
+        play(c, 'Idle', 0.4);
+        ch.after -= dt;
+        if (ch.after <= 0) {
+          s.chase = null;
+          s.p.z = -8.2;
+          s.sit = rnd(3, 6);
+          s.walking = false;
+        }
+      }
+      m.holder.position.copy(ch.m);
+      m.mixer?.update(dt);
+    } else {
+      const d = this.terrier;
+      d.holder.visible = !ch.gone;
+      if (!ch.leaving) {
+        const toCat = s.hidden ? ch.catTo : s.p;
+        const h = this._toward(ch.d, toCat, ch.sniff > 0 ? 0 : 5.2, dt);
+        const dist = Math.hypot(toCat.x - ch.d.x, toCat.z - ch.d.z);
+        if (h !== null) d.holder.rotation.y = h;
+        play(d, ch.sniff > 0 ? 'Eating' : 'Gallop', 0.2);
+        ch.barked -= dt;
+        if (ch.barked <= 0 && !s.hidden) {
+          ch.barked = 1.2 + Math.random() * 1.2;
+          this._call('terrier', ch.d.clone().setY(ch.d.y + 0.4), { ref: 10, rolloff: 1.1, max: 120, gain: 0.9, rate: 0.95 + Math.random() * 0.1 });
+        }
+        // the cat: a hiss when it is close, then off
+        if (!ch.hissed && Math.hypot(ch.d.x - s.p.x, ch.d.z - s.p.z) < 7) {
+          ch.hissed = true;
+          this._call('cat-hiss', s.p.clone().setY(s.p.y + 0.3), { ref: 6, rolloff: 1.3, max: 60, gain: 0.9 });
+        }
+        if (ch.hissed && !s.hidden) {
+          const hc = this._toward(s.p, ch.catTo, 4.4, dt);
+          if (hc !== null) c.holder.rotation.y = hc;
+          play(c, 'Walking', 0.15, 3.6);
+          if (hc === null) s.hidden = true; // (round the corner)
+        } else if (!s.hidden) play(c, 'Idle', 0.2);
+        // where the cat went: a sniff, a last bark, then home
+        if (s.hidden && dist < 3 && ch.sniff === 0) ch.sniff = 3.5;
+        if (ch.sniff > 0) {
+          ch.sniff -= dt;
+          if (ch.sniff <= 0) {
+            ch.leaving = true;
+            ch.route = [new THREE.Vector3(12, 0, -1), new THREE.Vector3(9, 0, 14), new THREE.Vector3(4.6, 0, 22), new THREE.Vector3(4.6, 0, 32)];
+            this._call('terrier', ch.d.clone().setY(ch.d.y + 0.4), { ref: 10, rolloff: 1.1, max: 120, gain: 0.8 });
+          }
+        }
+      } else if (!ch.gone) {
+        const h = this._toward(ch.d, ch.route[0], 2.2, dt);
+        if (h === null) ch.route.shift();
+        else d.holder.rotation.y = h;
+        play(d, 'Walk', 0.3, 1.3);
+        if (!ch.route.length) ch.gone = true;
+      }
+      if (s.hidden) c.holder.visible = false;
+      if (ch.gone) {
+        // (the cat stays away a good while)
+        s.chase = null;
+        s.p = null;
+        s.goneFor = rnd(120, 240);
+        d.holder.visible = false;
+      }
+      d.holder.position.copy(ch.d);
+      d.mixer?.update(dt);
+    }
+    c.holder.position.copy(s.p ?? c.holder.position);
     c.mixer.update(dt);
   }
 
