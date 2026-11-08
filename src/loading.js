@@ -43,7 +43,7 @@ export const TIPS = [
   'On Easter weekend, a dozen eggs are hidden on the lawns.',
   'At night, Your light gives you a glow, a torch, or a flaming torch to carry.',
   'The tour is always a clear summer afternoon. Your own time and weather come back after.',
-  'Tick With seasons and weathers, and a flyby changes every few seconds.',
+  'Turn on Flybys change season and weather, and a flyby cuts to another season every few seconds.',
   'Make a video turns any flyby into an MP4, with its sound.',
   'Photo mode hides the panel and lets you pick a film look.',
   'Now sets today’s date and the time, and keeps time.',
@@ -53,7 +53,7 @@ export const TIPS = [
 export class LoadingBar {
   /**
    * @param {object} o
-   * @param {HTMLElement} o.cover the part of the bar still to fill (slid off to the right)
+   * @param {HTMLElement} o.cover the fill (waiting off to the left of the bar, slid in as it loads)
    * @param {HTMLElement} o.text the line under the bar
    * @param {HTMLElement} [o.tip] the tip under that
    * @param {number} o.bytes the download's expected size

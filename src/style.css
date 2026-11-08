@@ -1,3 +1,27 @@
+/* The viewer's interface, in the Apple manner: the system font (SF Pro on a Mac and an iPhone),
+   dark translucent materials (blur and saturation over the picture, hairline edges, soft shadows),
+   grouped cards, iOS segmented controls and switches, pop-up menus, slim sliders, one accent colour:
+   Apple's system blue in the dark appearance. */
+:root {
+  color-scheme: dark;
+  --accent: #0a84ff;
+  --accent-press: #0071e3;
+  --label: rgba(255, 255, 255, 0.92);
+  --label-2: rgba(235, 235, 245, 0.62);
+  --label-3: rgba(235, 235, 245, 0.32);
+  --fill: rgba(120, 120, 128, 0.24); /* (a control's face) */
+  --fill-hover: rgba(120, 120, 128, 0.34);
+  --fill-press: rgba(120, 120, 128, 0.44);
+  --group: rgba(118, 118, 128, 0.12); /* (a grouped card inside a material) */
+  --hairline: rgba(255, 255, 255, 0.1);
+  --separator: rgba(255, 255, 255, 0.08);
+  --material: rgba(30, 30, 32, 0.66);
+  --material-thick: rgba(28, 28, 30, 0.84);
+  --blur: blur(28px) saturate(180%);
+  --shadow: 0 18px 50px rgba(0, 0, 0, 0.38), 0 2px 8px rgba(0, 0, 0, 0.2);
+  --text: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', 'Inter', system-ui, sans-serif;
+  --display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', 'Inter', system-ui, sans-serif;
+}
 * {
   box-sizing: border-box;
 }
@@ -6,9 +30,10 @@ body {
   margin: 0;
   height: 100%;
   overflow: hidden;
-  background: #1b1d22;
-  font: 14px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif;
-  color: #f2efe8;
+  background: #111214;
+  font: 13px/1.38 var(--text);
+  color: var(--label);
+  -webkit-font-smoothing: antialiased;
 }
 #view {
   display: block;
@@ -16,16 +41,17 @@ body {
   height: 100vh;
   outline: none;
 }
-/* loading: the classic bar, green running to cyan inside a white frame */
+
+/* ── the loading screen: the intro film behind; the title, a thin bar, what it is doing ───────── */
 #loading {
   position: fixed;
   inset: 0;
   z-index: 20;
   display: grid;
   place-content: end center;
-  padding-bottom: max(7vh, 36px);
+  padding-bottom: max(9vh, 44px);
   background: #c9c1b5; /* (the film's studio backdrop, before it arrives) */
-  transition: opacity 0.6s;
+  transition: opacity 0.7s ease;
 }
 /* behind it, the house as a miniature on a turntable: a film, the still first */
 #loading .shots {
@@ -38,83 +64,109 @@ body {
   height: 100%;
   object-fit: cover;
 }
-/* (dark at the foot, where the bar is, and a little round the edges) */
+/* (a soft dark fall at the foot, where the words are) */
 #loading .shots::after {
   content: '';
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(to top, rgba(0, 0, 0, 0.82) 0%, rgba(0, 0, 0, 0.45) 24%, rgba(0, 0, 0, 0) 46%),
-    radial-gradient(ellipse at center, transparent 62%, rgba(0, 0, 0, 0.3));
+    linear-gradient(to top, rgba(0, 0, 0, 0.74) 0%, rgba(0, 0, 0, 0.42) 26%, rgba(0, 0, 0, 0) 54%),
+    radial-gradient(ellipse at center, transparent 64%, rgba(0, 0, 0, 0.22));
 }
 #loading.done {
   opacity: 0;
   pointer-events: none;
 }
+/* (on a tall screen, a phone held upright, the film would be cut to a sliver of the middle: it sits
+   near the top instead, wide enough for the whole miniature, fading into the dark under the words) */
+@media (max-aspect-ratio: 4/5) {
+  #loading {
+    background: #0e0e0f;
+  }
+  #loading .shots video {
+    position: absolute;
+    top: 8vh;
+    left: 50%;
+    width: 185vw;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    transform: translateX(-50%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 24%, #000 76%, transparent);
+    mask-image: linear-gradient(to bottom, transparent, #000 24%, #000 76%, transparent);
+  }
+  #loading .shots::after {
+    background: radial-gradient(ellipse 120% 60% at 50% 35%, transparent 55%, rgba(14, 14, 15, 0.9));
+  }
+}
+
 #loading .loader {
   position: relative;
   z-index: 1;
-  width: min(560px, 80vw);
+  width: min(520px, 86vw);
   display: grid;
+  justify-items: center;
   gap: 8px;
+  text-align: center;
 }
-#loading .loader-word {
+#loading .intro-title {
   margin: 0;
-  justify-self: end;
-  /* (no font-stretch: the build folds it into this shorthand as a percentage, which browsers reject) */
-  font: 700 clamp(34px, 6vw, 52px) / 1 'Avenir Next Condensed', 'Arial Narrow', 'Roboto Condensed', 'Helvetica Neue', sans-serif;
-  letter-spacing: -0.01em;
+  font: 300 clamp(32px, 5.4vw, 58px) / 1.04 var(--display);
+  letter-spacing: -0.028em;
   color: #fff;
-  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.6);
+  text-shadow: 0 2px 28px rgba(0, 0, 0, 0.35);
+}
+/* the line under the title (sfatosu.com puts its "can't open here" here when a browser has no 3D) */
+#loading .loader-word {
+  margin: 0 0 10px;
+  font: 400 15px/1.3 var(--text);
+  letter-spacing: -0.01em;
+  color: rgba(255, 255, 255, 0.72);
 }
 #loading .bar {
-  height: clamp(26px, 4.4vw, 38px);
-  padding: 3px;
-  border: 3px solid #f4f4f4;
-  border-radius: 3px;
-  background: #000;
+  width: min(300px, 64vw);
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.24);
+  overflow: hidden;
+  box-shadow: 0 1px 10px rgba(0, 0, 0, 0.2);
 }
 #loading-bar {
   position: relative;
   overflow: hidden;
   height: 100%;
   width: 100%;
-  /* a lit tube: dark at the top and bottom edges, bright through the middle */
-  background:
-    linear-gradient(to bottom, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0) 38%, rgba(255, 255, 255, 0.12) 50%, rgba(0, 0, 0, 0) 62%, rgba(0, 0, 0, 0.6)),
-    linear-gradient(to right, #06a806, #0cc23a 35%, #0ccf9a 70%, #0fd6dc);
 }
-/* the part still to fill: slid off to the right as it loads (a transform, so it keeps moving while the page is busy) */
+/* the fill: a white bar waiting off to the left, slid in as it loads (loading.js moves it with a
+   transform, so it keeps going while the page is busy) */
 #loading-cover {
   position: absolute;
-  inset: 0 -1px 0 0;
-  background: #000;
+  top: 0;
+  bottom: 0;
+  left: -100%;
+  width: 100%;
+  border-radius: 2px;
+  background: #fff;
   will-change: transform;
 }
 #loading-text {
-  margin: 2px 0 0;
-  font-size: 13px;
-  color: #b9b5ad;
+  margin: 6px 0 0;
+  font: 400 13px/1.35 var(--text);
+  color: rgba(255, 255, 255, 0.66);
   font-variant-numeric: tabular-nums;
 }
-/* a tip while you wait, as games have; a new one every few seconds */
+/* a tip while you wait; a new one every few seconds */
 #loading-tip {
-  margin: 22px 0 0;
-  min-height: 2.6em;
-  font-size: 13px;
-  line-height: 1.35;
-  color: #b3afa7;
+  margin: 4px 0 0;
+  max-width: 440px;
+  min-height: 2.7em;
+  font: 400 13px/1.38 var(--text);
+  color: rgba(255, 255, 255, 0.5);
   transition: opacity 0.35s;
 }
 #loading-tip::before {
-  content: 'Tip';
-  display: block;
-  margin-bottom: 3px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: #0ccf9a;
+  content: 'Tip  ';
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.78);
 }
 #loading-tip.fade {
   opacity: 0;
@@ -123,6 +175,7 @@ body {
   display: none;
 }
 
+/* ── things over the picture ───────────────────────────────────────────────────────────────── */
 #walk-status:empty {
   display: none;
 }
@@ -131,14 +184,24 @@ body {
   left: 50%;
   bottom: 28px;
   transform: translateX(-50%);
-  font: 600 15px/1 system-ui, -apple-system, sans-serif;
-  color: #1b1d22;
-  background: rgba(217, 180, 90, 0.95);
-  border: 0;
+  font: 600 14px/1 var(--text);
+  letter-spacing: -0.01em;
+  color: #fff;
+  background: var(--material);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+  border: 0.5px solid var(--hairline);
   border-radius: 999px;
   padding: 12px 20px;
   cursor: pointer;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--shadow);
+  transition: transform 0.15s, background 0.15s;
+}
+#lock-hint:hover {
+  background: var(--material-thick);
+}
+#lock-hint:active {
+  transform: translateX(-50%) scale(0.97);
 }
 #crosshair {
   position: fixed;
@@ -148,20 +211,20 @@ body {
   height: 6px;
   margin: -3px 0 0 -3px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.85);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
   pointer-events: none;
 }
-
+/* the tour's captions: large, light */
 #caption {
   position: fixed;
   left: 50%;
   bottom: 9vh;
   transform: translate(-50%, 8px);
-  font: 500 clamp(22px, 3.2vw, 40px) / 1.1 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
-  letter-spacing: 0.06em;
-  color: #fff8e8;
-  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.6);
+  font: 300 clamp(26px, 3.6vw, 46px) / 1.1 var(--display);
+  letter-spacing: -0.02em;
+  color: #fff;
+  text-shadow: 0 2px 22px rgba(0, 0, 0, 0.55);
   opacity: 0;
   transition: opacity 1.2s ease, transform 1.2s ease;
   pointer-events: none;
@@ -177,58 +240,71 @@ body {
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  font: 600 clamp(80px, 16vw, 220px) / 1 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
-  color: #fff3d6;
-  text-shadow: 0 0 40px rgba(255, 200, 110, 0.55), 0 4px 30px rgba(0, 0, 0, 0.6);
+  font: 200 clamp(90px, 17vw, 240px) / 1 var(--display);
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  text-shadow: 0 0 46px rgba(255, 214, 140, 0.5), 0 4px 30px rgba(0, 0, 0, 0.55);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.3s;
 }
 #countdown.show {
-  opacity: 0.92;
+  opacity: 0.94;
 }
-/* a short line at the top for a few seconds (an Easter egg found) */
+/* a short line at the top for a few seconds: a HUD */
 #toast {
   position: fixed;
   left: 50%;
-  top: 18px;
-  transform: translate(-50%, -8px);
-  padding: 7px 14px;
-  border-radius: 999px;
-  background: rgba(20, 18, 14, 0.78);
-  color: #fff6e0;
-  font-size: 14px;
+  top: 16px;
+  transform: translate(-50%, -10px) scale(0.98);
+  padding: 9px 16px;
+  border-radius: 14px;
+  background: var(--material-thick);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+  border: 0.5px solid var(--hairline);
+  box-shadow: var(--shadow);
+  color: var(--label);
+  font: 600 14px/1.25 var(--text);
+  letter-spacing: -0.01em;
   white-space: nowrap;
   max-width: calc(100vw - 24px);
   overflow: hidden;
   text-overflow: ellipsis;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.3s, transform 0.3s;
+  transition: opacity 0.25s, transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
   z-index: 25;
 }
 #toast.show {
   opacity: 1;
-  transform: translate(-50%, 0);
+  transform: translate(-50%, 0) scale(1);
 }
-
 body.touring #panel {
   opacity: 0;
   pointer-events: none;
 }
+/* pills over the picture: leaving a flyby, the hint how */
 #tour-stop {
   position: fixed;
   right: 18px;
   bottom: 18px;
-  font: 600 13px/1 system-ui, -apple-system, sans-serif;
-  color: #f2efe8;
-  background: rgba(20, 22, 27, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  z-index: 7;
+  font: 600 13px/1 var(--text);
+  color: var(--label);
+  background: var(--material);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+  border: 0.5px solid var(--hairline);
   border-radius: 999px;
-  padding: 9px 14px;
+  padding: 10px 15px;
+  box-shadow: var(--shadow);
   cursor: pointer;
 }
-
+#tour-stop:hover {
+  background: var(--material-thick);
+}
 #fade {
   position: fixed;
   inset: 0;
@@ -236,7 +312,6 @@ body.touring #panel {
   opacity: 0;
   pointer-events: none;
 }
-
 /* the black film bars of a flyby, like the old Tomb Raider cutscenes */
 .film-bar {
   position: fixed;
@@ -261,9 +336,9 @@ body.flyby .film-bar {
   top: 3.2vh;
   left: 50%;
   transform: translateX(-50%);
-  font: 500 13px/1 system-ui, -apple-system, sans-serif;
-  letter-spacing: 0.04em;
-  color: rgba(255, 248, 232, 0.85);
+  font: 500 12px/1 var(--text);
+  letter-spacing: 0.01em;
+  color: rgba(255, 255, 255, 0.72);
   opacity: 0;
   transition: opacity 0.8s;
   pointer-events: none;
@@ -272,78 +347,537 @@ body.flyby .film-bar {
 #leave-hint.show {
   opacity: 1;
 }
-#tour-stop {
-  z-index: 7;
-}
-
-#video-panel {
-  position: fixed;
-  inset: 0;
-  z-index: 20;
-  display: grid;
-  place-items: center;
-  background: rgba(10, 11, 14, 0.94);
-}
-#video-panel[hidden] {
-  display: none;
-}
-.video-box {
-  display: grid;
-  gap: 12px;
-  justify-items: center;
-  font: 500 14px/1.4 system-ui, -apple-system, sans-serif;
-  color: #f2efe8;
-}
-.video-box .bar {
-  width: min(60vw, 520px);
-  height: 6px;
-  border-radius: 3px;
-  background: #2c2f36;
-  overflow: hidden;
-}
-#video-bar {
-  height: 100%;
-  width: 0;
-  background: #d9b45a;
-}
-#video-preview {
-  max-width: 70vw;
-  max-height: 62vh;
-  border: 1px solid #333;
-}
-
 #bar-clock {
   position: absolute;
   right: 4vw;
   top: 50%;
   transform: translateY(-50%);
-  font: 500 clamp(16px, 2.2vw, 28px) / 1 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
-  letter-spacing: 0.06em;
-  color: #f3e7c9;
+  font: 300 clamp(16px, 2.2vw, 28px) / 1 var(--display);
+  letter-spacing: -0.01em;
+  color: rgba(255, 255, 255, 0.86);
   font-variant-numeric: tabular-nums;
 }
 
-/* the dock: how to move in the current mode, under the panel when there is room, else bottom right */
+/* ── the controls, shared by the panel, the photo bar and the dialogs ─────────────────────── */
+:is(#panel, #photo-bar, #report-panel, #video-panel) :is(button, select) {
+  font: 500 13px/1.2 var(--text);
+  letter-spacing: -0.005em;
+  color: var(--label);
+  background: var(--fill);
+  border: 0;
+  border-radius: 8px;
+  padding: 6px 10px;
+  min-height: 28px;
+  cursor: pointer;
+  min-width: 0;
+  transition: background 0.15s, transform 0.1s, color 0.15s;
+}
+:is(#panel, #photo-bar, #report-panel, #video-panel) :is(button, select):hover:not(:disabled) {
+  background: var(--fill-hover);
+}
+:is(#panel, #photo-bar, #report-panel, #video-panel) button:active:not(:disabled) {
+  background: var(--fill-press);
+  transform: scale(0.97);
+}
+:is(#panel, #photo-bar, #report-panel, #video-panel) :is(button, select, input, textarea):focus-visible {
+  outline: 3px solid rgba(10, 132, 255, 0.55);
+  outline-offset: 1px;
+}
+/* pop-up menus: the face of a button, two small chevrons at the end */
+:is(#panel, #photo-bar) select {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: 26px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='14' viewBox='0 0 10 14'%3E%3Cpath d='M2 5l3-3 3 3M2 9l3 3 3-3' fill='none' stroke='rgba(235,235,245,0.7)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+}
+:is(#panel, #photo-bar) select option,
+:is(#panel, #photo-bar) select optgroup {
+  background: #2c2c2e;
+  color: #fff;
+}
+/* primary actions: filled with the accent */
+:is(#panel, #report-panel) button.primary,
+#panel button.tour,
+#report-panel #report-github {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+:is(#panel, #report-panel) button.primary:hover,
+#panel button.tour:hover,
+#report-panel #report-github:hover {
+  background: #2a93ff !important;
+}
+:is(#panel, #report-panel) button.primary:active,
+#panel button.tour:active,
+#report-panel #report-github:active {
+  background: var(--accent-press) !important;
+}
+:is(#panel, #photo-bar) button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+/* sliders: slim, round thumbs, the accent filling the track */
+:is(#panel, #photo-bar) input[type='range'] {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  height: 22px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+/* switches (the tick boxes, as iOS has them): a knob that slides across, the accent when on */
+:is(#panel, #photo-bar, #report-panel) input[type='checkbox'] {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: none;
+  width: 38px;
+  height: 22px;
+  margin: 0;
+  border-radius: 11px;
+  background-color: rgba(120, 120, 128, 0.36);
+  background-image:
+    radial-gradient(circle at 11px 11.6px, rgba(0, 0, 0, 0.28) 0 9.4px, transparent 10.6px),
+    radial-gradient(circle at 11px 11px, #fff 0 8.9px, transparent 9.6px);
+  background-repeat: no-repeat;
+  background-position: 0 0, 0 0;
+  transition: background-color 0.22s ease, background-position 0.22s cubic-bezier(0.3, 0.7, 0.3, 1);
+  cursor: pointer;
+}
+:is(#panel, #photo-bar, #report-panel) input[type='checkbox']:checked {
+  background-color: var(--accent);
+  background-position: 16px 0, 16px 0;
+}
+
+/* ── the panel ─────────────────────────────────────────────────────────────────────────────
+   a header (the title; folds the rest away), how to move, then grouped cards: Explore, Time and
+   weather, Lights, Sound; the video and the settings fold; the picture buttons at the foot */
+#panel {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  width: 280px;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  border-radius: 18px;
+  background: var(--material);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+  border: 0.5px solid var(--hairline);
+  box-shadow: var(--shadow), inset 0 0.5px 0 rgba(255, 255, 255, 0.08);
+  font-size: 13px;
+  transition: opacity 0.6s;
+}
+#panel .head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 12px 12px 18px;
+  background: rgba(30, 30, 32, 0.92);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+}
+#panel .title {
+  flex: 1;
+  min-width: 0;
+}
+#panel h1 {
+  margin: 0;
+  font: 700 20px/1.15 var(--display);
+  letter-spacing: -0.022em;
+  color: #fff;
+}
+#panel .credit {
+  display: flex;
+  gap: 4px;
+  margin: 3px 0 0;
+  font-size: 11px;
+  color: var(--label-2);
+  white-space: nowrap;
+}
+/* (the credit shortens, the version number never does) */
+#panel .credit span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#panel .credit .dot,
+#panel .credit b {
+  flex: none;
+}
+#panel .credit b {
+  font-weight: 500;
+  color: var(--label-2);
+}
+#panel.folded .body {
+  display: none;
+}
+/* (whatever the code hides stays hidden, whatever its layout) */
+#panel [hidden] {
+  display: none !important;
+}
+#panel.folded #panel-fold svg {
+  transform: rotate(180deg);
+}
+#panel .body {
+  display: grid;
+  gap: 10px;
+  padding: 2px 12px 14px;
+}
+/* a grouped card, its name small above its rows */
+#panel section,
+#panel details.section {
+  display: grid;
+  gap: 9px;
+  padding: 10px 12px 12px;
+  border-radius: 12px;
+  background: var(--group);
+}
+#panel h2 {
+  margin: 0 0 1px;
+  font: 600 12px/1.2 var(--text);
+  letter-spacing: -0.005em;
+  color: var(--label-2);
+}
+#panel button.small {
+  font-size: 12px;
+  padding: 4px 9px;
+  min-height: 26px;
+}
+/* round icon buttons: play, the arrows, the fold, the speaker */
+#panel button.icon,
+#panel button.arrow {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 10px;
+  line-height: 1;
+}
+#panel button.arrow {
+  width: 26px;
+  height: 26px;
+  min-height: 26px;
+}
+#panel .head button.icon {
+  background: var(--fill);
+  color: var(--label-2);
+}
+#panel .head button.icon:hover {
+  color: #fff;
+}
+#panel button :is(svg) {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.25s cubic-bezier(0.3, 0.7, 0.3, 1);
+}
+#panel .check {
+  display: flex;
+  flex-direction: row-reverse;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+  color: var(--label);
+  cursor: pointer;
+}
+#panel .help,
+#stats {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--label-2);
+}
+#panel .help a {
+  color: inherit;
+}
+#stats {
+  font-variant-numeric: tabular-nums;
+  color: var(--label-3);
+}
+
+/* segmented controls: how to move, the lights (the chosen one raised, as iOS has it) */
+#panel .seg,
+#panel .pills {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  padding: 2px;
+  gap: 2px;
+  border-radius: 9px;
+  background: rgba(118, 118, 128, 0.24);
+}
+#panel .seg button,
+#panel .pills button {
+  background: transparent;
+  border-radius: 7px;
+  padding: 5px 4px;
+  min-height: 26px;
+  font-weight: 500;
+  color: var(--label);
+}
+#panel .seg button:hover:not(:disabled):not(.on),
+#panel .pills button:hover:not(.on) {
+  background: rgba(255, 255, 255, 0.06);
+}
+#panel .seg button.on,
+#panel .pills button.on {
+  background: #636366;
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.18), 0 0.5px 0 rgba(255, 255, 255, 0.12) inset;
+}
+#panel .pills button span {
+  color: var(--label-2);
+  font-size: 11px;
+  font-weight: 400;
+}
+#panel .pills button.on span {
+  color: rgba(255, 255, 255, 0.75);
+}
+/* the move modes stand on their own, at the top */
+#panel .modes {
+  margin: 4px 0 2px;
+}
+
+/* a row: a label, then its control */
+#panel .field {
+  display: grid;
+  grid-template-columns: 62px 1fr;
+  align-items: center;
+  gap: 8px;
+}
+#panel .field .label {
+  color: var(--label);
+}
+#panel .field:has(.stepper) {
+  grid-template-columns: 42px 1fr;
+}
+#panel select {
+  width: 100%;
+}
+#panel .value {
+  font-weight: 600;
+  color: var(--label);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+#panel .stepper {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+#panel .slider {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+#panel .slider:not(:has(#now)) {
+  grid-template-columns: 1fr auto;
+}
+#panel .pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+#panel .weather-line::first-letter {
+  text-transform: uppercase;
+}
+#panel .weather-line:empty {
+  display: none;
+}
+#panel .weather-now {
+  font-weight: 600;
+  color: var(--label);
+}
+#weather-source:empty {
+  display: none;
+}
+#weather-source:not(:empty)::before {
+  content: ' · ';
+}
+
+/* sound: the speaker (mute), and the volume */
+#panel .sound-bar {
+  display: grid;
+  grid-template-columns: auto 1fr 38px;
+  align-items: center;
+  gap: 9px;
+}
+#panel .sound-bar .value {
+  text-align: right;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--label-2);
+}
+#panel button.mute svg {
+  width: 17px;
+  height: 17px;
+}
+#panel button.mute .cone {
+  fill: currentColor;
+  stroke: none;
+}
+#panel button.mute .cross,
+#panel button.mute.muted .wave {
+  display: none;
+}
+#panel button.mute.muted .cross {
+  display: inline;
+}
+#panel button.mute.quiet .w2 {
+  display: none;
+}
+#panel button.mute.muted {
+  color: var(--label-2);
+}
+#panel .sound-bar.muted input {
+  opacity: 0.45;
+}
+
+/* the folding cards: the video, the settings (a chevron that turns as it opens) */
+#panel details.section {
+  gap: 0;
+}
+#panel details.section[open] {
+  gap: 9px;
+}
+#panel details.section summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  list-style: none;
+  font: 600 12px/1.2 var(--text);
+  color: var(--label-2);
+  padding: 2px 0;
+}
+#panel details.section summary::-webkit-details-marker {
+  display: none;
+}
+#panel details.section summary::after {
+  content: '';
+  width: 6px;
+  height: 6px;
+  margin-right: 4px;
+  border-right: 1.7px solid currentColor;
+  border-bottom: 1.7px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 0.25s cubic-bezier(0.3, 0.7, 0.3, 1);
+}
+#panel details.section[open] summary::after {
+  transform: rotate(45deg);
+}
+#panel details.section summary:hover {
+  color: var(--label);
+}
+#panel .checks {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2px;
+}
+#panel .checks .check,
+#panel details.section > .check {
+  padding: 2px 0;
+  border-bottom: 0.5px solid var(--separator);
+}
+#panel .checks .check:last-child {
+  border-bottom: 0;
+}
+#panel .record-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+#panel .record-row .check {
+  flex: 1;
+}
+#panel button.record {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 600;
+}
+#panel button.record i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ff453a;
+  box-shadow: 0 0 6px rgba(255, 69, 58, 0.7);
+}
+
+/* the foot: the picture buttons, and Report a bug */
+#panel .actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding-top: 2px;
+}
+#panel .actions button {
+  font-size: 12px;
+  padding: 6px 6px;
+}
+#panel button.link {
+  justify-self: center;
+  margin-top: -2px;
+  padding: 2px 6px;
+  min-height: 0;
+  background: none;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent);
+}
+#panel button.link:hover {
+  background: none;
+  color: #409cff;
+}
+
+/* ── the keys: how to move in the mode you are in (under the panel, or bottom right) ─────── */
 #dock {
   position: fixed;
   right: 16px;
   bottom: 16px;
   z-index: 4;
   width: 286px;
-  padding: 10px 12px 12px;
-  border-radius: 12px;
-  background: rgba(20, 22, 27, 0.82);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(8px);
-  color: #e9e5dc;
-  font: 13px/1.35 system-ui, -apple-system, sans-serif;
+  padding: 12px 14px 13px;
+  border-radius: 16px;
+  background: var(--material);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+  border: 0.5px solid var(--hairline);
+  box-shadow: var(--shadow);
+  color: var(--label);
+  font: 12.5px/1.35 var(--text);
   transition: opacity 0.5s;
 }
 #dock.under-panel {
   left: 12px;
   right: auto;
   bottom: 12px;
-  width: 272px;
+  width: 280px;
 }
 /* room for sfatosu.com's Credits button in the bottom left corner */
 body.has-credits #panel {
@@ -356,13 +890,15 @@ body.touring #dock {
   opacity: 0;
   pointer-events: none;
 }
-#dock button {
-  font: inherit;
-  color: inherit;
-  background: #2c2f36;
-  border: 1px solid #454952;
+/* keycaps */
+#dock button,
+.legend kbd {
+  font: 600 11px/1 var(--text);
+  color: var(--label);
+  background: linear-gradient(#48484c, #3a3a3d);
+  border: 0;
   border-radius: 6px;
-  padding: 6px 4px;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.45), inset 0 0.5px 0 rgba(255, 255, 255, 0.16);
   cursor: pointer;
   touch-action: none;
   user-select: none;
@@ -380,43 +916,41 @@ body.touring #dock {
   display: grid;
   grid-template-columns: repeat(3, 30px);
   grid-auto-rows: 30px;
-  gap: 3px;
+  gap: 4px;
 }
-#dock .pad button,
-#dock .legend button {
+#dock .pad button {
   padding: 0;
-  font-weight: 600;
   min-width: 30px;
-  height: 26px;
+  height: 28px;
+  font-size: 12px;
 }
 #dock .legend button {
   padding: 0 7px;
-  height: 22px;
-  font-size: 11px;
+  height: 21px;
+  min-width: 22px;
 }
 #dock .legend button.wide {
   min-width: 56px;
 }
 #dock button.down {
-  background: #d9b45a;
-  color: #1b1d22;
+  background: var(--accent);
+  color: #fff;
 }
 .legend p {
-  margin: 0 0 3px;
+  margin: 0 0 4px;
+  color: var(--label-2);
 }
 .legend kbd {
   display: inline-block;
-  font: 600 11px/20px system-ui, -apple-system, sans-serif;
   padding: 0 6px;
-  border-radius: 5px;
-  background: #2c2f36;
-  border: 1px solid #454952;
+  line-height: 20px;
+  cursor: default;
 }
 .keys .note {
   grid-column: 1 / -1;
-  margin: 6px 0 0;
-  color: #a8a398;
-  font-size: 12px;
+  margin: 8px 0 0;
+  color: var(--label-3);
+  font-size: 11.5px;
 }
 #keys-orbit {
   grid-template-columns: 1fr;
@@ -425,15 +959,60 @@ body.touring #dock {
   display: none;
 }
 
+/* ── making a video: a card over a dim, blurred picture ─────────────────────────────────── */
+#video-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.55);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+}
+#video-panel[hidden] {
+  display: none;
+}
+.video-box {
+  display: grid;
+  gap: 14px;
+  justify-items: center;
+  padding: 22px 24px;
+  border-radius: 18px;
+  background: var(--material-thick);
+  border: 0.5px solid var(--hairline);
+  box-shadow: var(--shadow);
+  font: 500 14px/1.4 var(--text);
+  color: var(--label);
+}
+.video-box .bar {
+  width: min(60vw, 520px);
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.18);
+  overflow: hidden;
+}
+#video-bar {
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+}
+#video-preview {
+  max-width: 70vw;
+  max-height: 62vh;
+  border-radius: 10px;
+}
 
-/* report a bug */
+/* ── report a bug: a sheet ──────────────────────────────────────────────────────────────── */
 #report-panel {
   position: fixed;
   inset: 0;
   z-index: 21;
   display: grid;
   place-items: center;
-  background: rgba(10, 11, 14, 0.7);
+  background: rgba(0, 0, 0, 0.45);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
 }
 #report-panel[hidden] {
   display: none;
@@ -441,66 +1020,59 @@ body.touring #dock {
 .report-box {
   width: min(92vw, 460px);
   display: grid;
-  gap: 10px;
-  padding: 18px 20px;
-  border-radius: 12px;
-  background: #1b1d22;
-  border: 1px solid #3a3d45;
-  color: #f2efe8;
-  font: 14px/1.4 system-ui, -apple-system, sans-serif;
+  gap: 12px;
+  padding: 22px 22px 18px;
+  border-radius: 18px;
+  background: var(--material-thick);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+  border: 0.5px solid var(--hairline);
+  box-shadow: var(--shadow);
+  color: var(--label);
+  font: 13px/1.4 var(--text);
 }
 .report-box h2 {
-  margin: 0;
-  font-size: 17px;
+  margin: 0 0 2px;
+  font: 700 19px/1.2 var(--display);
+  letter-spacing: -0.02em;
 }
 .report-box label {
   display: grid;
-  gap: 4px;
-  color: #c9c4b8;
+  gap: 5px;
+  color: var(--label-2);
+  font-weight: 500;
 }
 .report-box textarea,
 .report-box input {
-  font: inherit;
-  color: inherit;
-  background: #2c2f36;
-  border: 1px solid #454952;
-  border-radius: 6px;
-  padding: 8px;
+  font: 400 13px/1.4 var(--text);
+  color: var(--label);
+  background: rgba(118, 118, 128, 0.18);
+  border: 0.5px solid var(--hairline);
+  border-radius: 9px;
+  padding: 9px 10px;
   resize: vertical;
 }
 .report-box .small-print {
   margin: 0;
-  font-size: 12px;
-  color: #a8a398;
+  font-size: 11.5px;
+  color: var(--label-3);
 }
 .report-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
 }
 .report-actions button {
-  font: inherit;
-  color: inherit;
-  background: #2c2f36;
-  border: 1px solid #454952;
-  border-radius: 6px;
-  padding: 6px 10px;
-  cursor: pointer;
-}
-#report-github {
-  background: #d9b45a;
-  border-color: #d9b45a;
-  color: #1b1d22;
-  font-weight: 600;
+  padding: 7px 12px;
 }
 #report-sent {
   margin: 0;
   min-height: 1em;
-  color: #d9b45a;
-  font-size: 13px;
+  color: var(--accent);
+  font-size: 12.5px;
 }
 
-/* photo mode: nothing on the picture but the photo controls at the bottom */
+/* ── photo mode: nothing on the picture but the photo controls at the bottom ─────────────── */
 body.photo #panel,
 body.photo #dock,
 body.photo #lock-hint,
@@ -516,18 +1088,20 @@ body.photo .sfx-game-credits-btn {
 #photo-bar {
   position: fixed;
   left: 50%;
-  bottom: 16px;
+  bottom: 18px;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 9px 14px;
-  font: 500 13px/1 system-ui, -apple-system, sans-serif;
-  color: #f2efe8;
-  background: rgba(20, 22, 27, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  gap: 12px;
+  padding: 8px 10px 8px 16px;
+  font: 500 13px/1 var(--text);
+  color: var(--label);
+  background: var(--material);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+  border: 0.5px solid var(--hairline);
   border-radius: 999px;
-  backdrop-filter: blur(8px);
+  box-shadow: var(--shadow);
   z-index: 9;
   white-space: nowrap;
 }
@@ -537,21 +1111,31 @@ body.photo .sfx-game-credits-btn {
 #photo-bar label {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
+  color: var(--label-2);
+}
+#photo-bar input[type='range'] {
+  width: 110px;
 }
 #photo-bar .photo-hint {
-  color: rgba(242, 239, 232, 0.7);
+  color: var(--label-2);
 }
 #photo-bar button {
   border-radius: 999px;
+  padding: 6px 13px;
+}
+#photo-save {
+  background: var(--accent) !important;
+  color: #fff !important;
+  font-weight: 600 !important;
 }
 #photo-focus {
   position: fixed;
   width: 46px;
   height: 46px;
   margin: -23px 0 0 -23px;
-  border: 1.5px solid rgba(255, 236, 170, 0.95);
-  border-radius: 4px;
+  border: 1.5px solid rgba(255, 214, 10, 0.95);
+  border-radius: 6px;
   pointer-events: none;
   opacity: 0;
   z-index: 8;
@@ -566,447 +1150,19 @@ body.photo .sfx-game-credits-btn {
   100% { opacity: 0; }
 }
 @media (max-width: 720px) {
-  #photo-bar { flex-wrap: wrap; justify-content: center; border-radius: 14px; width: calc(100% - 24px); white-space: normal; }
+  #photo-bar { flex-wrap: wrap; justify-content: center; border-radius: 18px; width: calc(100% - 24px); white-space: normal; padding: 10px 12px; }
   #photo-bar .photo-hint { display: none; }
 }
-
-/* ── the panel ───────────────────────────────────────────────────────────────
-   a header (folds the rest away), how to move, then sections: Explore, Time and weather, Lights,
-   Sound; the video and the settings fold; the picture buttons at the foot */
-#panel {
-  --gold: #d9b45a;
-  --gold-soft: #f2d48a;
-  --line: rgba(255, 255, 255, 0.08);
-  --field: #2a2d34;
-  --edge: #41454e;
-  --muted: #a39f96;
-  position: fixed;
-  top: 12px;
-  left: 12px;
-  width: 272px;
-  max-height: calc(100vh - 24px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: #4a4d55 transparent;
-  border-radius: 14px;
-  background: rgba(19, 21, 26, 0.84);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.35);
-  backdrop-filter: blur(10px);
-  font-size: 13px;
-  transition: opacity 0.6s;
-}
-#panel .head {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 12px 10px 16px;
-  background: rgb(22, 24, 29);
-  border-bottom: 1px solid var(--line);
-}
-#panel .title {
-  flex: 1;
-  min-width: 0;
-}
-#panel h1 {
-  margin: 0;
-  font-size: 17px;
-  font-weight: 650;
-  letter-spacing: 0.02em;
-}
-#panel .credit {
-  margin: 1px 0 0;
-  font-size: 11px;
-  color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-#panel .credit b {
-  font-weight: 500;
-  color: #cfcac0;
-}
-#panel.folded .head {
-  border-bottom-color: transparent;
-}
-#panel.folded .body {
-  display: none;
-}
-#panel.folded #panel-fold svg {
-  transform: rotate(180deg);
-}
-#panel .body {
-  display: grid;
-  gap: 12px;
-  padding: 12px 16px 14px;
-}
-#panel section {
-  display: grid;
-  gap: 7px;
-  padding-top: 10px;
-  border-top: 1px solid var(--line);
-}
-#panel h2 {
-  margin: 0 0 1px;
-  font-size: 10.5px;
-  font-weight: 650;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--gold);
-}
-
-/* the controls */
-#panel button,
-#panel select {
-  font: inherit;
-  color: inherit;
-  background: var(--field);
-  border: 1px solid var(--edge);
-  border-radius: 7px;
-  padding: 6px 8px;
-  cursor: pointer;
-  min-width: 0;
-}
-#panel select {
-  width: 100%;
-  text-overflow: ellipsis;
-}
-#panel button:hover:not(:disabled),
-#panel select:hover {
-  border-color: #5d616b;
-}
-#panel button:focus-visible,
-#panel select:focus-visible,
-#panel input:focus-visible {
-  outline: 2px solid var(--gold);
-  outline-offset: 1px;
-}
-#panel button.on {
-  background: var(--gold);
-  border-color: var(--gold);
-  color: #1b1d22;
-  font-weight: 600;
-}
-#panel button:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-#panel button.small {
-  font-size: 12px;
-  padding: 4px 8px;
-}
-#panel button.icon {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 28px;
-  padding: 0;
-  font-size: 11px;
-  line-height: 1;
-}
-#panel .head button.icon {
-  background: transparent;
-  border-color: transparent;
-  color: var(--muted);
-}
-#panel .head button.icon:hover {
-  color: #f2efe8;
-  background: var(--field);
-}
-#panel button.icon svg {
-  width: 16px;
-  height: 16px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  transition: transform 0.2s;
-}
-#panel input[type='range'] {
-  width: 100%;
-  min-width: 0;
-  margin: 0;
-  accent-color: var(--gold);
-}
-#panel .check {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: #d8d4cb;
-  cursor: pointer;
-}
-#panel .check input {
-  margin: 0;
-  accent-color: var(--gold);
-}
-#panel .help,
-#stats {
-  margin: 0;
-  font-size: 11.5px;
-  color: var(--muted);
-}
-#panel .help a {
-  color: inherit;
-}
-#stats {
-  font-variant-numeric: tabular-nums;
-}
-
-/* segmented buttons: how to move, the lights */
-#panel .seg {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: 1fr;
-  padding: 3px;
-  gap: 3px;
-  border-radius: 9px;
-  background: #24262c;
-  border: 1px solid var(--line);
-}
-#panel .seg button {
-  border-color: transparent;
-  background: transparent;
-  border-radius: 6px;
-  padding: 6px 4px;
-  color: #d8d4cb;
-}
-#panel .seg button:hover:not(:disabled):not(.on) {
-  background: #30333a;
-  border-color: transparent;
-}
-#panel .seg button.on {
-  background: var(--gold);
-  color: #1b1d22;
-}
-
-/* a row: a label, then its control */
-#panel .field {
-  display: grid;
-  grid-template-columns: 62px 1fr;
-  align-items: center;
-  gap: 8px;
-}
-#panel .field .label {
-  color: #cfcac0;
-}
-#panel .field:has(.stepper) {
-  grid-template-columns: 40px 1fr;
-}
-#panel .value {
-  font-weight: 600;
-  color: var(--gold);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-#panel .stepper {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-}
-#panel button.arrow {
-  width: 26px;
-  height: 30px;
-  padding: 0;
-  font-size: 17px;
-  line-height: 1;
-}
-#panel .slider {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  align-items: center;
-  gap: 5px;
-  min-width: 0;
-}
-#panel .slider:not(:has(#now)) {
-  grid-template-columns: 1fr auto;
-}
-#panel .pair {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-}
-#panel button.tour {
-  background: transparent;
-  border-color: var(--gold);
-  color: var(--gold-soft);
-}
-#panel button.tour.on {
-  background: var(--gold);
-  color: #1b1d22;
-}
-#panel .weather-line::first-letter {
-  text-transform: uppercase;
-}
-#panel .weather-line:empty {
-  display: none;
-}
-#panel .weather-now {
-  font-weight: 500;
-  color: var(--gold-soft);
-}
-#weather-source:empty {
-  display: none;
-}
-#weather-source:not(:empty)::before {
-  content: ' · ';
-}
-
-/* sound: mute, and the volume */
-#panel .sound-bar {
-  display: grid;
-  grid-template-columns: auto 1fr 38px;
-  align-items: center;
-  gap: 9px;
-}
-#panel .sound-bar .value {
-  text-align: right;
-  font-size: 12px;
-}
-#panel button.mute svg {
-  width: 18px;
-  height: 18px;
-}
-#panel button.mute .cone {
-  fill: currentColor;
-  stroke: none;
-}
-#panel button.mute .cross,
-#panel button.mute.muted .wave {
-  display: none;
-}
-#panel button.mute.muted .cross {
-  display: inline;
-}
-#panel button.mute.quiet .w2 {
-  display: none;
-}
-#panel button.mute.muted {
-  color: var(--muted);
-}
-#panel .sound-bar.muted input {
-  opacity: 0.45;
-}
-
-/* the folding sections: the video, the settings */
-#panel details.section {
-  border-top: 1px solid var(--line);
-  padding-top: 10px;
-}
-#panel details.section summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  cursor: pointer;
-  list-style: none;
-  font-size: 10.5px;
-  font-weight: 650;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--gold);
-}
-#panel details.section summary::-webkit-details-marker {
-  display: none;
-}
-#panel details.section summary::after {
-  content: '';
-  width: 6px;
-  height: 6px;
-  margin-right: 4px;
-  border-right: 1.6px solid currentColor;
-  border-bottom: 1.6px solid currentColor;
-  transform: rotate(45deg) translateY(-2px);
-  transition: transform 0.2s;
-}
-#panel details.section[open] summary::after {
-  transform: rotate(225deg) translate(-1px, -1px);
-}
-#panel details.section[open] {
-  display: grid;
-  gap: 8px;
-}
-#panel details.section[open] summary {
-  margin-bottom: 2px;
-}
-#panel .checks {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px 10px;
-}
-#panel .pills {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  border: 1px solid var(--edge);
-  border-radius: 7px;
-  overflow: hidden;
-}
-#panel .pills button {
-  border: 0;
-  border-radius: 0;
-  background: var(--field);
-  padding: 6px 4px;
-}
-#panel .pills button span {
-  color: #a8a398;
-  font-size: 11px;
-}
-#panel .pills button.on {
-  background: var(--gold);
-  color: #1b1d22;
-  font-weight: 600;
-}
-#panel .pills button.on span {
-  color: #4a3d1a;
-}
-#panel .record-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-#panel button.record {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  font-weight: 600;
-}
-#panel button.record i {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #e0473c;
-  box-shadow: 0 0 6px rgba(224, 71, 60, 0.8);
-}
-
-/* the foot: the picture buttons, and Report a bug */
-#panel .actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
-}
-#panel .actions button {
-  font-size: 12px;
-  padding: 6px 6px;
-}
-#panel button.link {
-  justify-self: center;
-  margin-top: -4px;
-  padding: 2px 6px;
-  border: 0;
-  background: none;
-  font-size: 11.5px;
-  color: var(--muted);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-#panel button.link:hover {
-  color: #f2efe8;
+@media (prefers-reduced-transparency: reduce) {
+  #panel, #dock, #toast, #photo-bar, .report-box, .video-box, #lock-hint, #tour-stop { background: #1c1c1e; -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+/* (on a touch screen the round buttons stay round at a finger's size: sfatosu.com makes every
+   button in the panel at least 40 px tall there) */
+@media (pointer: coarse) {
+  #panel button.icon,
+  #panel button.arrow {
+    width: 40px;
+    height: 40px;
+    min-height: 40px;
+  }
 }

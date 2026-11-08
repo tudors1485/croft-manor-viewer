@@ -8,6 +8,21 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.56.0, 8 November 2026
+
+A new look, and the intro with the year's busiest days at the door.
+
+- **Croft Manor Viewer**: the name in the page's title, at the head of the panel and over the loading film.
+- **Apple's look** for everything over the picture: dark translucent panels that blur the view behind them, the system font, segmented controls for the modes and the lights, switches for the settings, one blue for what is chosen, chevrons for the arrows, a thin white loading bar; solid panels for anyone who has asked for less transparency. The credit under the title shortens on a narrow panel, never the version number.
+- **The intro, with things happening**: the turntable now runs 24 seconds through the year's busiest days. The camera comes in close for the hounds coming home after the hunt, across the lawn to the horse waiting at the front door; then the garden party by day, an autumn shower, Halloween at dusk, Christmas Eve in the snow with the lights on, midnight on New Year's Eve with the fireworks bursting over the roof, the snow and the thaw. Each day dissolves into the next, and it still loops without a seam. 4.7 MB in full HD, 1.7 MB on a phone.
+- **On a phone held upright** the intro sits at the top of the screen, wide enough for the whole miniature, fading into the dark under the title, instead of a sliver of the middle.
+
+Fixes:
+
+- **The scenes no longer pull the view away**: after *Deer at dawn*, the camera kept following the hounds for the rest of the 40 seconds, so the next scenes (by the arrows or the menu) slid off towards the hunt. Choosing a scene, a place, a flyby or Reset now ends it, and calls the hunt off.
+- **Brightness** (*Picture and settings*): moving the slider turned the whole picture black.
+- The Perseids' busier sky no longer carries on into the next night's scene.
+
 ## 0.55.0, 8 November 2026
 
 - **Fireflies** instead of the glow-worms (*Fireflies on a June night*): five of them over the meadow behind the house, drifting, each flashing yellow-green in its own time, a quick bright flash and a slower fade, rising a little as it lights, a faint glow between.

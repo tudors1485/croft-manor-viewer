@@ -213,42 +213,115 @@ class Precipitation {
 // fov; day (of the year, may be fractional), hours, compass (degrees: turns the sun's path), weather,
 // rain and snow (0..1), blur (the miniature's shallow focus, 0..1).
 export const FILMS = {
-  // A: a turntable. A whole turn round the miniature while a whole year goes by, from late March
-  // round to late March again, so it loops without a seam: the bare trees come into leaf, a pause on
-  // high summer, autumn colour and a shower, snow falling and lying through midwinter, the thaw; the
-  // sun swinging round it all the while, so the shadows sweep across the lawn.
+  // A: a turntable, a whole turn round the miniature while a whole year goes by, its days at the
+  // door: the bare trees of March come into blossom and leaf (round the back), then at the front a May
+  // morning when the hounds come home up the drive to the horse waiting at the door, a summer garden
+  // party, autumn and a shower, Halloween at dusk, Christmas Eve in the snow, New Year's midnight with
+  // the fireworks; round the back again the winter thaws into spring. It loops without a seam: the
+  // camera lingers along the front and swings quickly round the back; each day dissolves into the next.
   A: {
     label: 'Turntable',
-    length: 12,
+    length: 24,
     backdrop: ['#efe9df', '#b9b1a5', 'rgba(255,250,240,0.55)'],
-    at(t) {
-      const k = t / this.length;
-      // (the year in stretches, at an even pace within each: in leaf by two seconds, autumn by five,
-      // snow by six and a half, the thaw at the end)
-      const knots = [
-        [0, 0],
-        [2.2, 70],
-        [4.0, 150],
-        [5.6, 222],
-        [7.0, 300],
-        [10.0, 335],
-        [12, 365],
-      ];
-      let i = 0;
-      while (i < knots.length - 2 && t > knots[i + 1][0]) i++;
-      const [t0, d0] = knots[i];
-      const [t1, d1] = knots[i + 1];
-      const day = (78 + lerp(d0, d1, Math.min(1, Math.max(0, (t - t0) / (t1 - t0))))) % 365;
+    // the days, in order (t0..t1 seconds; spring wraps round the loop's end)
+    segs: [
+      { name: 'hunt', t0: 2, t1: 5, at: (u) => ({ day: 132, hours: lerp(8.8, 9.6, u), weather: 'clear', hunt: true }) },
+      { name: 'party', t0: 5, t1: 8.5, at: (u) => ({ day: 194, hours: lerp(14.5, 16, u), weather: 'clear', party: true }) },
+      { name: 'autumn', t0: 8.5, t1: 10.5, at: (u) => ({ day: lerp(285, 300, u), hours: 14.5, weather: u > 0.3 && u < 0.85 ? 'rain' : 'clear', rain: smooth(0.3, 0.4, u) * (1 - smooth(0.75, 0.85, u)) }) },
+      // (the evenings lit as a studio lights a model: brighter than a real dusk)
+      { name: 'halloween', t0: 10.5, t1: 13, at: (u) => ({ day: 303, hours: lerp(16.72, 16.95, u), weather: 'clear', exposure: 170, backdrop: 0.42 }) },
+      { name: 'christmas', t0: 13, t1: 16, at: (u) => ({ day: 357, hours: lerp(16.05, 16.45, u), weather: 'snow', snow: 0.45, exposure: 160, backdrop: 0.4 }) },
+      // (midnight a quarter of the way in: the rockets of the last minutes, then the dozen at once)
+      { name: 'nye', t0: 16, t1: 19.6, at: (u) => (u < 0.06 ? { day: 364, hours: lerp(23.996, 23.9999, u / 0.06), weather: 'clear', nye: true, exposure: 40, backdrop: 0.07 } : { day: 0, hours: lerp(0.0001, 0.06, (u - 0.06) / 0.94), weather: 'clear', nye: true, exposure: 40, backdrop: 0.07 }) },
+      { name: 'winter', t0: 19.6, t1: 22, at: (u) => ({ day: lerp(4, 64, u), hours: 12.5, weather: u < 0.35 ? 'snow' : 'clear', snow: u < 0.35 ? 0.25 * (1 - smooth(0.25, 0.35, u)) : 0 }) },
+      { name: 'spring', t0: 22, t1: 26, at: (u) => ({ day: lerp(64, 132, u), hours: lerp(12, 10, u), weather: 'clear' }) },
+    ],
+    // the camera: slowly along the front (from the south-west round to the south-east) while the days
+    // at the door go by, quickly round the back (a smooth surge of speed), once round in all
+    az(t) {
+      const tau = t < 2 ? t + 24 : t;
+      const v0 = 140 / 17;
+      const extra = (360 - v0 * 24) / 3.5;
+      const back = tau < 19 ? 0 : (tau - 19) / 2 - (7 / (4 * Math.PI)) * Math.sin((2 * Math.PI * (tau - 19)) / 7);
+      return -70 + v0 * (tau - 2) + extra * back;
+    },
+    // the camera: in close for the hounds coming home to the horse at the door, nearer for the party
+    // and for Halloween's drive, further back and higher for the New Year's fireworks (each eased in
+    // and out round its day)
+    focus: {
+      hunt: { dist: 50, el: 15, target: [0, 0.8, -5] },
+      party: { dist: 96, el: 21, target: [11, 0, -1] },
+      halloween: { dist: 98, el: 19, target: [2, 0, -2] },
+      nye: { dist: 205, el: 11, target: [3, 30, -20] },
+    },
+    cam(t) {
+      const tau = t < 2 ? t + 24 : t;
+      const base = { dist: 138, el: 24, target: [6, -0.5, -9] };
+      let sum = 0;
+      const acc = { dist: 0, el: 0, target: [0, 0, 0] };
+      for (const g of this.segs) {
+        const f = this.focus[g.name];
+        if (!f) continue;
+        const w = smooth(g.t0 - 0.7, g.t0 + 0.5, tau) * (1 - smooth(g.t1 - 0.5, g.t1 + 0.7, tau));
+        if (w <= 0) continue;
+        sum += w;
+        acc.dist += f.dist * w;
+        acc.el += f.el * w;
+        for (let i = 0; i < 3; i++) acc.target[i] += f.target[i] * w;
+      }
+      const k = Math.min(1, sum);
+      const n = Math.max(sum, 1e-6);
       return {
-        cam: { az: lerp(-35, 325, k), el: 24, dist: 138, fov: 30 },
-        day,
-        hours: 14.5,
-        compass: lerp(-60, 300, k),
-        weather: t > 4.9 && t < 5.6 ? 'rain' : t > 6.3 && t < 9.7 ? 'snow' : 'clear',
-        rain: smooth(4.9, 5.1, t) * (1 - smooth(5.35, 5.6, t)),
-        snow: smooth(6.3, 6.8, t) * (1 - smooth(9.1, 9.7, t)),
-        blur: 0.35,
+        az: this.az(t),
+        el: lerp(base.el, acc.el / n, k),
+        dist: lerp(base.dist, acc.dist / n, k),
+        fov: 30,
+        target: base.target.map((v, i) => lerp(v, acc.target[i] / n, k)),
       };
+    },
+    seg(t) {
+      const tau = t < 2 ? t + 24 : t;
+      return this.segs.find((g) => tau >= g.t0 && tau < g.t1) ?? this.segs[0];
+    },
+    state(g, t) {
+      const tau = t < 2 ? t + 24 : t;
+      const u = Math.min(1, Math.max(0, (tau - g.t0) / (g.t1 - g.t0)));
+      const st = g.at(u);
+      return {
+        cam: this.cam(t),
+        compass: lerp(-60, 300, t / this.length),
+        rain: 0,
+        snow: 0,
+        blur: 0.35,
+        ...st,
+        day: ((st.day % 365) + 365) % 365,
+        seg: g.name,
+      };
+    },
+    at(t) {
+      return this.state(this.seg(t), t);
+    },
+    // a dissolve where one day gives way to the next (not where the seasons run on into each other)
+    parts(t) {
+      const tau = t < 2 ? t + 24 : t;
+      const W = 0.22;
+      for (let i = 0; i < this.segs.length; i++) {
+        const a = this.segs[i];
+        const b = this.segs[(i + 1) % this.segs.length];
+        const edge = a.t1;
+        if (['winter'].includes(a.name)) continue; // (winter runs straight on into spring)
+        const d = tau - edge;
+        const dd = Math.abs(d) < W ? d : Math.abs(d + 24) < W ? d + 24 : Math.abs(d - 24) < W ? d - 24 : null;
+        if (dd === null) continue;
+        const k = smooth(-W, W, dd);
+        const tA = t - dd - 1e-3; // (each held at its edge)
+        const tB = t - dd + 1e-3;
+        return [
+          { w: 1 - k, s: { ...this.state(a, ((tA % 24) + 24) % 24), cam: this.cam(t) } },
+          { w: k, s: { ...this.state(b, ((tB % 24) + 24) % 24), cam: this.cam(t) } },
+        ];
+      }
+      return [{ w: 1, s: this.at(t) }];
     },
   },
   // B: a studio lamp. A dark room, the miniature lit by a lamp swinging from one side to the other
@@ -307,7 +380,9 @@ export function setup(manor, id) {
   const film = FILMS[id];
   const { scene, camera, renderer, tod, quality } = manor;
   const $ = (x) => document.getElementById(x);
-  for (const el of ['panel', 'dock', 'lock-hint', 'crosshair', 'toast']) if ($(el)) $(el).style.display = 'none';
+  // (nothing over the picture: whatever the stylesheet does with them)
+  for (const el of ['panel', 'dock', 'lock-hint', 'crosshair', 'toast', 'loading', 'fade', 'caption', 'countdown', 'tour-stop', 'leave-hint', 'bar-top', 'bar-bottom', 'photo-bar', 'photo-focus', 'video-panel', 'report-panel']) if ($(el)) $(el).style.display = 'none';
+  for (const el of document.querySelectorAll('.sfx-menu, .sfx-hud, .sfx-game-credits-btn, .sfx-game-legal')) el.style.display = 'none';
   manor.setMode('orbit');
   manor.orbit.enabled = false;
   quality.adaptive = false;
@@ -317,6 +392,8 @@ export function setup(manor, id) {
   // their branches over the edge as a model's would be; those rooted off it are taken away below)
   renderer.localClippingEnabled = true;
   const isTree = (o) => {
+    // (the fireworks too: they are placed in their shader, and burst over the block anyway)
+    for (let p = o; p; p = p.parent) if (p.name === 'Bonfire Night') return true;
     if (o.isInstancedMesh) for (let p = o; p; p = p.parent) if (p.name === 'Blossom') return true;
     return o.isInstancedMesh && o.parent === manor.landscape?.group && !o.material?.isShaderMaterial;
   };
@@ -339,7 +416,7 @@ export function setup(manor, id) {
     const b = new THREE.Box3();
     scene.updateMatrixWorld(true);
     scene.traverse((o) => {
-      if (!(o.isMesh || o.isPoints || o.isLine || o.isSprite) || o.isInstancedMesh || !o.geometry) return;
+      if (!(o.isMesh || o.isPoints || o.isLine || o.isSprite) || o.isInstancedMesh || o.isSkinnedMesh || !o.geometry) return; // (the animals move about: the cut does them)
       if (o.frustumCulled === false && !o.geometry.boundingSphere) return; // (camera-following effects)
       b.setFromObject(o);
       if (!b.isEmpty() && !b.intersectsBox(keep)) o.visible = false;
@@ -466,9 +543,46 @@ export function setup(manor, id) {
   return {
     film,
     length: film.length,
+    /** The states to draw at t, and their weights (two where one day dissolves into the next). */
+    parts(t) {
+      return film.parts ? film.parts(t) : [{ w: 1, s: film.at(t) }];
+    },
     /** Puts everything where it is at t seconds into the film (then draw the frame). */
     at(t, dt = 1 / 30) {
-      const s = film.at(t);
+      return this.apply(film.at(t), dt);
+    },
+    /** Puts everything as state s has it (then draw the frame). */
+    apply(s, dt = 1 / 30) {
+      // the days' doings: the garden party by day, the New Year's rockets, the hounds coming home
+      const party = scene.getObjectByName('Garden party')?.userData.sight;
+      if (party) {
+        party.always = !!s.party;
+        if (s.party) party.mode = 'day';
+      }
+      if (manor.bonfire) {
+        manor.bonfire.boost = s.nye ? 3 : 1;
+        // (the fireworks' smoke, and the year they write in sparks, read from the lawn; from this far
+        // off they are one white blot each)
+        manor.bonfire.haze.points.visible = false;
+        manor.bonfire.autoYear = false;
+        // (the show already going when the film reaches it: the rockets of midnight take two seconds
+        // to climb, and the New Year has under four)
+        if (s.nye && !this._nyed) {
+          this._nyed = true;
+          const b = manor.bonfire;
+          b.reset();
+          b.update(1 / 30, { day: 364, hours: 23.999, level: 0, wind: 0.2, camera });
+          for (let i = 0; i < 57; i++) b.update(1 / 30, { day: 0, hours: 0.0001, level: 0, wind: 0.2, camera });
+        }
+      }
+      set('exposure', s.exposure ?? 100);
+      const park = manor.park;
+      if (park && s.hunt && !this._hunted) {
+        this._hunted = true;
+        park.hunt(s.day);
+        // (on, until the hounds are past the fountain and nearly home: in the shot they come up to the horse at the door)
+        for (let i = 0; i < 600 && !(park.hounds?.[0]?.holder.visible && park.hounds[0].holder.position.z < -1); i++) park._updateHunt(0.1, s.day, s.hours, camera);
+      }
       if (s.weather !== last?.weather) set('weather', s.weather, 'change');
       manor.setDay(s.day);
       set('time', s.hours.toFixed(3));
@@ -485,7 +599,8 @@ export function setup(manor, id) {
       quality.photo.focus = camera.position.distanceTo(s.cam.focus ? new THREE.Vector3(...s.cam.focus) : target);
       quality.photo.aperture = s.blur;
       // (the backdrop stays as it is, whatever the eye's adaptation does to the exposure)
-      scene.backgroundIntensity = 1 / Math.max(0.2, renderer.toneMappingExposure);
+      // (the studio dims for the evenings: lights and fireworks show against the dark)
+      scene.backgroundIntensity = (s.backdrop ?? 1) / Math.max(0.2, renderer.toneMappingExposure);
       // (no chimney smoke on the miniature: out of scale, and it would not meet itself where the film loops)
       if (manor.garden?.smoke) manor.garden.smoke.points.visible = false;
       precip.snow.material.color.setScalar(0.3 + 0.7 * (1 - tod.night));

@@ -218,6 +218,7 @@ let roofed = 1; // 1 under a solid roof, 0 under glass (the pool hall), eased
 let roofCheck = 0;
 const UP = new THREE.Vector3(0, 1, 0);
 function updateExposure(dt = 0) {
+  if (!Number.isFinite(dt)) dt = 0;
   // under glass the light is nearly outdoor light, so the eye opens up much less there
   roofCheck -= dt;
   if (walker && roofCheck <= 0) {
@@ -580,6 +581,7 @@ function startTour(id = null) {
   setOakScene(false);
   showScene(-1);
   sound.stopMusic();
+  endSight();
   $('viewpoint').value = '';
   if (lens) {
     // (a flyby has its own lens)
@@ -1070,6 +1072,7 @@ function goToPlace(i, named = false) {
     $('viewpoint').value = String(i);
     showScene(-1);
     sound.stopMusic();
+    endSight();
     const [name, pos, target, v] = viewpoints[i];
     setOakScene(name === 'Under the oak');
     tod.moonBig = 1;
@@ -1901,7 +1904,7 @@ $('reset').onclick = (e) => {
   e.currentTarget.blur();
   wakeSound();
   if (mode === 'tour') leaveTour();
-  sight = null;
+  endSight();
   flight = null;
   moving?.set(false);
   setOakScene(false);
@@ -2156,6 +2159,11 @@ function startHunt() {
 orbit.addEventListener('start', () => {
   sight = null; // (you have taken over)
 });
+/** Another scene, place or flyby: the sight's camera lets go, and its hunt is called off. */
+function endSight() {
+  sight = null;
+  if (park) park.huntDay = null;
+}
 function stepSight(dt) {
   if (!sight || mode !== 'orbit' || flight) return;
   sight.t += dt;
@@ -2209,6 +2217,7 @@ function playScene(i, named = false) {
   setTime(typeof h.hours === 'function' ? h.hours() : h.hours);
   murmuration.always = false;
   balloons.always = false;
+  meteors.boost = 0; // (the Perseids' busier sky, not carried into the next night)
   if (party) party.always = false;
   for (const sight of [fireflies, nightClouds, comet, blossom, nightSnow]) if (sight) sight.always = false; // (sights3.js)
   // (a scene's own lens, as the night-shining clouds' or the harvest moon's, is not carried into the next)
@@ -2224,6 +2233,7 @@ function playScene(i, named = false) {
   wet = h.wet ?? Math.min(1, weather.rain * 3);
   rainbow.snap = true; // (a new scene: its rainbow there at once, or none, not the last one's fading)
   tod.update(true);
+  endSight(); // (the deer's camera, still following the hounds, would pull this scene's view back to them)
   h.then?.();
   const v = (x) => new THREE.Vector3(...(typeof x === 'function' ? x() : x));
   if (h.orbit && mode !== 'orbit') {
@@ -2344,7 +2354,7 @@ $('play-year').onclick = (e) => {
   setPlayingYear(!playingYear);
   e.currentTarget.blur();
 };
-$('exposure').addEventListener('input', updateExposure);
+$('exposure').addEventListener('input', () => updateExposure(0)); // (not the event as the time step: that turned the picture black)
 $('ivy').addEventListener('change', (e) => {
   const ivy = model?.getObjectByName('Ivy');
   if (ivy) ivy.visible = e.target.checked;
