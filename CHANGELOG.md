@@ -8,6 +8,12 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.54.0, 8 November 2026
+
+- **The intro, again**: no tree split in half any more (the blossom goes with its tree when a tree outside the model is left out); the seasons come in sooner (in leaf by two seconds, autumn by five, snow by six and a half), the whole loop twelve seconds, the sun once round it, a little quicker. 3.7 MB in full HD, 1 MB on a phone.
+- **Four seasons side by side** (Flybys): the four seasons in upright strips, spring to winter from left to right, on the sweep across the front, so the house slides through the year as the camera moves along it. The split views now take any layout of columns and rows.
+- **No rainbow on a frosty morning**: a rainbow wants the air above freezing (none in frost or over snow), and a scene starts with its own wet or dry ground, not the last scene's; its rainbow is there at once or not at all.
+
 ## 0.53.0, 8 November 2026
 
 A new intro: the house as a miniature on a turntable.

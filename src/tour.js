@@ -497,6 +497,14 @@ export const FLYBYS = {
     lapse: { what: 'scenes', every: 1e9, fixed: true, scenes: [{ day: 188, hours: 14, weather: 'clear', title: 'The four seasons, at once' }] },
     keys: splitSweep(),
   },
+  // the four seasons in upright strips side by side, spring to winter from left to right, on the
+  // same sweep across the front: the house slides through the year as the camera moves along it
+  seasonsStrips: {
+    label: 'Four seasons side by side',
+    split: 'v4',
+    lapse: { what: 'scenes', every: 1e9, fixed: true, scenes: [{ day: 188, hours: 14, weather: 'clear', title: 'The four seasons, side by side' }] },
+    keys: splitSweep(),
+  },
 };
 
 /** The seasons-at-once flybys' path: across the front, the house in the middle of the picture. */

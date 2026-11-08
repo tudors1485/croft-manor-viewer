@@ -2188,7 +2188,9 @@ function playScene(i, named = false) {
   tod.moonBig = 1;
   $('weather').value = h.weather;
   refreshWeather();
-  if (h.wet) wet = h.wet; // (the ground still wet from a shower)
+  // (the ground as the scene has it: still wet from a shower, or as its weather makes it, not the last scene's)
+  wet = h.wet ?? Math.min(1, weather.rain * 3);
+  rainbow.snap = true; // (a new scene: its rainbow there at once, or none, not the last one's fading)
   tod.update(true);
   h.then?.();
   const v = (x) => new THREE.Vector3(...(typeof x === 'function' ? x() : x));
@@ -2419,7 +2421,9 @@ function step(dt, exporting = false) {
   const sunDeg = THREE.MathUtils.radToDeg(Math.asin(THREE.MathUtils.clamp(tod.sunDir.y, -1, 1)));
   const afterRain = THREE.MathUtils.smoothstep(wet, 0.2, 0.6) * (1 - THREE.MathUtils.smoothstep(weather.rain, 0.25, 0.6));
   const sunOut = THREE.MathUtils.smoothstep(sunDeg, 0.5, 4) * (1 - THREE.MathUtils.smoothstep(weather.overcast, 0.45, 0.85)) * (1 - weather.fog) * (1 - weather.snowing) * (1 - (weather.storm ?? 0));
-  rainbow.update(dt, camera, tod.sunDir, afterRain * sunOut * (1 - THREE.MathUtils.smoothstep(sunDeg, 39, 42)) * (1 - tod.inside));
+  // (and above freezing: no rainbow on a frosty morning or over snow)
+  const thawed = (1 - (weather.frost ?? 0)) * (1 - THREE.MathUtils.smoothstep(seasonUniforms.uSnow.value, 0.05, 0.3));
+  rainbow.update(dt, camera, tod.sunDir, afterRain * sunOut * thawed * (1 - THREE.MathUtils.smoothstep(sunDeg, 39, 42)) * (1 - tod.inside));
   footprints.update(dt, seasonUniforms.uSnow.value, weather.snowing, THREE.MathUtils.lerp(1, 0.3, tod.night));
   // the northern lights: on their nights, in the dark, while the sky is clear
   const auroraUp = auroraAt(seasonDay, tod.hours) ? 1 : 0;

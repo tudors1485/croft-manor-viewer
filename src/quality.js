@@ -192,7 +192,8 @@ export class Quality {
     this._time = 0;
     this._cooldown = 2;
     this.onResize = null; // called after the drawing buffer changes size
-    this.split = 0; // the seasons-at-once flybys: the picture drawn in 2 or 4 parts (splitseasons.js)
+    this.split = 0; // the seasons-at-once flybys: the picture drawn in parts (splitseasons.js)
+    this.splitLayout = null; // ([columns, rows] of those parts)
 
     this.composer = new EffectComposer(renderer);
     this.ao = new N8AOPass(scene, camera, innerWidth, innerHeight);
@@ -249,8 +250,7 @@ export class Quality {
     const p = PRESETS[this.preset];
     this.ao.configuration.halfRes = p.halfRes;
     // (drawn in parts, the post-processing works at one part's size: splitseasons.js)
-    const cols = this.split >= 2 ? 2 : 1;
-    const rows = this.split >= 4 ? 2 : 1;
+    const [cols, rows] = this.splitLayout ?? [1, 1];
     if (this.fixed) {
       // a video: exactly this many pixels, whatever the window
       this.renderer.setPixelRatio(1);

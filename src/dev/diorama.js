@@ -219,33 +219,34 @@ export const FILMS = {
   // sun swinging round it all the while, so the shadows sweep across the lawn.
   A: {
     label: 'Turntable',
-    length: 16,
+    length: 12,
     backdrop: ['#efe9df', '#b9b1a5', 'rgba(255,250,240,0.55)'],
     at(t) {
       const k = t / this.length;
-      // (the year in stretches, each eased, so it lingers on each season)
+      // (the year in stretches, at an even pace within each: in leaf by two seconds, autumn by five,
+      // snow by six and a half, the thaw at the end)
       const knots = [
         [0, 0],
-        [5, 80],
-        [7, 190],
-        [8.6, 222],
-        [10.4, 305],
-        [13.4, 340],
-        [16, 365],
+        [2.2, 70],
+        [4.0, 150],
+        [5.6, 222],
+        [7.0, 300],
+        [10.0, 335],
+        [12, 365],
       ];
       let i = 0;
       while (i < knots.length - 2 && t > knots[i + 1][0]) i++;
       const [t0, d0] = knots[i];
       const [t1, d1] = knots[i + 1];
-      const day = (78 + lerp(d0, d1, smooth(t0, t1, t))) % 365;
+      const day = (78 + lerp(d0, d1, Math.min(1, Math.max(0, (t - t0) / (t1 - t0))))) % 365;
       return {
         cam: { az: lerp(-35, 325, k), el: 24, dist: 138, fov: 30 },
         day,
         hours: 14.5,
         compass: lerp(-60, 300, k),
-        weather: t > 7.6 && t < 8.5 ? 'rain' : t > 9.2 && t < 12.9 ? 'snow' : 'clear',
-        rain: smooth(7.6, 7.85, t) * (1 - smooth(8.2, 8.5, t)),
-        snow: smooth(9.2, 9.8, t) * (1 - smooth(12.2, 12.9, t)),
+        weather: t > 4.9 && t < 5.6 ? 'rain' : t > 6.3 && t < 9.7 ? 'snow' : 'clear',
+        rain: smooth(4.9, 5.1, t) * (1 - smooth(5.35, 5.6, t)),
+        snow: smooth(6.3, 6.8, t) * (1 - smooth(9.1, 9.7, t)),
         blur: 0.35,
       };
     },
@@ -316,7 +317,7 @@ export function setup(manor, id) {
   // their branches over the edge as a model's would be; those rooted off it are taken away below)
   renderer.localClippingEnabled = true;
   const isTree = (o) => {
-    for (let p = o; p; p = p.parent) if (p.name === 'Blossom') return true;
+    if (o.isInstancedMesh) for (let p = o; p; p = p.parent) if (p.name === 'Blossom') return true;
     return o.isInstancedMesh && o.parent === manor.landscape?.group && !o.material?.isShaderMaterial;
   };
   const treeMats = new Set();
@@ -349,14 +350,35 @@ export function setup(manor, id) {
     const m = new THREE.Matrix4();
     const p = new THREE.Vector3();
     const zero = new THREE.Matrix4().makeScale(0, 0, 0);
+    const crowns = manor.landscape?.crowns ?? [];
+    const off = (x, z) => x < BOX.x0 || x > BOX.x1 || z < BOX.z0 || z > BOX.z1;
+    const inBlossom = (o) => {
+      for (let q = o; q; q = q.parent) if (q.name === 'Blossom') return true;
+      return false;
+    };
     scene.traverse((o) => {
       if (!o.isInstancedMesh) return;
       o.updateMatrixWorld(true);
+      const blossom = inBlossom(o);
       let changed = false;
       for (let i = 0; i < o.count; i++) {
         o.getMatrixAt(i, m);
         p.setFromMatrixPosition(m).applyMatrix4(o.matrixWorld);
-        if (p.x < BOX.x0 || p.x > BOX.x1 || p.z < BOX.z0 || p.z > BOX.z1) {
+        let gone = off(p.x, p.z);
+        if (blossom && crowns.length) {
+          // (the tree it flowers on: the nearest crown's trunk decides)
+          let best = null;
+          let bd = Infinity;
+          for (const c of crowns) {
+            const d = Math.hypot(c.x - p.x, c.z - p.z);
+            if (d < bd) {
+              bd = d;
+              best = c;
+            }
+          }
+          gone = off(best.x, best.z);
+        }
+        if (gone) {
           o.setMatrixAt(i, zero);
           changed = true;
         }

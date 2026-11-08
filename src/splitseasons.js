@@ -19,15 +19,20 @@ import * as THREE from 'three';
 import { seasonAt, seasonUniforms, dateLabel } from './season.js';
 import { weatherAt } from './weather.js';
 
-// the parts' seasons, in the order of the parts: two side by side (left, right), or four quarters
-// (top left, top right, bottom left, bottom right). All at two in the afternoon, the winter sun low.
+// the parts' seasons, in the order of the parts: two side by side (left, right), four quarters
+// (top left, top right, bottom left, bottom right), or four upright strips side by side, the year
+// from left to right ('v4'). All at two in the afternoon, the winter sun low.
 const SPRING = { day: 112, hours: 14, weather: 'clouds', name: 'Spring' };
 const SUMMER = { day: 188, hours: 14, weather: 'clear', name: 'Summer' };
 const AUTUMN = { day: 291, hours: 14, weather: 'clear', name: 'Autumn', tweak: { fog: 0.12 } }; // (a light haze)
 const WINTER = { day: 22, hours: 14, weather: 'snow', name: 'Winter', tweak: { snowing: 0.55, fog: 0.1 } }; // (snow falling, the house still to be seen)
+// how each is laid out: [columns, rows]
+const LAYOUTS = { 2: [2, 1], 4: [2, 2], v4: [4, 1] };
+
 export const SPLITS = {
   2: [SUMMER, WINTER],
   4: [SPRING, SUMMER, WINTER, AUTUMN],
+  v4: [SPRING, SUMMER, AUTUMN, WINTER],
 };
 
 /** A season's state: the uniforms' values and the weather, worked out once. */
@@ -89,7 +94,9 @@ export class SplitSeasons {
 
   begin(n) {
     if (!SPLITS[n]) return;
-    this.n = n;
+    this.id = n;
+    [this.cols, this.rows] = LAYOUTS[n];
+    this.n = this.cols * this.rows;
     this.states = SPLITS[n].map(stateOf);
     const t = this.tod;
     // each season's environment map, made now (TimeOfDay's own is kept aside meanwhile)
@@ -124,7 +131,8 @@ export class SplitSeasons {
     this.quality.adaptive = false; // (the parts make the frame rate say nothing about the resolution: _adapt)
     this._ratio = this.quality.ratio;
     this._fps = { since: performance.now() + 2000, frames: 0 }; // (after the first moments, while the maps are made)
-    this.quality.split = n;
+    this.quality.split = this.n;
+    this.quality.splitLayout = [this.cols, this.rows];
     this.quality.apply();
     this._oKey = '';
   }
@@ -132,6 +140,7 @@ export class SplitSeasons {
   end() {
     if (!this.n) return;
     this.n = 0;
+    this.id = null;
     const t = this.tod;
     // TimeOfDay's own environment map and shadow map back; the seasons' let go
     for (const st of this.states) st.env?.dispose();
@@ -147,6 +156,7 @@ export class SplitSeasons {
     sh.autoUpdate = this._shadow.auto;
     sh.needsUpdate = true;
     this.quality.split = 0;
+    this.quality.splitLayout = null;
     this.quality.adaptive = !this.quality.fixed && (this._wasAdaptive ?? true);
     if (this._ratio) this.quality.ratio = this._ratio;
     this.quality.apply();
@@ -184,8 +194,8 @@ export class SplitSeasons {
   /** The parts, in CSS pixels from the top left: [{ x, y, w, h }]. */
   _regions() {
     const { x: W, y: H } = this.renderer.getSize(this._size);
-    const cols = 2;
-    const rows = this.n >= 4 ? 2 : 1;
+    const cols = this.cols;
+    const rows = this.rows;
     const w = Math.ceil(W / cols);
     const h = Math.ceil(H / rows);
     const out = [];
@@ -195,7 +205,7 @@ export class SplitSeasons {
 
   /** Draws the picture in its parts (instead of Quality.render), each in its season. */
   render(dt, n) {
-    if (this.n !== n) {
+    if (this.id !== n) {
       this.end();
       this.begin(n);
     }
@@ -330,7 +340,7 @@ export class SplitSeasons {
     const r = this.renderer;
     const { x: W, y: H } = r.getSize(this._size);
     const buf = r.getDrawingBufferSize(this._buffer);
-    const key = `${this.n}:${buf.x}x${buf.y}`;
+    const key = `${this.id}:${buf.x}x${buf.y}`;
     if (key !== this._oKey) {
       this._oKey = key;
       const c = this.oCanvas;
@@ -356,9 +366,9 @@ export class SplitSeasons {
           g.stroke();
         }
       };
-      const midX = regions.length > 1 ? regions[1].x * sx : 0;
-      line(midX, 0, midX, buf.y);
-      if (this.n >= 4) line(0, regions[2].y * sy, buf.x, regions[2].y * sy);
+      // (between the columns, and between the rows)
+      for (let c = 1; c < this.cols; c++) line(regions[c].x * sx, 0, regions[c].x * sx, buf.y);
+      for (let r = 1; r < this.rows; r++) line(0, regions[r * this.cols].y * sy, buf.x, regions[r * this.cols].y * sy);
       // each part's label at its top left (below the flyby's film bar, for the top row)
       const bar = 0.105 * buf.y;
       g.font = `600 ${Math.round(26 * u)}px system-ui, -apple-system, 'Segoe UI', sans-serif`;
