@@ -8,6 +8,13 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.55.0, 8 November 2026
+
+- **Fireflies** instead of the glow-worms (*Fireflies on a June night*): five of them over the meadow behind the house, drifting, each flashing yellow-green in its own time, a quick bright flash and a slower fade, rising a little as it lights, a faint glow between.
+- **The summer garden party at dusk**: at the end of June, as the sun goes 9° below, under the luminous midsummer sky with the night-shining clouds over the roofline, the marquee glowing.
+- **A summer garden party by day** (a new sight): a July afternoon in full swing: bunting, parasols, a bar with lemonade and Pimm's, a cake table with a tiered cake and scones, picnic blankets and hampers, deckchairs, croquet laid out, a string quartet's dais with its instruments, balloons, flowers, and signs of the guests (boaters on chairs, half-drunk glasses).
+- **New Year's Eve** (and Day): the Christmas things give way (the wreaths, the presents, the reindeer, the red bows) to gold and silver balloons by the door and at the gate, the coming year in lit marquee letters on the lawn, gold stars where the bows were, a mirror ball turning in the porch and a champagne table by the door; the Christmas lights stay on.
+
 ## 0.54.0, 8 November 2026
 
 - **The intro, again**: no tree split in half any more (the blossom goes with its tree when a tree outside the model is left out); the seasons come in sooner (in leaf by two seconds, autumn by five, snow by six and a half), the whole loop twelve seconds, the sun once round it, a little quicker. 3.7 MB in full HD, 1 MB on a phone.

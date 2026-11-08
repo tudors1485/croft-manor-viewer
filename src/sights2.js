@@ -12,7 +12,12 @@
 //   folding chairs, plates, glasses, cutlery, flowers, candles in hurricane lamps and wine; festoon
 //   lights swagged from the king poles, and more strung out over the lawn in front, where two bistro
 //   tables stand; a gramophone on a side table plays (a recording, if there is one: `party-music`).
-//   At dusk the lights come up and the marquee glows.
+//   At dusk the lights come up and the marquee glows. By day (mode 'day') the party is in full swing
+//   and dressed for the afternoon: bunting criss-crossing, parasols over the bistro tables, a bar of
+//   lemonade and Pimm's, a cake table, picnic blankets and hampers, striped deckchairs, croquet laid
+//   out on the lawn, a string quartet's chairs, stands and instruments on a little dais, balloons
+//   tied to the posts, flowers in urns, and the guests' traces: a hat on a chair, glasses half drunk,
+//   a napkin dropped on the grass.
 //
 // The balloons and the marquee are drawn here; the chairs and the bistro tables are James Ray Cock's
 // "Outdoor Table Chair Set 01" (Poly Haven, CC0), and the gramophone is Don Carson's (CC BY 3.0), both loaded
@@ -727,10 +732,17 @@ export class GardenParty {
    * @param {(x: number, z: number) => number} o.ground
    * @param {{ sample: Function, has?: Function, onStopMusic?: Function }} [o.sound]
    * @param {object[]} [o.obstacles] (the tables, the king poles and the bistro tables are added)
+   * @param {(x: number, z: number) => boolean} [o.isGrass] whether there is lawn at a point (the day's
+   *   dressing goes only on the lawn)
    */
-  constructor(scene, { at, ground, sound = null, obstacles = [] }) {
+  constructor(scene, { at, ground, sound = null, obstacles = [], isGrass = () => true }) {
     this.sound = sound;
     this.at = at;
+    this.ground = ground;
+    this.isGrass = isGrass;
+    this.obstacles = obstacles;
+    this.mode = 'evening'; // 'day': the afternoon party, dressed for it (built when first wanted)
+    this.day = null;
     this.group = new THREE.Group();
     this.group.name = 'Garden party';
     this.group.userData.sight = this;
@@ -936,6 +948,7 @@ export class GardenParty {
     }
     this.gramophoneAt = new THREE.Vector3(-2.55, H, 5.3);
     this.musicAt = new THREE.Vector3(this.at.x - 2.55, this.y0 + 1.2, this.at.z + 5.3);
+    this.gramophoneMusicAt = this.musicAt.clone();
     // the place settings: a plate, a napkin on it, a knife and fork, a glass
     const seats = [];
     for (const tx of tables) for (let k = 0; k < 6; k++) for (const side of [-1, 1]) seats.push([tx, -2.75 + k * 1.1, side]);
@@ -1140,6 +1153,531 @@ export class GardenParty {
     this.group.add(this.lights);
   }
 
+  /**
+   * The afternoon party's dressing, laid out round the marquee on the lawn (each piece only where
+   * there is grass and nothing standing): built the first time a day party is wanted.
+   */
+  _dressForDay() {
+    const g = new THREE.Group();
+    g.name = 'Garden party by day';
+    this.day = g;
+    this.group.add(g);
+    const at = this.at;
+    const ok = (x, z, r = 0.6) => {
+      const wx = at.x + x;
+      const wz = at.z + z;
+      for (const [dx, dz] of [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]]) if (!this.isGrass(wx + dx, wz + dz)) return false;
+      return !this.obstacles.some((o) => !o.when && Math.hypot(o.x - wx, o.z - wz) < (o.r ?? 0) + r);
+    };
+    const y = (x, z) => this.ground(at.x + x, at.z + z) - this.y0; // (the lawn's height there, in the group)
+    const H = TABLE_H;
+    const R = (n) => (Math.random() - 0.5) * n;
+    // shared materials (so the pieces merge into a few meshes)
+    const white = new THREE.MeshStandardMaterial({ color: 0xf2efe8, roughness: 0.55 });
+    const wood = new THREE.MeshStandardMaterial({ color: 0x8a6440, roughness: 0.7 });
+    const darkWood = new THREE.MeshStandardMaterial({ color: 0x4a2c18, roughness: 0.45 });
+    const brass = new THREE.MeshStandardMaterial({ color: 0xc9a14a, metalness: 0.9, roughness: 0.3 });
+    const iron = new THREE.MeshStandardMaterial({ color: 0x2a2826, metalness: 0.6, roughness: 0.5 });
+    const linenMat = new THREE.MeshStandardMaterial({ map: linen(), roughness: 0.92, side: THREE.DoubleSide });
+    const glassMat = new THREE.MeshStandardMaterial({ color: 0xeef4f6, transparent: true, opacity: 0.28, roughness: 0.04, depthWrite: false, side: THREE.DoubleSide });
+    const china = new THREE.MeshStandardMaterial({ color: 0xf7f5f0, roughness: 0.22 });
+    const tinted = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6 });
+    const add = (geo, mat, x, yy, z, ry = 0, tint, rx = 0, rz = 0) => {
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(x, yy, z);
+      m.rotation.set(rx, ry, rz);
+      if (tint !== undefined) m.userData.tint = tint;
+      m.castShadow = m.receiveShadow = true;
+      g.add(m);
+      return m;
+    };
+    const glasses = [];
+    const drinks = []; // [matrix, colour]: what is left in the glasses
+    const glassAt = (x, yy, z, colour, left = 0.5) => {
+      glasses.push(mat4(x, yy, z));
+      if (colour !== null) drinks.push([mat4(x, yy + 0.09, z, 0, 1), colour, left]);
+    };
+    const PIMMS = 0x9a4a1e;
+    const LEMON = 0xf3e7a0;
+    const FIZZ = 0xf2dd9a;
+
+    // --- parasols over the bistro tables, cream canvas on a wooden pole ---
+    const canopy = new THREE.ConeGeometry(1.05, 0.36, 16, 1, true);
+    const canvasMat = new THREE.MeshStandardMaterial({ map: canvasCloth(), roughness: 0.85, side: THREE.DoubleSide });
+    for (const [x, z] of this.bistro) {
+      add(new THREE.CylinderGeometry(0.022, 0.026, 2.2, 8).translate(0, 1.1, 0), wood, x, y(x, z), z);
+      add(canopy, canvasMat, x, y(x, z) + 2.1, z, 0.2);
+      add(new THREE.SphereGeometry(0.035, 8, 6), wood, x, y(x, z) + 2.31, z);
+      // (on each: two glasses, half drunk, and a jug)
+      glassAt(x + 0.12, y(x, z) + 0.74, z + 0.08, PIMMS, 0.45);
+      glassAt(x - 0.1, y(x, z) + 0.74, z - 0.1, LEMON, 0.3);
+    }
+
+    // --- the bar: a long table, clothed, with lemonade and Pimm's, glasses, lemons, an ice bucket ---
+    const bar = [5.4, 2.2];
+    if (ok(bar[0], bar[1], 1.4)) {
+      const cloth = tablecloth(0.75, 2.6, H, linenMat);
+      for (const m of [...cloth.children]) {
+        m.position.x += bar[0];
+        m.position.z += bar[1];
+        m.position.y += y(...bar);
+        m.userData.keep = false;
+        g.add(m);
+      }
+      const yb = y(...bar) + H;
+      // two glass dispensers on stands, lemonade and Pimm's, a tap on each
+      const jar = lathe([
+        [0, 0],
+        [0.11, 0],
+        [0.12, 0.03],
+        [0.12, 0.3],
+        [0.1, 0.33],
+        [0, 0.33],
+      ], 20);
+      const liquid = lathe([
+        [0, 0],
+        [0.11, 0],
+        [0.115, 0.03],
+        [0.115, 0.22],
+        [0, 0.22],
+      ], 20);
+      for (const [dz, col] of [[-0.8, LEMON], [-0.3, PIMMS]]) {
+        add(new THREE.CylinderGeometry(0.1, 0.12, 0.12, 16).translate(0, 0.06, 0), brass, bar[0], yb, bar[1] + dz);
+        add(jar, glassMat, bar[0], yb + 0.12, bar[1] + dz).userData.keep = true;
+        add(liquid, new THREE.MeshStandardMaterial({ color: col, roughness: 0.15, transparent: true, opacity: 0.85 }), bar[0], yb + 0.125, bar[1] + dz).userData.keep = true;
+        add(new THREE.CylinderGeometry(0.012, 0.012, 0.06, 8).rotateZ(Math.PI / 2), brass, bar[0] - 0.14, yb + 0.16, bar[1] + dz);
+      }
+      // lemons in a bowl, an ice bucket with bottles, rows of glasses
+      add(lathe([
+        [0, 0],
+        [0.09, 0],
+        [0.13, 0.06],
+        [0.14, 0.08],
+        [0, 0.08],
+      ], 20), china, bar[0], yb, bar[1] + 0.25);
+      for (let i = 0; i < 7; i++) add(new THREE.SphereGeometry(0.034, 10, 8).scale(1, 0.85, 1.25), tinted, bar[0] + R(0.14), yb + 0.08 + Math.random() * 0.03, bar[1] + 0.25 + R(0.14), Math.random() * 6, 0xe8cf2a);
+      add(lathe([
+        [0, 0],
+        [0.1, 0],
+        [0.12, 0.22],
+        [0.125, 0.23],
+        [0, 0.23],
+      ], 20), new THREE.MeshStandardMaterial({ color: 0xd8dadc, metalness: 1, roughness: 0.25 }), bar[0], yb, bar[1] + 0.75);
+      for (let i = 0; i < 3; i++) add(new THREE.CylinderGeometry(0.035, 0.035, 0.3, 12).translate(0, 0.15, 0), tinted, bar[0] + Math.cos(i * 2.1) * 0.05, yb + 0.06, bar[1] + 0.75 + Math.sin(i * 2.1) * 0.05, 0, i === 1 ? 0x2a5530 : 0x18381e, R(0.3), R(0.3));
+      for (let k = 0; k < 12; k++) glassAt(bar[0] + 0.22 - (k % 2) * 0.12, yb, bar[1] + 1.05 + Math.floor(k / 2) * 0.03 - 0.15 + (k % 6) * 0.03, null);
+      // a chalkboard on an easel beside it
+      const board = canvasTexture((c, w, h) => {
+        c.fillStyle = '#5c3a1e';
+        c.fillRect(0, 0, w, h);
+        c.fillStyle = '#23272a';
+        c.fillRect(10, 10, w - 20, h - 20);
+        c.fillStyle = '#f4f1e8';
+        c.textAlign = 'center';
+        c.font = 'italic 600 30px Georgia, serif';
+        c.fillText("Pimm's", w / 2, 62);
+        c.font = 'italic 400 24px Georgia, serif';
+        c.fillText('Lemonade', w / 2, 112);
+        c.fillText('Elderflower', w / 2, 152);
+        c.fillText('Strawberries', w / 2, 192);
+      }, 256, 256);
+      const easel = [bar[0] + 0.2, bar[1] - 1.75];
+      add(new THREE.PlaneGeometry(0.6, 0.6), new THREE.MeshStandardMaterial({ map: board, roughness: 0.9 }), easel[0], y(...easel) + 1.0, easel[1], Math.PI / 2 + 0.45, undefined, -0.12).userData.keep = true;
+      for (const s of [-1, 1]) add(new THREE.BoxGeometry(0.03, 1.5, 0.03).translate(0, 0.75, 0), wood, easel[0] + 0.05, y(...easel), easel[1] + s * 0.25, 0, undefined, 0, 0.12);
+    }
+
+    // --- the cake table: a round table, a three-tiered cake, scones and strawberries on a stand, a jug of Pimm's, teacups ---
+    const cake = [5.2, -2.4];
+    if (ok(cake[0], cake[1], 0.8)) {
+      add(lathe([
+        [0, H],
+        [0.5, H],
+        [0.52, H - 0.02],
+        [0.54, H - 0.2],
+        [0.58, 0.25],
+        [0.6, 0.02],
+        [0, 0.02],
+      ], 36), linenMat, cake[0], y(...cake), cake[1]);
+      const yc = y(...cake) + H;
+      const icing = new THREE.MeshStandardMaterial({ color: 0xfbf7ee, roughness: 0.5 });
+      add(new THREE.CylinderGeometry(0.03, 0.12, 0.08, 16).translate(0, 0.04, 0), china, cake[0], yc, cake[1]);
+      let yy = yc + 0.08;
+      for (const r of [0.16, 0.12, 0.08]) {
+        add(new THREE.CylinderGeometry(r, r, 0.1, 28).translate(0, 0.05, 0), icing, cake[0], yy, cake[1]);
+        for (let i = 0; i < Math.round(r * 60); i++) {
+          const a = (i / Math.round(r * 60)) * Math.PI * 2;
+          add(new THREE.SphereGeometry(0.014, 8, 6).scale(1, 1.2, 1), tinted, cake[0] + Math.cos(a) * r, yy + 0.1, cake[1] + Math.sin(a) * r, 0, i % 3 ? 0xc81d2a : 0xf4a6b6);
+        }
+        yy += 0.1;
+      }
+      add(new THREE.SphereGeometry(0.03, 10, 8), tinted, cake[0], yy + 0.02, cake[1], 0, 0xe85a7a);
+      // a three-tiered stand: scones with jam and cream, and strawberries
+      const st = [cake[0] + 0.28, cake[1] + 0.22];
+      add(new THREE.CylinderGeometry(0.006, 0.006, 0.42, 6).translate(0, 0.21, 0), brass, st[0], yc, st[1]);
+      for (const [h, r] of [[0.02, 0.15], [0.18, 0.12], [0.33, 0.09]]) {
+        add(new THREE.CylinderGeometry(r, r * 0.92, 0.012, 24), china, st[0], yc + h, st[1]);
+        for (let i = 0; i < Math.round(r * 40); i++) {
+          const a = (i / Math.round(r * 40)) * Math.PI * 2;
+          const sx = st[0] + Math.cos(a) * r * 0.6;
+          const sz = st[1] + Math.sin(a) * r * 0.6;
+          if (h > 0.3) add(new THREE.SphereGeometry(0.018, 8, 6).scale(1, 1.25, 1), tinted, sx, yc + h + 0.025, sz, 0, 0xc4182a);
+          else {
+            add(new THREE.CylinderGeometry(0.03, 0.033, 0.035, 12).translate(0, 0.018, 0), tinted, sx, yc + h + 0.006, sz, 0, 0xc89a5a);
+            add(new THREE.SphereGeometry(0.016, 8, 6).scale(1, 0.6, 1), tinted, sx, yc + h + 0.045, sz, 0, (i % 2 ? 0x9c1626 : 0xfff6dd));
+          }
+        }
+      }
+      // the jug of Pimm's: fruit and mint on top; teacups
+      const jug = [cake[0] - 0.25, cake[1] + 0.25];
+      add(lathe([
+        [0, 0],
+        [0.06, 0],
+        [0.075, 0.08],
+        [0.07, 0.2],
+        [0.05, 0.24],
+        [0.055, 0.26],
+        [0, 0.26],
+      ], 20), glassMat, jug[0], yc, jug[1]).userData.keep = true;
+      add(lathe([
+        [0, 0.005],
+        [0.058, 0.005],
+        [0.071, 0.08],
+        [0.066, 0.19],
+        [0, 0.19],
+      ], 20), new THREE.MeshStandardMaterial({ color: PIMMS, roughness: 0.12, transparent: true, opacity: 0.85 }), jug[0], yc, jug[1]).userData.keep = true;
+      for (let i = 0; i < 6; i++) add(new THREE.CylinderGeometry(0.022, 0.022, 0.006, 12), tinted, jug[0] + R(0.06), yc + 0.19 + i * 0.004, jug[1] + R(0.06), Math.random() * 3, i % 2 ? 0xf08a1c : 0xe94a3a, Math.random(), 0);
+      for (let i = 0; i < 5; i++) add(new THREE.ConeGeometry(0.012, 0.04, 5), tinted, jug[0] + R(0.06), yc + 0.21, jug[1] + R(0.06), 0, 0x3e7a32, R(1), R(1));
+      for (let i = 0; i < 4; i++) {
+        const a = 2.4 + i * 0.5;
+        add(lathe([
+          [0, 0],
+          [0.03, 0],
+          [0.045, 0.05],
+          [0.047, 0.055],
+          [0, 0.055],
+        ], 16), china, cake[0] + Math.cos(a) * 0.36, yc, cake[1] + Math.sin(a) * 0.36);
+      }
+    }
+
+    // --- picnic blankets with hampers, and striped deckchairs, on the lawn ---
+    const tartan = (base, line1, line2) =>
+      canvasTexture((c, w, h) => {
+        c.fillStyle = base;
+        c.fillRect(0, 0, w, h);
+        for (const [col, step, wd] of [[line1, 64, 18], [line2, 32, 4]]) {
+          c.fillStyle = col;
+          c.globalAlpha = 0.55;
+          for (let p = 0; p < w; p += step) {
+            c.fillRect(p, 0, wd, h);
+            c.fillRect(0, p, w, wd);
+          }
+        }
+        c.globalAlpha = 1;
+      }, 256, 256, { repeat: [2, 2] });
+    const blankets = [
+      [7.6, 7.2, 0.4, tartan('#8a1f22', '#1d3a2a', '#e9d27a')],
+      [9.6, 3.0, -0.3, tartan('#23406b', '#2e6a3c', '#f2efe6')],
+      [-6.2, 8.4, 0.9, tartan('#2f5a34', '#7a1c22', '#f0d47a')],
+    ];
+    const hamperMat = new THREE.MeshStandardMaterial({ map: wickerTexture(), roughness: 0.85 });
+    for (const [x, z, ry, tex] of blankets) {
+      if (!ok(x, z, 1.0)) continue;
+      const by = y(x, z) + 0.012;
+      add(new THREE.PlaneGeometry(1.7, 1.35).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95 }), x, by, z, ry).userData.keep = true;
+      // a hamper, its lid up, plates and glasses out, a bottle, a book left open
+      const hx = x + Math.cos(ry) * 0.55;
+      const hz = z - Math.sin(ry) * 0.55;
+      add(new THREE.BoxGeometry(0.48, 0.26, 0.32).translate(0, 0.13, 0), hamperMat, hx, by, hz, ry);
+      add(new THREE.BoxGeometry(0.48, 0.03, 0.32).translate(0, 0, -0.16), hamperMat, hx - Math.sin(ry) * 0.16, by + 0.26, hz - Math.cos(ry) * 0.16, ry, undefined, -1.1);
+      for (const [px, pz] of [[-0.3, 0.2], [0.1, 0.35]]) add(new THREE.CylinderGeometry(0.11, 0.1, 0.01, 20), china, x + px, by + 0.005, z + pz);
+      glassAt(x - 0.42, by, z + 0.42, FIZZ, 0.35);
+      glassAt(x + 0.32, by, z + 0.5, PIMMS, 0.6);
+      add(new THREE.CylinderGeometry(0.036, 0.036, 0.28, 12).translate(0, 0.14, 0), tinted, x - 0.1, by, z - 0.1, 0, 0x163a1e, Math.PI / 2 - 0.05, 0.4);
+      add(new THREE.BoxGeometry(0.22, 0.025, 0.16), tinted, x - 0.45, by + 0.012, z - 0.35, 0.6, 0x7a2a22);
+      add(new THREE.BoxGeometry(0.2, 0.004, 0.15), tinted, x - 0.45, by + 0.027, z - 0.35, 0.6, 0xf3eedd);
+    }
+    // deckchairs: a wooden frame, a striped sling sagging between the rails
+    const stripes = (a, b) =>
+      canvasTexture((c, w, h) => {
+        for (let x = 0; x < w; x += 16) {
+          c.fillStyle = (x / 16) % 2 ? a : b;
+          c.fillRect(x, 0, 16, h);
+        }
+      }, 128, 32);
+    const slingGeo = new THREE.PlaneGeometry(0.5, 1.15, 1, 12);
+    {
+      const p = slingGeo.attributes.position;
+      for (let i = 0; i < p.count; i++) {
+        const v = p.getY(i) / 1.15 + 0.5; // 0 at the foot, 1 at the head
+        p.setZ(i, -Math.sin(v * Math.PI) * 0.14);
+      }
+      slingGeo.computeVertexNormals();
+    }
+    const deckchairs = [
+      [8.2, 9.2, 2.6, stripes('#c8302a', '#f4f0e6')],
+      [9.3, 8.4, 2.4, stripes('#2a4f8a', '#f4f0e6')],
+      [10.2, 1.0, 1.9, stripes('#2f7a4a', '#f4f0e6')],
+      [-5.4, 10.0, -2.6, stripes('#d89a2a', '#f4f0e6')],
+    ];
+    for (const [x, z, ry, tex] of deckchairs) {
+      if (!ok(x, z, 0.6)) continue;
+      const cy = y(x, z);
+      const chair = new THREE.Group();
+      for (const s of [-1, 1]) {
+        chair.add(new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.035, 1.25).translate(0, 0, -0.6).rotateX(0.9).translate(s * 0.29, 0.02, 0.35), wood));
+        chair.add(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.75).translate(0, 0, -0.35).rotateX(-0.55).translate(s * 0.29, 0.02, -0.15), wood));
+      }
+      const sling = new THREE.Mesh(slingGeo, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85, side: THREE.DoubleSide }));
+      sling.rotation.x = -Math.PI / 2 + 0.9;
+      sling.position.set(0, 0.5, -0.1);
+      chair.add(sling);
+      chair.position.set(x, cy, z);
+      chair.rotation.y = ry;
+      chair.traverse((o) => o.isMesh && (o.castShadow = o.receiveShadow = true));
+      g.add(chair);
+    }
+
+    // --- croquet laid out on the lawn: six hoops, the peg, four balls, the mallets ---
+    const cq = [9.0, -1.0];
+    if (ok(cq[0], cq[1], 1.6) && ok(cq[0] + 1.4, cq[1] + 1.4, 0.5) && ok(cq[0] - 1.4, cq[1] - 1.4, 0.5)) {
+      const hoop = new THREE.TorusGeometry(0.1, 0.006, 6, 16, Math.PI);
+      for (const [hx, hz] of [[-1.3, -1.6], [1.3, -1.6], [-0.5, 0], [0.5, 0], [-1.3, 1.6], [1.3, 1.6]]) add(hoop, white, cq[0] + hx, y(cq[0] + hx, cq[1] + hz), cq[1] + hz, Math.PI / 2 + 0.1);
+      const peg = canvasTexture((c, w, h) => {
+        c.fillStyle = '#f2efe8';
+        c.fillRect(0, 0, w, h);
+        ['#2a4f9a', '#c8302a', '#1c1c1c', '#e0b62a'].forEach((col, i) => {
+          c.fillStyle = col;
+          c.fillRect(0, i * 10, w, 8);
+        });
+      }, 16, 64);
+      add(new THREE.CylinderGeometry(0.02, 0.02, 0.46, 10).translate(0, 0.23, 0), new THREE.MeshStandardMaterial({ map: peg, roughness: 0.6 }), cq[0], y(...cq), cq[1]).userData.keep = true;
+      for (const [bx, bz, col] of [[0.7, 0.9, 0x2a4f9a], [-0.9, -0.4, 0xc8302a], [1.1, -1.3, 0x1c1c1c], [-0.2, 1.4, 0xe0b62a]]) add(new THREE.SphereGeometry(0.046, 14, 10), tinted, cq[0] + bx, y(cq[0] + bx, cq[1] + bz) + 0.046, cq[1] + bz, 0, col);
+      for (const [mx, mz, ry, col] of [[0.9, 0.5, 0.6, 0x2a4f9a], [-1.1, 0.2, 2.1, 0xc8302a]]) {
+        const yy = y(cq[0] + mx, cq[1] + mz);
+        add(new THREE.CylinderGeometry(0.012, 0.014, 0.9, 8).rotateZ(Math.PI / 2).translate(0.45, 0.03, 0), wood, cq[0] + mx, yy, cq[1] + mz, ry);
+        add(new THREE.CylinderGeometry(0.045, 0.045, 0.23, 14).rotateX(Math.PI / 2), tinted, cq[0] + mx, yy + 0.045, cq[1] + mz, ry, col);
+      }
+    }
+
+    // --- a little dais, the string quartet's chairs, stands and instruments, between the sets ---
+    const dq = [-6.6, 2.2];
+    if (ok(dq[0], dq[1], 1.8)) {
+      const yd = y(...dq);
+      add(new THREE.CylinderGeometry(1.7, 1.75, 0.16, 40).translate(0, 0.08, 0), wood, dq[0], yd, dq[1]);
+      const body = (() => {
+        // a violin's outline: two bouts and a waist
+        const sh = new THREE.Shape();
+        sh.moveTo(0, -0.18);
+        sh.bezierCurveTo(0.12, -0.18, 0.11, -0.04, 0.06, -0.01);
+        sh.bezierCurveTo(0.085, 0.03, 0.1, 0.16, 0, 0.16);
+        sh.bezierCurveTo(-0.1, 0.16, -0.085, 0.03, -0.06, -0.01);
+        sh.bezierCurveTo(-0.11, -0.04, -0.12, -0.18, 0, -0.18);
+        return new THREE.ExtrudeGeometry(sh, { depth: 0.04, bevelEnabled: true, bevelSize: 0.008, bevelThickness: 0.008, bevelSegments: 2, curveSegments: 10 }).translate(0, 0, -0.02);
+      })();
+      const varnish = new THREE.MeshStandardMaterial({ color: 0x7a3a14, roughness: 0.25, metalness: 0.05 });
+      const ebony = new THREE.MeshStandardMaterial({ color: 0x141010, roughness: 0.4 });
+      const paper = new THREE.MeshStandardMaterial({ color: 0xf6f2e4, roughness: 0.9, side: THREE.DoubleSide });
+      // four chairs in an arc facing the lawn (+z, -x), a stand before each
+      for (let i = 0; i < 4; i++) {
+        const a = -0.9 + i * 0.6;
+        const cx = dq[0] + Math.sin(a) * 1.0;
+        const cz = dq[1] - Math.cos(a) * 0.4;
+        const face = Math.PI + a * 0.6 - 0.5; // (towards the guests)
+        const chair = new THREE.Group();
+        chair.add(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.03, 20).translate(0, 0.46, 0), darkWood));
+        for (const [lx, lz] of [[-0.14, -0.14], [0.14, -0.14], [-0.14, 0.14], [0.14, 0.14]]) chair.add(new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.46, 6).translate(lx, 0.23, lz), darkWood));
+        chair.add(new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.012, 6, 16, Math.PI).rotateX(-0.1).translate(0, 0.62, -0.17), darkWood));
+        for (const lx of [-0.17, 0.17]) chair.add(new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.18, 6).translate(lx, 0.54, -0.18), darkWood));
+        chair.position.set(cx, yd + 0.16, cz);
+        chair.rotation.y = face;
+        chair.traverse((o) => o.isMesh && (o.castShadow = true));
+        g.add(chair);
+        // the stand: a tripod, a rod, a desk with music on it
+        const sx = cx + Math.sin(face + Math.PI) * -0.62;
+        const sz = cz + Math.cos(face + Math.PI) * -0.62;
+        const stand = new THREE.Group();
+        stand.add(new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 1.05, 6).translate(0, 0.53, 0), iron));
+        for (let k = 0; k < 3; k++) stand.add(new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.32, 5).translate(0, -0.16, 0).rotateX(0.9).rotateY((k / 3) * Math.PI * 2).translate(0, 0.25, 0), iron));
+        stand.add(new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.32, 0.01).rotateX(-0.45).translate(0, 1.12, 0.02), iron));
+        stand.add(new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.29).rotateX(-0.45).translate(0, 1.12, 0.03), paper));
+        stand.position.set(sx, yd + 0.16, sz);
+        stand.rotation.y = face + Math.PI;
+        stand.traverse((o) => o.isMesh && (o.castShadow = true));
+        g.add(stand);
+        // the instruments laid on the chairs, and the cello against the last
+        if (i < 3) {
+          const inst = new THREE.Group();
+          const sc = i === 2 ? 1.15 : 1; // (the viola a little bigger)
+          inst.add(new THREE.Mesh(body, varnish));
+          inst.add(new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.26, 0.02).translate(0, 0.29, 0.03), ebony));
+          inst.add(new THREE.Mesh(new THREE.TorusGeometry(0.018, 0.008, 6, 10).translate(0, 0.43, 0.03), varnish));
+          inst.scale.setScalar(sc);
+          inst.rotation.set(-Math.PI / 2, 0, face + 0.4);
+          inst.position.set(cx, yd + 0.16 + 0.5, cz);
+          g.add(inst);
+        } else {
+          const cello = new THREE.Group();
+          cello.add(new THREE.Mesh(body, varnish));
+          cello.add(new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.3, 0.02).translate(0, 0.27, 0.03), ebony));
+          cello.add(new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.18, 5).translate(0, -0.27, 0), iron));
+          cello.scale.setScalar(2.7);
+          cello.position.set(cx + 0.3, yd + 0.16 + 0.68, cz + 0.12);
+          cello.rotation.set(0, face, -0.22);
+          cello.traverse((o) => o.isMesh && (o.castShadow = true));
+          g.add(cello);
+        }
+      }
+      this.quartetAt = new THREE.Vector3(at.x + dq[0], this.y0 + 1.2, at.z + dq[1]);
+    }
+
+    // --- flowers in urns either side of the marquee's open end ---
+    const blooms = [];
+    const bloomCols = [];
+    const palette = [0xf2a6b8, 0xfffaf0, 0xc94a6a, 0xf6d36a, 0xb7a6e8].map((c) => new THREE.Color(c));
+    const urnGeo = lathe([
+      [0, 0],
+      [0.14, 0],
+      [0.15, 0.05],
+      [0.06, 0.12],
+      [0.06, 0.3],
+      [0.18, 0.42],
+      [0.24, 0.58],
+      [0.25, 0.62],
+      [0, 0.62],
+    ], 24);
+    const stone = new THREE.MeshStandardMaterial({ color: 0xd9d2c2, roughness: 0.9 });
+    for (const x of [-4.4, 4.4]) {
+      const z = L / 2 + 0.5;
+      if (!ok(x, z, 0.4)) continue;
+      const yu = y(x, z);
+      add(new THREE.BoxGeometry(0.4, 0.5, 0.4).translate(0, 0.25, 0), stone, x, yu, z);
+      add(urnGeo, stone, x, yu + 0.5, z);
+      for (let i = 0; i < 140; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const r = Math.sqrt(Math.random()) * 0.34;
+        const isLeaf = i % 3 === 0;
+        blooms.push(mat4(x + Math.cos(a) * r, yu + 1.12 + (0.34 - r) * 0.7 + Math.random() * 0.05, z + Math.sin(a) * r, Math.random() * 6, isLeaf ? 1.2 : 0.8 + Math.random() * 0.5, Math.random(), 0));
+        bloomCols.push(isLeaf ? new THREE.Color(0x4d6b3c) : palette[i % palette.length]);
+      }
+    }
+    if (blooms.length) g.add(instances(new THREE.IcosahedronGeometry(0.035, 0).scale(1, 0.75, 1), new THREE.MeshStandardMaterial({ roughness: 0.8 }), blooms, { colours: bloomCols }));
+
+    // --- the guests' traces: straw boaters on two chairs, napkins dropped on the grass ---
+    const straw = canvasTexture((c, w, h) => {
+      c.fillStyle = '#d9bf7e';
+      c.fillRect(0, 0, w, h);
+      for (let yy = 0; yy < h; yy += 3) {
+        c.fillStyle = `rgba(120,90,40,${0.15 + Math.random() * 0.15})`;
+        c.fillRect(0, yy, w, 1);
+      }
+    }, 64, 64, { repeat: [6, 1] });
+    const boater = lathe([
+      [0, 0.075],
+      [0.11, 0.075],
+      [0.11, 0.012],
+      [0.2, 0.01],
+      [0.2, 0],
+      [0, 0.002],
+    ], 24);
+    const strawMat = new THREE.MeshStandardMaterial({ map: straw, roughness: 0.85 });
+    for (const k of [3, 14]) {
+      const s = this.seats[k];
+      if (!s) continue;
+      const [tx, z, side] = s;
+      add(boater, strawMat, tx + side * 0.78, y(tx, z) + 0.47, z, Math.random() * 3);
+      add(new THREE.CylinderGeometry(0.112, 0.112, 0.022, 24).translate(0, 0.045, 0), tinted, tx + side * 0.78, y(tx, z) + 0.47, z, 0, 0x1c2a4a);
+    }
+    for (const [x, z] of [[2.6, 8.0], [6.8, 5.2]]) if (ok(x, z, 0.3)) add(new THREE.BoxGeometry(0.3, 0.004, 0.3), tinted, x, y(x, z) + 0.006, z, Math.random() * 3, 0xb7c9ae, R(0.2), R(0.2));
+    // half-drunk glasses on the long tables
+    for (const [tx, z, side] of this.seats.filter((_, i) => i % 3 === 0)) glassAt(tx + side * 0.3 - side * 0.17, y(tx, z) + H, z + 0.16, [PIMMS, FIZZ, LEMON][Math.floor(Math.random() * 3)], 0.2 + Math.random() * 0.5);
+
+    // the glasses, and what is left in them
+    const wineGlass = lathe([
+      [0.034, 0],
+      [0.036, 0.004],
+      [0.006, 0.009],
+      [0.004, 0.085],
+      [0.012, 0.09],
+      [0.03, 0.105],
+      [0.041, 0.135],
+      [0.04, 0.165],
+      [0.036, 0.19],
+    ]);
+    if (glasses.length) g.add(instances(wineGlass, glassMat, glasses));
+    if (drinks.length) {
+      const lq = lathe([
+        [0, 0.0],
+        [0.028, 0.0],
+        [0.037, 0.03],
+        [0.038, 0.05],
+        [0, 0.05],
+      ], 16);
+      const list = drinks.map(([m, , left]) => m.clone().multiply(new THREE.Matrix4().makeScale(1, 0.4 + left, 1)));
+      g.add(instances(lq, new THREE.MeshStandardMaterial({ roughness: 0.12, transparent: true, opacity: 0.82 }), list, { colours: drinks.map(([, c]) => new THREE.Color(c)) }));
+    }
+
+    // --- bunting criss-crossing: from the marquee's corners to the posts, across the open end, out to two poles ---
+    const flags = [];
+    const flagCols = [0xc8302a, 0xf4f0e6, 0x2a4f9a, 0xe0b62a, 0x3e8a4a, 0xf2a6b8].map((c) => new THREE.Color(c));
+    const flagColList = [];
+    const strings = [];
+    const run = (a, b, drop) => {
+      const n = Math.max(3, Math.round(a.distanceTo(b) / 0.32));
+      const pts = [];
+      for (let k = 0; k <= n; k++) {
+        const t = k / n;
+        const p = a.clone().lerp(b, t);
+        p.y -= Math.sin(t * Math.PI) * drop;
+        pts.push(p);
+      }
+      strings.push(...pts.slice(1).flatMap((p, k) => [pts[k], p]));
+      const dir = b.clone().sub(a).setY(0).normalize();
+      const ry = Math.atan2(-dir.z, dir.x);
+      for (let k = 1; k < n; k++) {
+        flags.push(mat4(pts[k].x, pts[k].y, pts[k].z, ry));
+        flagColList.push(flagCols[(k + strings.length) % flagCols.length]);
+      }
+    };
+    const E = EAVE - 0.08;
+    const poles = [];
+    for (const [px, pz] of [[8.6, -4.6], [8.8, 6.6]]) if (ok(px, pz, 0.3)) poles.push([px, pz]);
+    for (const [px, pz] of poles) add(new THREE.CylinderGeometry(0.03, 0.035, 2.9, 8).translate(0, 1.45, 0), white, px, y(px, pz), pz);
+    run(new THREE.Vector3(-W / 2, E, L / 2), new THREE.Vector3(3.2, 2.85, 10.5), 0.25);
+    run(new THREE.Vector3(W / 2, E, L / 2), new THREE.Vector3(-3.2, 2.85, 10.5), 0.25);
+    run(new THREE.Vector3(-W / 2, E - 0.25, L / 2), new THREE.Vector3(W / 2, E - 0.25, L / 2), 0.3);
+    for (const [px, pz] of poles) for (const z of [-3.2, 3.2]) if (Math.abs(z - pz) < 7) run(new THREE.Vector3(W / 2, E, z), new THREE.Vector3(px, y(px, pz) + 2.8, pz), 0.4);
+    if (poles.length === 2) run(new THREE.Vector3(poles[0][0], y(...poles[0]) + 2.8, poles[0][1]), new THREE.Vector3(poles[1][0], y(...poles[1]) + 2.8, poles[1][1]), 0.5);
+    const flagGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-0.1, 0, 0), new THREE.Vector3(0.1, 0, 0), new THREE.Vector3(0, -0.22, 0)]);
+    flagGeo.computeVertexNormals();
+    this.bunting = new THREE.Group();
+    this.bunting.add(instances(flagGeo, new THREE.MeshStandardMaterial({ roughness: 0.8, side: THREE.DoubleSide }), flags, { colours: flagColList }));
+    this.bunting.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(strings), new THREE.LineBasicMaterial({ color: 0xe8e2d4 })));
+    g.add(this.bunting);
+
+    // --- balloons tied to the festoon posts and the bar ---
+    this.balloonsTied = [];
+    const ties = [[-3.2, 10.5], [3.2, 10.5]];
+    if (this.day && ok(bar[0], bar[1], 1.4)) ties.push([bar[0] - 0.3, bar[1] + 1.25]);
+    const balloonGeo = new THREE.SphereGeometry(0.14, 16, 12).scale(1, 1.22, 1);
+    const bcols = [0xf2a6b8, 0xf4f0e6, 0xb7d3f2, 0xf6d36a];
+    let bi = 0;
+    for (const [tx, tz] of ties) {
+      const ty = y(tx, tz) + (Math.abs(tz - 10.5) < 0.01 ? 1.6 : H + 0.05);
+      for (let k = 0; k < 3; k++) {
+        const top = new THREE.Vector3(tx + R(0.5), ty + 1.1 + k * 0.18, tz + R(0.5));
+        const mesh = new THREE.Mesh(balloonGeo, new THREE.MeshStandardMaterial({ color: bcols[bi++ % bcols.length], roughness: 0.25, metalness: 0.05 }));
+        mesh.userData.keep = true;
+        mesh.position.copy(top);
+        mesh.castShadow = true;
+        g.add(mesh);
+        const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(tx, ty, tz), top.clone().setY(top.y - 0.17)]), new THREE.LineBasicMaterial({ color: 0xdddddd }));
+        line.userData.keep = true;
+        g.add(line);
+        this.balloonsTied.push({ mesh, line, at: top.clone(), ph: Math.random() * 6 });
+      }
+    }
+    mergeMeshes(g, tinted);
+  }
+
   /** The chairs, the bistro tables and the gramophone (models), once the party is on. */
   async load() {
     this.loaded = true;
@@ -1190,16 +1728,26 @@ export class GardenParty {
     }
   }
 
-  /** Midsummer weekends' evenings: Saturdays in June and July, from seven till midnight, when it's dry. */
+  /**
+   * Midsummer Saturdays in June and July, when it's dry: 'day' in the afternoon (one till seven),
+   * 'evening' from seven till midnight; otherwise null.
+   */
   static on(day, hours, rain) {
     const d = Math.floor(day);
     const date = new Date(Date.UTC(new Date().getFullYear(), 0, 1 + d));
-    return d >= 152 && d <= 212 && date.getUTCDay() === 6 && hours > 19 && hours < 24 && rain < 0.1;
+    if (!(d >= 152 && d <= 212 && date.getUTCDay() === 6 && rain < 0.1)) return null;
+    return hours >= 13 && hours < 19 ? 'day' : hours >= 19 && hours < 24 ? 'evening' : null;
   }
 
   update(dt, { day, hours, rain, dusk, camera, scale }) {
-    const on = this.always ? hours > 17 || hours < 1 : GardenParty.on(day, hours, rain);
+    let mode = null;
+    if (this.always) mode = this.mode === 'day' ? (hours > 9 && hours < 20 ? 'day' : null) : hours > 17 || hours < 1 ? 'evening' : null;
+    else mode = GardenParty.on(day, hours, rain);
+    const on = !!mode;
     this.group.visible = on;
+    if (mode === 'day' && !this.day) this._dressForDay();
+    if (this.day) this.day.visible = mode === 'day';
+    this.musicAt = mode === 'day' && this.quartetAt ? this.quartetAt : this.gramophoneMusicAt;
     const lit = on ? THREE.MathUtils.clamp(dusk * 1.4, 0.15, 1) : 0;
     this.lights.material.uniforms.uOn.value = lit;
     this.lights.material.uniforms.uTime.value += dt;
@@ -1215,6 +1763,15 @@ export class GardenParty {
     // the pennants stir
     const t = this.lights.material.uniforms.uTime.value;
     for (const [k, f] of this.flags.entries()) f.rotation.y = 0.35 * Math.sin(t * 1.3 + k * 2) + 0.15 * Math.sin(t * 3.1 + k);
+    // by day the balloons bob on their strings and the bunting stirs
+    if (this.day?.visible) {
+      for (const b of this.balloonsTied) {
+        b.mesh.position.set(b.at.x + 0.12 * Math.sin(t * 0.9 + b.ph), b.at.y + 0.06 * Math.sin(t * 1.3 + b.ph * 2), b.at.z + 0.1 * Math.cos(t * 0.8 + b.ph));
+        const pos = b.line.geometry.attributes.position;
+        pos.setXYZ(1, b.mesh.position.x, b.mesh.position.y - 0.17, b.mesh.position.z);
+        pos.needsUpdate = true;
+      }
+    }
     // the music, again and again while you are near enough to hear it
     this.nextMusic -= dt;
     if (this.nextMusic <= 0 && this.sound?.has?.('party-music') && camera.position.distanceTo(this.musicAt) < 120) {

@@ -7,6 +7,10 @@
 // - a wreath with a red bow in each of the front windows;
 // - presents wrapped under the big tree on the lawn;
 // - two reindeer made of white lights on the lawn, one grazing, one looking up, nodding.
+// On New Year's Eve and New Year's Day the Christmas things (the wreaths, the presents, the reindeer,
+// the red bows) give way to New Year's: gold and silver balloons by the door and the gate, the coming
+// year in lit marquee letters on the lawn, gold stars where the bows were, a mirror ball turning in the
+// porch, a champagne table by the door. The Christmas lights stay on.
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -131,6 +135,8 @@ export function dressFront(festive, { bvh, door, gate, treeAt, windows, ground, 
   const eve = festive.eve;
   if (!eve) return { update() {} };
   const lights = []; // (their bulbs objects, for festive.extra)
+  const christmasOnly = []; // (put away on New Year's Eve and Day)
+  const stars = []; // (where the bows are: New Year's gold stars instead) [position, yaw]
   const ray = new THREE.Ray();
   const greenMat = new THREE.MeshStandardMaterial({ color: 0x1d4526, roughness: 0.85 });
   const redMat = new THREE.MeshStandardMaterial({ color: 0xa3120f, roughness: 0.45, emissive: 0x200202 });
@@ -156,9 +162,10 @@ export function dressFront(festive, { bvh, door, gate, treeAt, windows, ground, 
     for (const b of bows) {
       const p = curve.getPointAt(b);
       reds.push(prep(bowGeo, at(p.x, p.y - 0.04, p.z, 0, bowYaw(p), 0)));
+      stars.push([p.clone(), bowYaw(p)]);
     }
     add(new THREE.Mesh(mergeGeometries(greens), greenMat));
-    if (reds.length) add(new THREE.Mesh(mergeGeometries(reds), redMat));
+    if (reds.length) christmasOnly.push(add(new THREE.Mesh(mergeGeometries(reds), redMat)));
     const pts = [];
     const m = Math.round(len / lightsEvery);
     for (let i = 0; i <= m; i++) {
@@ -271,8 +278,7 @@ export function dressFront(festive, { bvh, door, gate, treeAt, windows, ground, 
         g.setMatrixAt(i, m);
         r.setMatrixAt(i, m);
       });
-      add(g);
-      add(r);
+      christmasOnly.push(add(g), add(r));
     }
   }
 
@@ -307,7 +313,7 @@ export function dressFront(festive, { bvh, door, gate, treeAt, windows, ground, 
       coloured(new THREE.ConeGeometry(0.05, 0.12, 4).rotateZ(Math.PI / 2).translate(-0.06, h + 0.03, 0), base, rib);
       coloured(new THREE.ConeGeometry(0.05, 0.12, 4).rotateZ(-Math.PI / 2).translate(0.06, h + 0.03, 0), base, rib);
     }
-    add(new THREE.Mesh(mergeGeometries(parts), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55 })));
+    christmasOnly.push(add(new THREE.Mesh(mergeGeometries(parts), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55 }))));
   }
 
   // --- two reindeer of lights on the lawn ---
@@ -331,9 +337,175 @@ export function dressFront(festive, { bvh, door, gate, treeAt, windows, ground, 
       r.group.position.set(x, ground(x, z), z);
       r.group.rotation.y = x < 4.6 ? -0.5 : Math.PI + 0.5;
       eve.add(r.group);
+      christmasOnly.push(r.group);
       deer.push({ ...r, grazing: deer.length === 0, ph: Math.random() * 6 });
       deerLights.push(...r.lights);
     }
+  }
+
+  // --- New Year's Eve ---
+  const nye = new THREE.Group();
+  nye.name = 'New Year';
+  nye.visible = false;
+  festive.christmas.parent.add(nye);
+  // (a little light of their own: metal shows nothing but the dark round it at night)
+  const gold = new THREE.MeshStandardMaterial({ color: 0xd8b04a, metalness: 0.85, roughness: 0.25, emissive: 0x5a4210, emissiveIntensity: 0.6 });
+  const silver = new THREE.MeshStandardMaterial({ color: 0xd9dde3, metalness: 0.9, roughness: 0.2, emissive: 0x3c4048, emissiveIntensity: 0.6 });
+  const string = new THREE.LineBasicMaterial({ color: 0xd8d4c8, transparent: true, opacity: 0.6 });
+  // gold stars where the bows are
+  {
+    const shape = new THREE.Shape();
+    for (let k = 0; k < 10; k++) {
+      const a = (k / 10) * Math.PI * 2 + Math.PI / 2;
+      const r = k % 2 ? 0.07 : 0.17;
+      if (k === 0) shape.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+      else shape.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+    }
+    const starGeo = new THREE.ExtrudeGeometry(shape, { depth: 0.03, bevelEnabled: false }).translate(0, 0, -0.015);
+    for (const [p, yaw] of stars) {
+      const m = new THREE.Mesh(starGeo, gold);
+      m.position.copy(p).setY(p.y - 0.06);
+      m.rotation.y = yaw;
+      m.castShadow = true;
+      nye.add(m);
+    }
+  }
+  // balloons: clusters of gold and silver, on strings, bobbing
+  const balloons = [];
+  const cluster = (base, n, height = 1.7) => {
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + R2(0.5);
+      const r = 0.18 + Math.random() * 0.25;
+      const top = new THREE.Vector3(base.x + Math.cos(a) * r, base.y + height + Math.random() * 0.5, base.z + Math.sin(a) * r);
+      const b = new THREE.Group();
+      const ball = new THREE.Mesh(new THREE.SphereGeometry(0.2, 18, 12).scale(1, 1.18, 1), i % 2 ? silver : gold);
+      ball.castShadow = true;
+      const knot = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.05, 6).translate(0, -0.25, 0), i % 2 ? silver : gold);
+      b.add(ball, knot);
+      b.position.copy(top);
+      nye.add(b);
+      const geo = new THREE.BufferGeometry().setFromPoints([base.clone(), top.clone().setY(top.y - 0.26)]);
+      const line = new THREE.Line(geo, string);
+      nye.add(line);
+      balloons.push({ b, top, line, base: base.clone(), ph: Math.random() * 6 });
+    }
+  };
+  if (door) {
+    const out = door.normal.clone();
+    if (out.z < 0) out.negate();
+    const side = new THREE.Vector3(out.z, 0, -out.x);
+    for (const sd of [-1, 1]) {
+      const p = door.centre.clone().addScaledVector(side, sd * 1.95).addScaledVector(out, 2.2);
+      p.y = ground(p.x, p.z) + 0.6;
+      cluster(p, 6);
+    }
+    // a mirror ball turning in the porch, high up
+    const facets = (() => {
+      const c = document.createElement('canvas');
+      c.width = 256;
+      c.height = 128;
+      const g = c.getContext('2d');
+      for (let y = 0; y < 128; y += 8) for (let x = 0; x < 256; x += 8) {
+        const v = 120 + Math.random() * 135;
+        g.fillStyle = `rgb(${v},${v},${v + 10})`;
+        g.fillRect(x, y, 7, 7);
+      }
+      const t = new THREE.CanvasTexture(c);
+      t.colorSpace = THREE.SRGBColorSpace;
+      return t;
+    })();
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.22, 24, 16), new THREE.MeshStandardMaterial({ map: facets, metalness: 1, roughness: 0.12 }));
+    ball.position.copy(door.centre).addScaledVector(out, 1.0).setY(door.y0 + 2.75);
+    nye.add(ball);
+    nye.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([ball.position.clone(), ball.position.clone().setY(ball.position.y + 0.6)]), string));
+    nye.userData.mirror = ball;
+    // a champagne table by the door: a white cloth, an ice bucket with two bottles, flutes
+    const tp = door.centre.clone().addScaledVector(side, -2.9).addScaledVector(out, 3.1);
+    const ty = ground(tp.x, tp.z);
+    const table = new THREE.Group();
+    table.position.set(tp.x, ty, tp.z);
+    const cloth = new THREE.MeshStandardMaterial({ color: 0xf3f0e8, roughness: 0.85 });
+    table.add(new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.56, 0.74, 28, 1, true).translate(0, 0.37, 0), cloth));
+    table.add(new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.02, 28).translate(0, 0.74, 0), cloth));
+    table.add(new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.09, 0.2, 18, 1, true).translate(0.12, 0.85, 0), silver));
+    const bottle = new THREE.MeshStandardMaterial({ color: 0x173a22, roughness: 0.25, metalness: 0.2 });
+    for (const [x, z, tilt] of [
+      [0.1, 0.03, 0.2],
+      [0.15, -0.04, -0.15],
+    ]) {
+      const b = new THREE.Group();
+      b.add(new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.038, 0.22, 12).translate(0, 0.11, 0), bottle));
+      b.add(new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.034, 0.1, 12).translate(0, 0.27, 0), bottle));
+      b.add(new THREE.Mesh(new THREE.CylinderGeometry(0.017, 0.017, 0.05, 10).translate(0, 0.33, 0), gold));
+      b.position.set(x, 0.76, z);
+      b.rotation.z = tilt;
+      table.add(b);
+    }
+    const flute = new THREE.LatheGeometry([new THREE.Vector2(0.03, 0), new THREE.Vector2(0.004, 0.005), new THREE.Vector2(0.004, 0.09), new THREE.Vector2(0.02, 0.12), new THREE.Vector2(0.024, 0.2)], 14);
+    const glass = new THREE.MeshStandardMaterial({ color: 0xf6efd6, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.45, depthWrite: false });
+    for (let i = 0; i < 6; i++) {
+      const f = new THREE.Mesh(flute, glass);
+      const a = (i / 6) * Math.PI * 2;
+      f.position.set(-0.18 + Math.cos(a) * 0.15, 0.75, Math.sin(a) * 0.15);
+      table.add(f);
+    }
+    table.traverse((o) => o.isMesh && (o.castShadow = o.receiveShadow = true));
+    nye.add(table);
+  }
+  if (gate) {
+    for (const sd of [-1, 1]) {
+      const p = new THREE.Vector3(gate.x + sd * 3.0, 0, gate.z - 1.0);
+      p.y = ground(p.x, p.z) + 0.2;
+      cluster(p, 5, 2.4);
+    }
+  }
+  // the coming year in marquee letters, lit, on the lawn facing the gate
+  let yearSign = null;
+  {
+    // (the year about to begin, as the fireworks write it: this one in its first week, else the next)
+    const now = new Date();
+    const year = String(now.getMonth() === 0 && now.getDate() <= 6 ? now.getFullYear() : now.getFullYear() + 1);
+    const c = document.createElement('canvas');
+    c.width = 640;
+    c.height = 256;
+    const g = c.getContext('2d');
+    g.fillStyle = '#fff';
+    g.font = '700 236px Georgia, "Times New Roman", serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(year, 320, 136);
+    const img = g.getImageData(0, 0, 640, 256).data;
+    const W = 4.5; // metres across
+    const H = (W * 256) / 640;
+    const pts = [];
+    const step = 9;
+    for (let y = 4; y < 256; y += step) {
+      for (let x = 4; x < 640; x += step) {
+        if (img[(y * 640 + x) * 4 + 3] < 140) continue;
+        pts.push({ pos: [(x / 640 - 0.5) * W, (1 - y / 256) * H, 0.06], colour: Math.random() < 0.2 ? [1, 0.95, 0.85] : [1, 0.8, 0.42], phase: Math.random(), along: x / 9 });
+      }
+    }
+    const spot = [-1.9, 7.6]; // (the west lawn, in view from the gate, clear of the drive, the fountain and the tree)
+    const sx = spot[0];
+    const sz = spot[1];
+    const sign = new THREE.Group();
+    sign.position.set(sx, ground(sx, sz) + 0.35, sz);
+    sign.rotation.y = Math.atan2((gate?.x ?? 4.6) - sx, (gate?.z ?? 20.7) - sz);
+    // the letters' backing, dark, in their own shape
+    const backTex = new THREE.CanvasTexture(c);
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshStandardMaterial({ color: 0x1b1b1f, alphaMap: backTex, transparent: true, alphaTest: 0.4, side: THREE.DoubleSide, roughness: 0.6, metalness: 0.4 }));
+    back.position.y = H / 2;
+    back.castShadow = true;
+    sign.add(back);
+    for (const sd of [-1, 1]) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.5, 8).translate(0, -0.1, -0.05), silver);
+      post.position.x = sd * W * 0.32;
+      sign.add(post);
+    }
+    const sb = bulbs(pts, 0.07);
+    sign.add(sb);
+    nye.add(sign);
+    yearSign = sb;
   }
 
   for (const b of lights) {
@@ -345,8 +517,32 @@ export function dressFront(festive, { bvh, door, gate, treeAt, windows, ground, 
   let t = 0;
   return {
     deer,
-    update(dt) {
+    nye,
+    /** day: the day of the year (New Year's Eve and Day dress the house for the new year instead) */
+    update(dt, day = null) {
       t += dt;
+      const d = day == null ? -1 : Math.floor(day);
+      const newYear = d === 364 || d === 0;
+      for (const o of christmasOnly) o.visible = !newYear;
+      if (newYear) for (const w of festive.doorWreaths ?? []) w.visible = false;
+      nye.visible = newYear && !!eve.visible && !!festive.christmas.visible;
+      if (nye.visible) {
+        for (const b of balloons) {
+          const sway = new THREE.Vector3(Math.sin(t * 0.9 + b.ph) * 0.08, Math.sin(t * 1.3 + b.ph) * 0.05, Math.cos(t * 0.7 + b.ph) * 0.08);
+          b.b.position.copy(b.top).add(sway);
+          b.b.rotation.z = Math.sin(t * 0.8 + b.ph) * 0.12;
+          const pos = b.line.geometry.attributes.position;
+          pos.setXYZ(1, b.b.position.x, b.b.position.y - 0.26, b.b.position.z);
+          pos.needsUpdate = true;
+        }
+        if (nye.userData.mirror) nye.userData.mirror.rotation.y += dt * 0.6;
+        if (yearSign) {
+          const u = yearSign.material.uniforms;
+          u.uOn.value = 1;
+          u.uTime.value = t;
+          u.uScale.value = festive.outline.material.uniforms.uScale.value;
+        }
+      }
       for (const d of deer) {
         // one grazing (its head down, now and then lifting), one looking about, nodding
         if (d.grazing) d.head.rotation.z = -0.95 + 0.5 * Math.max(0, Math.sin(t * 0.25 + d.ph)) ** 3;

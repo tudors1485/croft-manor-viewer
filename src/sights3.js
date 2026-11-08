@@ -1,8 +1,8 @@
 // Five more sights, each as it really comes in Surrey, each where the house is in the view:
 //
-// - Glow-worms: on warm, still nights from mid-June to late July, after about half past ten, the
-//   wingless females climb the long grass and glow, a steady green-yellow point each, low down in the
-//   meadow behind the house and at the foot of the borders; a few winged males drift over, looking.
+// - Fireflies: on warm, still nights from mid-June to late July, after about a quarter past ten, a
+//   few of them over the meadow behind the house, drifting, each flashing yellow-green in its own
+//   time, a quick bright flash and a slower fade, rising a little as it lights.
 // - Night-shining clouds (noctilucent clouds): on some clear nights in June and July, an hour or two
 //   after sunset, while the sun is 6 to 16 degrees below the horizon, electric-blue and silver ripples
 //   low in the north, 80 km up, still lit by the sun long after the ordinary clouds have gone dark.
@@ -63,118 +63,53 @@ export function duskHour(day, deg) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Glow-worms
+// Fireflies
 
-export class GlowWorms {
+export class Fireflies {
   /**
    * @param {THREE.Scene} scene
    * @param {object} o
-   * @param {THREE.Box3} o.lawn the estate inside its walls
    * @param {(x: number, z: number) => number|null} o.ground
-   * @param {(x: number, z: number) => boolean} o.isGrass
+   * @param {THREE.Vector3} [o.at] where they dance: over the meadow behind the house
    */
-  constructor(scene, { lawn: L, ground, isGrass }) {
+  constructor(scene, { ground, at = new THREE.Vector3(8, 0, -58) }) {
     this.group = new THREE.Group();
-    this.group.name = 'Glow-worms';
+    this.group.name = 'Fireflies';
     this.group.visible = false;
     scene.add(this.group);
     this.always = false;
-    this.t = 0;
-    const R = mulberry(17062027);
-    // where the long grass is (as garden.js grows it): the meadow of the assault course behind the
-    // house in drifts and along its walls, and the foot of the borders inside the side walls
-    const noise = (x, z) => Math.sin(x * 0.21 + Math.sin(z * 0.13) * 2) * 0.5 + Math.sin(z * 0.17 - x * 0.07 + 1.3) * 0.5;
-    const pos = [];
-    const seed = [];
-    const add = (x, z) => {
-      const y = ground(x, z);
-      if (y === null || y > 0.6) return;
-      pos.push(x, y + 0.04 + Math.pow(R(), 1.6) * 0.32, z);
-      seed.push(R());
-    };
-    for (let tries = 0, n = 0; n < 700 && tries < 40000; tries++) {
-      const x = THREE.MathUtils.lerp(L.min.x + 1, L.max.x - 1, R());
-      const z = THREE.MathUtils.lerp(L.min.z + 1, -53.5, R());
-      const near = Math.min(x - L.min.x, L.max.x - x, z - L.min.z, -53 - z);
-      if (z > -60 && near > 1.5) continue;
-      if (noise(x, z) < 0.15 && near > 4) continue;
-      if (!isGrass(x, z)) continue;
-      add(x, z);
-      n++;
-    }
-    // the foot of the hedge along the low wall at the back of the house (they like a hedge bottom)
-    for (let n = 0; n < 220; n++) add(THREE.MathUtils.lerp(L.min.x + 2, L.max.x - 2, R()), -53.9 - R() * 1.4);
-    for (let n = 0; n < 160; n++) {
-      const side = R() < 0.5 ? -1 : 1;
-      const x = side < 0 ? L.min.x + 2 + R() * 2.2 : L.max.x - 2 - R() * 2.2;
-      add(x, THREE.MathUtils.lerp(L.max.z - 32, -50, R()));
-    }
-    this.count = seed.length;
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    geo.setAttribute('seed', new THREE.Float32BufferAttribute(seed, 1));
-    const map = glowTexture();
-    const material = (moving) =>
-      new THREE.ShaderMaterial({
-        uniforms: { uMap: { value: map }, uTime: { value: 0 }, uOn: { value: 0 }, uScale: { value: 800 }, uSize: { value: moving ? 0.07 : 0.12 } },
-        vertexShader: /* glsl */ `
-          attribute float seed;
-          uniform float uTime;
-          uniform float uScale;
-          uniform float uSize;
-          varying float vGlow;
-          void main() {
-            vec4 mv = modelViewMatrix * vec4(position, 1.0);
-            gl_Position = projectionMatrix * mv;
-            // a steady glow, each in its own time: now and then one dims and goes out for a while
-            float slot = floor(uTime / 50.0 + seed * 7.0);
-            float lit = step(0.12, fract(sin(slot * 91.7 + seed * 311.0) * 4375.5));
-            float breathe = 0.85 + 0.15 * sin(uTime * (0.3 + seed * 0.4) + seed * 40.0);
-            vGlow = mix(0.15, 1.0, lit) * breathe * (0.6 + 0.4 * seed);
-            gl_PointSize = clamp(uSize * uScale / -mv.z, 2.2, 16.0);
-          }`,
-        fragmentShader: /* glsl */ `
-          uniform sampler2D uMap;
-          uniform float uOn;
-          varying float vGlow;
-          void main() {
-            float a = texture2D(uMap, gl_PointCoord).a;
-            // green-yellow, near white at the heart
-            vec3 c = mix(vec3(0.42, 1.0, 0.18), vec3(0.9, 1.0, 0.7), smoothstep(0.6, 1.0, a));
-            gl_FragColor = vec4(c * a * vGlow * uOn * 3.6, 1.0);
-          }`,
-        transparent: true,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-      });
-    this.females = new THREE.Points(geo, material(false));
-    this.females.frustumCulled = false;
-    this.females.renderOrder = 10;
-    this.group.add(this.females);
-    // the males: a few drifting slowly a metre or so up, faint, looking for the lights below
-    this.males = [];
-    const mpos = new Float32Array(30 * 3);
-    const mseed = new Float32Array(30);
-    for (let i = 0; i < 30; i++) {
-      const k = Math.floor(R() * (pos.length / 3));
-      const home = new THREE.Vector3(pos[k * 3], pos[k * 3 + 1] + 0.6, pos[k * 3 + 2]);
-      this.males.push({ home, p: home.clone(), a: R() * 6.28, sp: 0.25 + R() * 0.3, ph: R() * 10 });
-      mseed[i] = 0.3 + R() * 0.3;
-    }
-    const mgeo = new THREE.BufferGeometry();
-    mgeo.setAttribute('position', new THREE.BufferAttribute(mpos, 3));
-    mgeo.setAttribute('seed', new THREE.BufferAttribute(mseed, 1));
-    this.flyers = new THREE.Points(mgeo, material(true));
-    this.flyers.frustumCulled = false;
-    this.flyers.renderOrder = 10;
-    this.group.add(this.flyers);
     this.amount = 0;
+    this.t = 0;
+    const tex = glowTexture();
+    const R = mulberry(19072027);
+    this.flies = [];
+    for (let i = 0; i < 5; i++) {
+      const home = new THREE.Vector3(at.x + (R() - 0.5) * 9, 0, at.z + (R() - 0.5) * 7);
+      home.y = (ground(home.x, home.z) ?? 0) + 0.7 + R() * 1.2;
+      // the flash: a bright core and a wide soft halo, yellow-green
+      const core = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, color: 0xf0ff80, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 }));
+      core.scale.setScalar(0.2);
+      const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, color: 0xb6f04a, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 }));
+      halo.scale.setScalar(0.62);
+      this.group.add(core, halo);
+      this.flies.push({
+        home,
+        core,
+        halo,
+        p: home.clone(),
+        ph: R() * 100,
+        sp: 0.35 + R() * 0.35,
+        period: 3 + R() * 3.5, // (seconds between flashes, each in its own time)
+        next: R() * 4,
+        flash: -1,
+      });
+    }
   }
 
-  /** Warm nights from mid-June to late July, from about half past ten until one. */
+  /** On warm June and July nights, from about a quarter past ten until half past one. */
   static on(day, hours) {
     const d = Math.floor(day);
-    return d >= 162 && d <= 206 && (hours >= 22.3 || hours < 1.2);
+    return d >= 162 && d <= 206 && (hours >= 22.25 || hours < 1.5);
   }
 
   /**
@@ -184,30 +119,40 @@ export class GlowWorms {
    * @param {number} o.hours
    * @param {number} o.night 0..1
    * @param {number} o.rain 0..1
-   * @param {number} [o.scale] the lamps' point scale (the focal length in pixels)
    */
-  update(dt, { day, hours, night, rain = 0, scale }) {
-    const want = (this.always || GlowWorms.on(day, hours)) && rain < 0.1 ? ss(night, 0.7, 0.95) : 0;
-    // (they light up slowly as it gets dark; a jump to another date puts them out at once)
+  update(dt, { day, hours, night, rain = 0 }) {
+    const want = (this.always || Fireflies.on(day, hours)) && rain < 0.1 ? ss(night, 0.7, 0.95) : 0;
     this.amount += (want - this.amount) * (1 - Math.exp(-dt * (want > this.amount ? 0.8 : 4)));
     this.group.visible = this.amount > 0.01;
     if (!this.group.visible) return;
     this.t += dt;
-    for (const p of [this.females, this.flyers]) {
-      const u = p.material.uniforms;
-      u.uTime.value = this.t;
-      u.uOn.value = this.amount;
-      if (scale) u.uScale.value = scale;
+    const t = this.t;
+    for (const f of this.flies) {
+      // a slow wandering flight, rising a little as it flashes (as they do: a short climb, lit)
+      f.next -= dt;
+      if (f.next <= 0) {
+        f.flash = 0;
+        f.next = f.period * (0.8 + Math.random() * 0.4);
+      }
+      let glow = 0.03; // (a faint glow between flashes)
+      if (f.flash >= 0) {
+        f.flash += dt;
+        const k = f.flash;
+        // quick to light, slower to fade: about half a second in all
+        glow = k < 0.12 ? k / 0.12 : Math.max(0.03, Math.exp(-(k - 0.12) * 6));
+        if (k > 0.9) f.flash = -1;
+      }
+      const lift = f.flash >= 0 ? Math.min(1, f.flash * 2) * 0.25 : 0;
+      f.p.set(
+        f.home.x + Math.sin(t * 0.21 * f.sp + f.ph) * 2.2 + Math.sin(t * 0.53 * f.sp + f.ph * 2) * 0.7,
+        f.home.y + Math.sin(t * 0.37 * f.sp + f.ph * 3) * 0.35 + lift,
+        f.home.z + Math.cos(t * 0.17 * f.sp + f.ph) * 2.0 + Math.sin(t * 0.61 * f.sp + f.ph * 4) * 0.6,
+      );
+      f.core.position.copy(f.p);
+      f.halo.position.copy(f.p);
+      f.core.material.opacity = Math.min(1, glow * 1.4) * this.amount;
+      f.halo.material.opacity = glow * 0.6 * this.amount;
     }
-    this.flyers.material.uniforms.uOn.value = this.amount * 0.35;
-    const a = this.flyers.geometry.attributes.position;
-    this.males.forEach((m, i) => {
-      m.a += dt * m.sp * (0.6 + 0.4 * Math.sin(this.t * 0.3 + m.ph));
-      const r = 1.6 + Math.sin(this.t * 0.11 + m.ph) * 1.1;
-      m.p.set(m.home.x + Math.cos(m.a) * r, m.home.y + 0.35 * Math.sin(this.t * 0.7 + m.ph), m.home.z + Math.sin(m.a * 1.3) * r);
-      a.setXYZ(i, m.p.x, m.p.y, m.p.z);
-    });
-    a.needsUpdate = true;
   }
 }
 

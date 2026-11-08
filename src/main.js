@@ -14,7 +14,7 @@ import { Garden } from './garden.js';
 import { MovingIn } from './movingin.js';
 import { Meteors, Murmuration, harvestMoon } from './sights.js';
 import { Balloons, GardenParty } from './sights2.js';
-import { GlowWorms, NightClouds, Comet, Blossom, NightSnow, duskHour } from './sights3.js';
+import { Fireflies, NightClouds, Comet, Blossom, NightSnow, duskHour } from './sights3.js';
 import { dressInterior, hallClock } from './interior.js';
 import { installGrade } from './look.js';
 import { Quality, LOOKS } from './quality.js';
@@ -1742,10 +1742,10 @@ async function prepareWalking(ground) {
         [18, 4],
         [-13, -2],
       ].find(([x, z]) => landscape._grassAt(x, z) && crownGap(x, z) > 6 && landscape.obstacles.every((o) => o.when || Math.hypot(o.x - x, o.z - z) - (o.r ?? 0) > 6.5));
-      if (spot) party = new GardenParty(scene, { at: new THREE.Vector3(spot[0], 0, spot[1]), ground: (x, z) => landscape.groundHeight(x, z) ?? 0, sound: wildSound, obstacles: landscape.obstacles });
+      if (spot) party = new GardenParty(scene, { at: new THREE.Vector3(spot[0], 0, spot[1]), ground: (x, z) => landscape.groundHeight(x, z) ?? 0, sound: wildSound, obstacles: landscape.obstacles, isGrass: (x, z) => landscape._grassAt(x, z) });
     }
     // Five more sights (sights3.js): the glow-worms in the long grass and the blossom round the lawns
-    glowWorms = new GlowWorms(scene, { lawn: landscape.lawn, ground: (x, z) => landscape.groundHeight(x, z), isGrass: (x, z) => landscape._grassAt(x, z) });
+    fireflies = new Fireflies(scene, { ground: (x, z) => landscape.groundHeight(x, z) });
     blossom = new Blossom(scene, { crowns: landscape.crowns, lawn: landscape.lawn, ground: (x, z) => landscape.groundHeight(x, z) });
     // (end of the five more sights' block)
     if (fireSpot) {
@@ -2005,14 +2005,46 @@ const HOLIDAYS = {
   },
   // hot-air balloons drifting low over the estate on a still June morning, from the lawn
   balloons: { day: 172, hours: 6.2, weather: 'clear', pos: [22, 2, 4], look: [-15, 30, -36], orbit: true, then: () => (balloons.always = true) },
-  // a summer garden party on the east lawn at dusk
-  party: { day: 180, hours: 21.3, weather: 'clear', pos: () => (party ? [party.at.x - 9, 2.4, party.at.z + 11] : [10, 2, 12]), look: () => (party ? [party.at.x, 1, party.at.z - 1] : [20, 1, 0]), then: () => party && (party.always = true) },
+  // a summer garden party on the east lawn late on a June evening: the lights strung over the lawn
+  // and the marquee glowing, under the luminous midsummer sky that never quite goes dark, with
+  // night-shining clouds low in the north over the house (the sun 9° below the horizon)
+  party: {
+    day: 181,
+    hours: () => duskHour(181, 9),
+    weather: 'clear',
+    orbit: true,
+    pos: () => (party ? [party.at.x + 11, 5, party.at.z + 20] : [27, 5, 23]),
+    look: () => (party ? [party.at.x - 13, 6.5, party.at.z - 40] : [3, 6.5, -37]),
+    then: () => {
+      if (party) {
+        party.mode = 'evening';
+        party.always = true;
+      }
+      nightClouds.always = true;
+    },
+  },
+  // the same party by day, in full swing on a July afternoon: bunting, parasols, the bar, the cake,
+  // picnics, deckchairs, croquet, a string quartet
+  partyday: {
+    day: 197,
+    hours: 15.2,
+    weather: 'clear',
+    orbit: true,
+    pos: () => (party ? [party.at.x + 9, 7.5, party.at.z + 19] : [25, 7.5, 22]),
+    look: () => (party ? [party.at.x, 0.5, party.at.z - 1] : [16, 0.5, 2]),
+    then: () => {
+      if (party) {
+        party.mode = 'day';
+        party.always = true;
+      }
+    },
+  },
   // a hard frost on a late November morning: the lawns and the hedges white with it, a mist lifting,
   // the low sun coming through
   frost: { day: 330, hours: 8.6, weather: 'frost', pos: [16, 1.6, 12], look: [-4, 2.5, -8] },
   // (the five more sights: sights3.js)
   // glow-worms in the long grass of the meadow behind the house, on a warm June night, low down
-  glowworms: { day: 177, hours: 23.4, weather: 'clear', pos: [9, 0.8, -63], look: [6, 3.2, -36], orbit: true, then: () => glowWorms && (glowWorms.always = true) },
+  fireflies: { day: 177, hours: 23.4, weather: 'clear', pos: [9, 1.1, -65], look: [7, 2.6, -40], orbit: true, then: () => fireflies && (fireflies.always = true) },
   // night-shining clouds low in the north over the roofs, late on a June night, from the drive
   // (from above the drive outside the gate, level with the roofs, through a longer lens: the
   // roofline against them; on the ground the gate, the trees and the house hide them)
@@ -2178,7 +2210,7 @@ function playScene(i, named = false) {
   murmuration.always = false;
   balloons.always = false;
   if (party) party.always = false;
-  for (const sight of [glowWorms, nightClouds, comet, blossom, nightSnow]) if (sight) sight.always = false; // (sights3.js)
+  for (const sight of [fireflies, nightClouds, comet, blossom, nightSnow]) if (sight) sight.always = false; // (sights3.js)
   // (a scene's own lens, as the night-shining clouds' or the harvest moon's, is not carried into the next)
   if (lens) {
     lens = null;
@@ -2438,7 +2470,7 @@ function step(dt, exporting = false) {
     lamps.update(camera, tod.lamps, dt, renderer, tod.hours);
     if (festive) {
       festive.update(dt, tod.lamps, seasonDay, tod.hours, true);
-      xmasFront?.update(dt);
+      xmasFront?.update(dt, seasonDay);
       festive.setScale(lamps.glowMat.uniforms.uScale.value);
     }
     if (spooky) {
@@ -2547,7 +2579,7 @@ function step(dt, exporting = false) {
   // (the five more sights: sights3.js)
   {
     const scale = lamps?.glowMat.uniforms.uScale.value;
-    glowWorms?.update(dt, { day: seasonDay, hours: tod.hours, night: tod.night, rain: weather.rain ?? 0, scale });
+    fireflies?.update(dt, { day: seasonDay, hours: tod.hours, night: tod.night, rain: weather.rain ?? 0 });
     nightClouds.update(dt, { day: seasonDay, sunDir: tod.sunDir, clouds: weather.clouds ?? 0, compass: tod.compass });
     comet.update(dt, { sunDir: tod.sunDir, clouds: weather.clouds ?? 0, fog: weather.fog ?? 0, compass: tod.compass });
     blossom?.update(dt, { day: seasonDay, wind, snow: seasonUniforms.uSnow.value, daylight: THREE.MathUtils.smoothstep(tod.sunDir.y, -0.05, 0.25), camera, scale });
@@ -2665,7 +2697,7 @@ let party = null; // a summer garden party on the east lawn (sights2.js)
 const nightClouds = new NightClouds(scene);
 const comet = new Comet(scene);
 const nightSnow = new NightSnow(scene);
-let glowWorms = null;
+let fireflies = null;
 let blossom = null;
 // (end of the five more sights' block)
 const santa = new Santa(scene, wildSound, { roof: { at: new THREE.Vector3(-6.6, 11.36, -19.9), dir: new THREE.Vector3(1, 0, 0) } });
@@ -2889,8 +2921,8 @@ window.manor = {
   nightClouds,
   comet,
   nightSnow,
-  get glowWorms() {
-    return glowWorms;
+  get fireflies() {
+    return fireflies;
   },
   get blossom() {
     return blossom;
