@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 import { Walker, buildCollider, moveSphere, firstHit, meshAtFace } from './walk.js';
@@ -13,11 +14,13 @@ import { Garden } from './garden.js';
 import { MovingIn } from './movingin.js';
 import { Meteors, Murmuration, harvestMoon } from './sights.js';
 import { Balloons, GardenParty } from './sights2.js';
+import { GlowWorms, NightClouds, Comet, Blossom, NightSnow, duskHour } from './sights3.js';
 import { dressInterior, hallClock } from './interior.js';
 import { installGrade } from './look.js';
 import { Quality, LOOKS } from './quality.js';
 import { tuneMaterials, GRASS_TINT, grassShader, TINTS, buildSkyMap, weatherShader } from './materials.js';
 import { Tour, FLYBYS, SCENES, TOUR_LIGHT, checkPath } from './tour.js';
+import { SplitSeasons } from './splitseasons.js';
 import { Soundscape, loadSamples, MORE_SOUNDS, LATER_SOUNDS } from './sound.js';
 import { seasonAt, seasonUniforms, dateLabel, Snowfall } from './season.js';
 import { weatherAt, WEATHERS, Rainfall } from './weather.js';
@@ -28,7 +31,10 @@ import { Festive } from './festive.js';
 import { Spooky } from './spooky.js';
 import { Haunt, findWindows } from './haunt.js';
 import { Lure } from './lure.js';
+import { Graveyards } from './graves.js';
+import { dressFront } from './xmasfront.js';
 import { HauntInside } from './hauntin.js';
+import { ChristmasInside } from './xmasin.js'; // Christmas inside the house (xmasin.js)
 import { Bonfire } from './bonfire.js';
 import { Storm } from './storm.js';
 import { Santa } from './santa.js';
@@ -45,6 +51,7 @@ import { LoadingBar, nextFrame } from './loading.js';
 import { Easter, nextEaster } from './easter.js';
 import { nightLights, MyLight } from './nightlights.js';
 import { Wildlife, WILD_SOUNDS } from './wildlife.js';
+import { LightShow } from './lightshow.js';
 
 installErrorLog();
 
@@ -110,9 +117,25 @@ let wet = 0; // the ground stays wet for a while after the rain stops
 let wind = 0.2; // eased towards the weather's wind, for the trees and the sound
 let coldness = 0; // 0 a warm day .. 1 a cold one (refreshWeather): smoke from the chimneys
 let hauntIn = null; // Halloween night inside: the kitchen, the zombies' party at the red pool, the bedroom, the attic (hauntin.js)
+let xmasIn = null; // Christmas inside the house: the trees, the garlands, the dinner (xmasin.js)
 let lure = null; // Halloween night outside: the figure who lures you to the graveyard, and the decorations (lure.js)
 let haunt = null; // Halloween night: the rooms behind every window, and the candle-bearer (haunt.js)
 let clockHands = null; // the great hall's clock keeping the viewer's time (interior.js)
+let graves = null; // Halloween night: more graveyards, and the dead climbing out (graves.js)
+let xmasFront = null; // more of Christmas at the front of the house (xmasfront.js)
+/** The day of the month for a day of the year (the clock's date aperture). */
+const dateOfMonth = (() => {
+  let last = -1;
+  let n = 1;
+  return (day) => {
+    const d = Math.floor(day);
+    if (d !== last) {
+      last = d;
+      n = new Date(Date.UTC(2026, 0, 1 + d)).getUTCDate();
+    }
+    return n;
+  };
+})();
 let moving = null; // Moving in (Sights): crates in the hall (movingin.js)
 let garden = null; // hedges, shrub borders, long grass, clipped evergreens, chimney smoke (garden.js)
 const rainfall = new Rainfall(scene);
@@ -127,6 +150,7 @@ let storm = null; // thunder and lightning (storm.js), made once the festivals' 
 let snowman = null;
 let leaves = null; // fallen leaves under the trees in autumn (leaves.js)
 let festive = null; // pumpkins at Halloween, lights at Christmas (festive.js)
+let lightShow = null; // the doorbell, and at Christmas the light show it starts (lightshow.js)
 let spooky = null; // Halloween evening: the figure at a window, the one in the gateway, the candle, the lights failing (spooky.js)
 let frontDoor = null; // (Halloween leaves it ajar)
 let easter = null; // daffodils in spring, the eggs and the bells at Easter (easter.js)
@@ -555,6 +579,7 @@ let tourReturn = null;
 function startTour(id = null) {
   setOakScene(false);
   showScene(-1);
+  sound.stopMusic();
   $('viewpoint').value = '';
   if (lens) {
     // (a flyby has its own lens)
@@ -671,7 +696,7 @@ function applyLapse(l) {
     sceneShown = k;
     const sc = l.scenes[sceneOrder[k]];
     applyScene(sc);
-    $('bar-clock').textContent = `${dateLabel(sc.day)} · ${sc.label ?? WEATHERS[sc.weather]}`;
+    $('bar-clock').textContent = sc.title ?? `${dateLabel(sc.day)} · ${sc.label ?? WEATHERS[sc.weather]}`;
 
     // a holiday flyby puts on a show: the bonfire already burning, more fireworks, the lights chasing
     setShow(sc.boost ?? 0);
@@ -1044,6 +1069,7 @@ function goToPlace(i, named = false) {
     placeAt = i;
     $('viewpoint').value = String(i);
     showScene(-1);
+    sound.stopMusic();
     const [name, pos, target, v] = viewpoints[i];
     setOakScene(name === 'Under the oak');
     tod.moonBig = 1;
@@ -1127,9 +1153,10 @@ function resizeWater() {
   water.setSize(drawSize.x, drawSize.y);
 }
 // the loading bar, at the real pace (loading.js); nothing is drawn behind it until everything is in
-const loadingBar = new LoadingBar({ cover: $('loading-cover'), text: $('loading-text'), tip: $('loading-tip'), bytes: 83_000_000 });
+const loadingBar = new LoadingBar({ cover: $('loading-cover'), text: $('loading-text'), tip: $('loading-tip'), bytes: 55_000_000 });
 let ready = false;
 const loader = new GLTFLoader();
+loader.setMeshoptDecoder(MeshoptDecoder); // (the house's geometry is meshopt-compressed: a third smaller to download)
 loader.load(
   '/manor.glb',
   (gltf) => {
@@ -1544,7 +1571,7 @@ async function prepareWalking(ground) {
     clockHands = hallClock(scene);
     moving = new MovingIn(scene, model, landscape.obstacles);
     await part(0.4, 'Clipping the hedges and planting the borders');
-    garden = new Garden(scene, { landscape, bvh: geo.boundsTree, gate: landscape.gate, materialAt: (fi) => meshAtFace(geo, fi)?.material.name || '' });
+    garden = new Garden(scene, { landscape, bvh: geo.boundsTree, gate: landscape.gate, materialAt: (fi) => meshAtFace(geo, fi)?.material.name || '', doors: doors.usable });
     console.info('garden', garden.build());
     await part(0.5, 'Putting up the lights at the gate and the fountain');
     // lights at the gateway, in the fountain and on the assault course (before the first frame: new lights recompile every shader)
@@ -1571,12 +1598,80 @@ async function prepareWalking(ground) {
     const front = doors.usable.find((d) => d.centre.z > -12 && d.centre.z < -8 && Math.abs(d.centre.x + 1.85) < 1.5);
     const oaks = landscape.gate ? landscape.treeSpots.filter((t) => Math.abs(t.z - (landscape.gate.z - 6.5)) < 1 && Math.abs(Math.abs(t.x - landscape.gate.x) - 5.4) < 1) : [];
     frontDoor = front ?? null;
-    festive = new Festive(scene, { bvh: geo.boundsTree, door: front, oaks, gate: landscape.gate });
+    festive = new Festive(scene, { bvh: geo.boundsTree, door: front, oaks, gate: landscape.gate, materialAt: (fi) => meshAtFace(geo, fi)?.material.name || '' });
     for (const pk of festive.pumpkins) landscape.obstacles.push({ x: pk.position.x, z: pk.position.z, r: 0.3, when: () => festive.halloween.visible });
+    // The doorbell and the Christmas light show (lightshow.js): a bell push beside the front door,
+    // rung with E or a click on it; at Christmas the house plays a carol with its lights in time
+    if (front) {
+      lightShow = new LightShow(scene, { sound, bvh: geo.boundsTree, door: front, christmas: (d) => Festive.isChristmas(d) });
+      // (music never carries on into another scene, a place, a flyby or the tour: the show stops with it)
+      sound.onStopMusic?.add(() => lightShow.stop());
+      const ringBell = () => {
+        wakeSound();
+        lightShow.ring({ day: seasonDay, exporting, listener: camera.position });
+      };
+      window.addEventListener('keydown', (e) => {
+        if (e.code !== 'KeyE' || e.repeat || mode === 'tour' || !lightShow.inReach) return;
+        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
+        ringBell();
+      });
+      canvas.addEventListener('click', (e) => {
+        if (mode === 'tour' || photo || performance.now() - dragged < 300) return;
+        // (with the mouse held for looking, a click is where the crosshair is)
+        const x = look.isLocked ? innerWidth / 2 : e.clientX;
+        const y = look.isLocked ? innerHeight / 2 : e.clientY;
+        const rc = new THREE.Raycaster();
+        rc.setFromCamera(new THREE.Vector2((x / innerWidth) * 2 - 1, -(y / innerHeight) * 2 + 1), camera);
+        if (lightShow.hit(rc.ray, mode === 'orbit' ? 14 : 3.2)) ringBell();
+      });
+    }
+    // (the end of the doorbell's block)
     // (the figure in the gateway is the lure's now: lure.js)
     spooky = new Spooky(scene, { bvh: geo.boundsTree, materialAt: (fi) => meshAtFace(geo, fi)?.material.name || '', houseBox: lamps.houseBox, gate: null, door: front?.centre ?? null, ground: (x, z) => landscape.groundHeight(x, z) });
     hauntIn = new HauntInside(scene, { bvh: geo.boundsTree, houseBox: lamps.houseBox, poolUniforms: water?.surfaces.find((w) => !w.outdoor)?.uniforms ?? null, sound: wildSound, say: (text) => toast(text) });
-    lure = new Lure(scene, { gate: landscape.gate, ground: (x, z) => landscape.groundHeight(x, z) ?? hillHeight(x, z), bvh: geo.boundsTree, landscape, door: front, sound: wildSound });
+    // Christmas inside the house (xmasin.js)
+    xmasIn = new ChristmasInside(scene, { bvh: geo.boundsTree, materialAt: (fi) => meshAtFace(geo, fi)?.material.name || '', model, houseBox: lamps.houseBox, light: hauntIn?.light ?? null });
+    // (end of Christmas inside)
+    {
+      // (the ground under the figure: looked for from just above the gravel, not from high up, which
+      // finds the top of the gate's arch)
+      const ray = new THREE.Ray(new THREE.Vector3(), new THREE.Vector3(0, -1, 0));
+      const lowGround = (x, z) => {
+        const h = hillHeight(x, z);
+        ray.origin.set(x, h + 2.2, z);
+        return geo.boundsTree.raycastFirst(ray, THREE.DoubleSide, 0, 6)?.point.y ?? h;
+      };
+      lure = new Lure(scene, { gate: landscape.gate, ground: lowGround, bvh: geo.boundsTree, landscape, door: front, sound: wildSound });
+      // more graveyards about the estate on Halloween night, and the dead climbing out (graves.js):
+      // each on open ground (no tree, wall, hedge, drive or the woods' far trees within r)
+      const far = [];
+      landscape.group.traverse((o) => {
+        if (!o.isInstancedMesh || !o.material.uniforms?.uMap) return;
+        const m = new THREE.Matrix4();
+        for (let i = 0; i < o.count; i++) {
+          o.getMatrixAt(i, m);
+          far.push(new THREE.Vector3().setFromMatrixPosition(m));
+        }
+      });
+      const down = new THREE.Ray(new THREE.Vector3(), new THREE.Vector3(0, -1, 0));
+      const clear = (x, z, r) => {
+        if (landscape.crowns.some((c) => Math.hypot(c.x - x, c.z - z) < c.r + r)) return false;
+        if (landscape.obstacles.some((o) => Math.hypot(o.x - x, o.z - z) < (o.r ?? 0) + r)) return false;
+        if (far.some((p) => Math.hypot(p.x - x, p.z - z) < r + 3)) return false;
+        for (let dx = -r; dx <= r; dx += 2) {
+          for (let dz = -r; dz <= r; dz += 2) {
+            if (dx * dx + dz * dz > r * r) continue;
+            const h = hillHeight(x + dx, z + dz);
+            down.origin.set(x + dx, h + 8, z + dz);
+            const hit = geo.boundsTree.raycastFirst(down, THREE.DoubleSide, 0, 12);
+            if (hit && (hit.point.y - h > 0.35 || /gravel/.test(meshAtFace(geo, hit.faceIndex)?.material.name || ''))) return false;
+          }
+        }
+        return true;
+      };
+      graves = new Graveyards(scene, { ground: lowGround, clear, sound: wildSound });
+      console.info('graveyards', graves.yards.map((y) => `(${y.c.x}, ${y.c.z})`).join(' '));
+    }
     // the rooms behind every window on Halloween night, and the one who walks them with a candle
     {
       const bw = spooky.bay?.window;
@@ -1604,6 +1699,18 @@ async function prepareWalking(ground) {
       const treeAt = spot ? new THREE.Vector3(spot[0], landscape.groundHeight(spot[0], spot[1]) ?? 0, spot[1]) : null;
       festive.decorate({ windows: haunt?.rooms.map((r) => r.w) ?? [], crowns, treeAt });
       if (treeAt) landscape.obstacles.push({ x: treeAt.x, z: treeAt.z, r: 1.8, when: () => !!festive.eve?.visible });
+      // more of Christmas at the front: the porch's garland, lanterns along the drive, the fountain
+      // dressed, wreaths in the windows, presents under the tree, reindeer of lights (xmasfront.js)
+      xmasFront = dressFront(festive, {
+        bvh: geo.boundsTree,
+        door: frontDoor,
+        gate: landscape.gate,
+        treeAt,
+        windows: haunt?.rooms.map((r) => r.w) ?? [],
+        ground: (x, z) => landscape.groundHeight(x, z) ?? 0,
+        clear: (x, z) => clear(x, z) && (!treeAt || Math.hypot(treeAt.x - x, treeAt.z - z) > 3.5),
+      });
+      for (const d of xmasFront.deer ?? []) landscape.obstacles.push({ x: d.group.position.x, z: d.group.position.z, r: 0.9, when: () => !!festive.eve?.visible });
     }
     await part(0.9, 'Building the bonfire');
     // the bonfire: on open lawn in front of the house, clear of the trees and shrubs
@@ -1626,6 +1733,10 @@ async function prepareWalking(ground) {
       ].find(([x, z]) => landscape._grassAt(x, z) && crownGap(x, z) > 6 && landscape.obstacles.every((o) => o.when || Math.hypot(o.x - x, o.z - z) - (o.r ?? 0) > 6.5));
       if (spot) party = new GardenParty(scene, { at: new THREE.Vector3(spot[0], 0, spot[1]), ground: (x, z) => landscape.groundHeight(x, z) ?? 0, sound: wildSound, obstacles: landscape.obstacles });
     }
+    // Five more sights (sights3.js): the glow-worms in the long grass and the blossom round the lawns
+    glowWorms = new GlowWorms(scene, { lawn: landscape.lawn, ground: (x, z) => landscape.groundHeight(x, z), isGrass: (x, z) => landscape._grassAt(x, z) });
+    blossom = new Blossom(scene, { crowns: landscape.crowns, lawn: landscape.lawn, ground: (x, z) => landscape.groundHeight(x, z) });
+    // (end of the five more sights' block)
     if (fireSpot) {
       const [x, z] = fireSpot;
       bonfire = new Bonfire(scene, new THREE.Vector3(x, landscape.groundHeight(x, z) ?? 0, z), festSound, { groundAt });
@@ -1784,6 +1895,7 @@ $('reset').onclick = (e) => {
   moving?.set(false);
   setOakScene(false);
   showScene(-1);
+  sound.stopMusic();
   $('viewpoint').value = '';
   $('weather').value = 'live';
   forcedWeather = null;
@@ -1832,6 +1944,19 @@ const HOLIDAYS = {
   bonfire: { day: 308, hours: 19.75, weather: 'clear', pos: () => [bonfireAt().x - 1.5, 1.7, bonfireAt().z + 6], look: () => [bonfireAt().x - 5, 4.5, bonfireAt().z - 18] },
   // the lights, and snow falling
   christmas: { day: 357, hours: 16, weather: 'snow', pos: [4.6, 1.7, 19.2], look: [2.5, 5, -6] },
+  // the light show: Christmas Eve at six, on the drive by the fountain, the front ahead, as if
+  // someone had rung the bell (lightshow.js)
+  lightshow: {
+    day: 357,
+    hours: 18,
+    weather: 'clear',
+    pos: [6.5, 1.7, 19.5],
+    look: [8, 4.2, -12],
+    then: () => {
+      releaseLens(); // (the usual lens, wide enough for the house and the big tree)
+      lightShow?.ringWhenReady({ listener: new THREE.Vector3(6.5, 1.7, 19.5) });
+    },
+  },
   // just after midnight, on the drive: the fireworks bursting over the house, and the new year
   // written in the sky above it
   newyear: { day: 0, hours: 0.02, weather: 'clear', pos: [4.6, 1.7, 19.2], look: [4.5, 18, -20] },
@@ -1845,9 +1970,11 @@ const HOLIDAYS = {
   rainbow: { day: 118, hours: 18.2, weather: 'clear', wet: 1, pos: [-8, 1.7, 12], look: [50, 9, 10] },
   // the Perseids at their best: the small hours of 13 August, lying back on the lawn looking up to
   // the north-east, a busier sky for a few minutes
-  perseids: { day: 224, hours: 1.2, weather: 'clear', pos: [16, 1.3, 14], look: [28, 36, -22], orbit: true, then: () => (meteors.boost = 240) },
-  // a starling murmuration over the fields beyond the gate, at dusk late in November
-  murmuration: { day: 328, hours: 16.25, weather: 'clear', pos: [4.6, 6, 26], look: [-60, 36, 92], orbit: true, then: () => (murmuration.always = true) },
+  // (from the front lawn, the roofline dark against the north-east sky where they come from)
+  perseids: { day: 224, hours: 1.2, weather: 'clear', pos: [-2, 1.5, 15], look: [16, 15, -30], orbit: true, then: () => (meteors.boost = 240) },
+  // a starling murmuration over the woods just west of the house, at dusk late in November, seen
+  // from the east lawn with the house's front alongside
+  murmuration: { day: 328, hours: 16.25, weather: 'clear', pos: [17, 2.2, 9], look: [-30, 14, -14], orbit: true, then: () => (murmuration.always = true) },
   // the harvest moon risen huge and orange over the woods, across the front lawn (this year's: the
   // full moon nearest the autumn equinox)
   harvestmoon: {
@@ -1866,15 +1993,31 @@ const HOLIDAYS = {
     },
   },
   // hot-air balloons drifting low over the estate on a still June morning, from the lawn
-  balloons: { day: 172, hours: 6.2, weather: 'clear', pos: [4.6, 3, 34], look: [-25, 42, -25], orbit: true, then: () => (balloons.always = true) },
+  balloons: { day: 172, hours: 6.2, weather: 'clear', pos: [22, 2, 4], look: [-15, 30, -36], orbit: true, then: () => (balloons.always = true) },
   // a summer garden party on the east lawn at dusk
   party: { day: 180, hours: 21.3, weather: 'clear', pos: () => (party ? [party.at.x - 9, 2.4, party.at.z + 11] : [10, 2, 12]), look: () => (party ? [party.at.x, 1, party.at.z - 1] : [20, 1, 0]), then: () => party && (party.always = true) },
   // a hard frost on a late November morning: the lawns and the hedges white with it, a mist lifting,
   // the low sun coming through
   frost: { day: 330, hours: 8.6, weather: 'frost', pos: [16, 1.6, 12], look: [-4, 2.5, -8] },
+  // (the five more sights: sights3.js)
+  // glow-worms in the long grass of the meadow behind the house, on a warm June night, low down
+  glowworms: { day: 177, hours: 23.4, weather: 'clear', pos: [9, 0.8, -63], look: [6, 3.2, -36], orbit: true, then: () => glowWorms && (glowWorms.always = true) },
+  // night-shining clouds low in the north over the roofs, late on a June night, from the drive
+  // (from above the drive outside the gate, level with the roofs, through a longer lens: the
+  // roofline against them; on the ground the gate, the trees and the house hide them)
+  nlc: { day: 176, hours: 23.0, weather: 'clear', pos: [4.6, 10, 50], look: [3.5, 11.5, -40], orbit: true, then: () => {
+    nightClouds.always = true;
+    setTimeout(() => holdLens(40), 0);
+  } },
+  // a comet low in the west-north-west in the deep dusk of late March, from the east lawn
+  comet: { day: 83, hours: () => duskHour(83, 10), weather: 'clear', pos: [38, 1.8, 8], look: [-40, 14, -22], orbit: true, then: () => (comet.always = true) },
+  // blossom round the lawns on an April morning, the petals coming down
+  blossom: { day: 102, hours: 9.8, weather: 'clouds', pos: [6, 1.7, 14], look: [-22, 4.5, -6], then: () => blossom && (blossom.always = true) },
+  // snow falling on a still December night, through the floodlights up the front
+  snownight: { day: 352, hours: 21.5, weather: 'snownight', pos: [5, 1.7, 3], look: [-1.5, 3.5, -11], then: () => (nightSnow.always = true) },
   // the great hall's clock in a time-lapse: a February day from half past seven, the clock run (a
   // day in two minutes), the hands spinning and the sun's patches crossing the floor and the walls
-  timelapse: { day: 50, hours: 7.5, weather: 'clear', pos: [0.4, 1.55, -16.6], look: [-1.85, 1.25, -20.1], then: () => {
+  timelapse: { day: 50, hours: 7.5, weather: 'clear', pos: [-1.35, 1.35, -18.3], look: [-1.85, 1.05, -19.96], then: () => {
     setPlaying(true);
     playRate = 2; // (a day in a minute: half past seven to six in about 25 seconds)
     playUntil = 18;
@@ -2015,6 +2158,7 @@ function playScene(i, named = false) {
   if (named) toast([...$('holiday').options].find((o) => o.value === sceneIds[i]).textContent);
   showScene(i);
   $('viewpoint').value = '';
+  sound.stopMusic(); // (the last scene's music doesn't carry on into this one)
   wakeSound();
   moving?.set(false); // (another holiday or sight: the crates go)
   setOakScene(false);
@@ -2023,6 +2167,13 @@ function playScene(i, named = false) {
   murmuration.always = false;
   balloons.always = false;
   if (party) party.always = false;
+  for (const sight of [glowWorms, nightClouds, comet, blossom, nightSnow]) if (sight) sight.always = false; // (sights3.js)
+  // (a scene's own lens, as the night-shining clouds' or the harvest moon's, is not carried into the next)
+  if (lens) {
+    lens = null;
+    camera.fov = LENS;
+    camera.updateProjectionMatrix();
+  }
   tod.moonBig = 1;
   $('weather').value = h.weather;
   refreshWeather();
@@ -2268,16 +2419,21 @@ function step(dt, exporting = false) {
   tod.flashDir = storm.keyDir;
   updateExposure(dt);
   if (lamps) {
+    lamps.flicker = Spooky.isOn(seasonDay, tod.night) ? 1 : 0; // (Halloween night: the lamps outside falter)
     lamps.update(camera, tod.lamps, dt, renderer, tod.hours);
     if (festive) {
       festive.update(dt, tod.lamps, seasonDay, tod.hours, true);
+      xmasFront?.update(dt);
       festive.setScale(lamps.glowMat.uniforms.uScale.value);
     }
     if (spooky) {
       spooky.update(dt, camera, seasonDay, tod.night, tod.flash);
       haunt?.update(dt, { on: Spooky.isOn(seasonDay, tod.night), camera, flash: tod.flash, flight: spooky.flight, candlesOut: spooky.candlesOut });
       hauntIn?.update(dt, { on: Spooky.isOn(seasonDay, tod.night), camera });
+      xmasIn?.update(dt, { day: seasonDay, hours: tod.hours, camera, houseOn: lamps.houseOn !== false && !lamps.dark, scale: lamps.glowMat.uniforms.uScale.value }); // Christmas inside the house (xmasin.js)
       lure?.update(dt, { on: Spooky.isOn(seasonDay, tod.night), flight: mode === 'tour', camera, flash: tod.flash, level: tod.lamps, strike: () => storm.strike(modelCentre, 160 + Math.random() * 120, true, true), scale: lamps.glowMat.uniforms.uScale.value });
+      // (after the lure: it borrows its graveyard's light when that is dark)
+      graves?.update(dt, { on: Spooky.isOn(seasonDay, tod.night), rise: mode !== 'tour', camera, scale: lamps.glowMat.uniforms.uScale.value, light: lure?.graveLight, lightHome: lure?.graveHome, lightFree: !!lure && lure.moment <= 0 });
       // Halloween evening: the house dark, the lights outside failing in the storm, the front door ajar (and stirring in the wind)
       const hallowe = Spooky.isOn(seasonDay, tod.night);
       lamps.dark = hallowe;
@@ -2287,6 +2443,25 @@ function step(dt, exporting = false) {
       if (spooky.wantStrike) {
         spooky.wantStrike = false;
         storm.strike(modelCentre, 230 + Math.random() * 150, true, true);
+      }
+    }
+    // the doorbell and the Christmas light show: the lights from the music's clock (festive.js reads
+    // them next frame), the house's own lights dimmed for it, the hint by the bell
+    if (lightShow) {
+      lightShow.update(dt, { camera, day: seasonDay, exporting });
+      if (festive) festive.sync = lightShow.sync;
+      if (lightShow.playing || lightShow.houseCut > 0) {
+        lamps.cut = Math.max(lamps.cut, lightShow.houseCut);
+        for (const m of lamps.glass) m.emissiveIntensity *= 1 - lightShow.houseCut; // (the lit windows too)
+      }
+      const hint = lightShow.inReach && mode !== 'tour' && !photo;
+      if (hint !== !!lightShow.hintShown) {
+        lightShow.hintShown = hint;
+        const el = $('leave-hint');
+        if (hint) {
+          el.textContent = 'E rings the bell';
+          el.classList.add('show');
+        } else if (el.textContent === 'E rings the bell') el.classList.remove('show');
       }
     }
     // your lantern at hand height while you walk (and in the headset)
@@ -2320,7 +2495,7 @@ function step(dt, exporting = false) {
   tod.fitShadow(camera, { inside: lamps?.houseBox.containsPoint(camera.position) ? 1 : 0, low: camera.position.y < 9, whole: (mode === 'tour' && !lamps?.houseBox.containsPoint(camera.position)) || exporting, house: lamps?.houseBox });
   if (landscape) landscape.update(dt, tod);
   garden?.update(dt, { cold: coldness, wind, night: tod.night, scale: lamps?.glowMat.uniforms.uScale.value });
-  clockHands?.update(Number($('time').value));
+  clockHands?.update(Number($('time').value), dateOfMonth(seasonDay));
   stepLens(dt);
   if (doors) doors.update(camera, dt);
   camSpeed += ((dt > 0 ? camera.position.distanceTo(lastCam) / dt : 0) - camSpeed) * (1 - Math.exp(-dt * 6));
@@ -2354,6 +2529,15 @@ function step(dt, exporting = false) {
   balloons.update(dt, { day: seasonDay, hours: tod.hours, wind, camera });
   party?.update(dt, { day: seasonDay, hours: tod.hours, rain: weather.rain ?? 0, dusk: tod.lamps, camera, scale: lamps?.glowMat.uniforms.uScale.value });
   murmuration.update(dt, { day: seasonDay, sunDeg: THREE.MathUtils.radToDeg(Math.asin(THREE.MathUtils.clamp(tod.sunDir.y, -1, 1))), clouds: weather.clouds ?? 0, rain: weather.rain ?? 0, scale: lamps?.glowMat.uniforms.uScale.value });
+  // (the five more sights: sights3.js)
+  {
+    const scale = lamps?.glowMat.uniforms.uScale.value;
+    glowWorms?.update(dt, { day: seasonDay, hours: tod.hours, night: tod.night, rain: weather.rain ?? 0, scale });
+    nightClouds.update(dt, { day: seasonDay, sunDir: tod.sunDir, clouds: weather.clouds ?? 0, compass: tod.compass });
+    comet.update(dt, { sunDir: tod.sunDir, clouds: weather.clouds ?? 0, fog: weather.fog ?? 0, compass: tod.compass });
+    blossom?.update(dt, { day: seasonDay, wind, snow: seasonUniforms.uSnow.value, daylight: THREE.MathUtils.smoothstep(tod.sunDir.y, -0.05, 0.25), camera, scale });
+    nightSnow.update(dt, { snowing: weather.snowing ?? 0, night: tod.night, inside: tod.inside, camera, lamps, scale });
+  }
   elapsed += dt;
   // the pool: caustics move, brighter by day (the sun through the glass roof), the pool light by night
   poolUniforms.uPoolTime.value += dt;
@@ -2369,6 +2553,7 @@ function step(dt, exporting = false) {
     }
   }
   quality.fisheye = mode === 'tour' ? tour.fisheye : 0;
+  if (!exporting) sound.setWhine(mode === 'tour' && tour.fpv ? 1 : 0, tour.speed ?? 0); // (the FPV drone's motors)
   if (countdownShown !== countdown) {
     countdownShown = countdown;
     $('countdown').textContent = countdown;
@@ -2379,8 +2564,23 @@ function step(dt, exporting = false) {
   quality.beams.strength = BEAMS.strength * tod.inside * sunUp * Number($('sunbeams').checked);
   // (in the headset, drawn straight, two eyes; the post-processing is for the screen)
   if (vr.presenting) renderer.render(scene, camera);
-  else quality.render(dt);
+  else if (mode === 'tour' && flybyId && FLYBYS[flybyId]?.split) splitSeasons.render(dt, FLYBYS[flybyId].split);
+  else {
+    splitSeasons.end();
+    quality.render(dt);
+  }
 }
+
+// The seasons-at-once flybys (splitseasons.js): the picture in two or four parts, each in its season
+const splitSeasons = new SplitSeasons({
+  renderer,
+  quality,
+  camera,
+  tod,
+  snowfall,
+  rainfall,
+  world: () => ({ landscape, leaves, snowman, easter, water, jetAllowed: !oakScene }),
+});
 
 /** What the sound needs to know about this moment. */
 function soundEnv() {
@@ -2420,6 +2620,7 @@ const wildSound = {
   },
   duration: (name) => sound.duration(name),
   voice: () => (sound.on && !exporting ? sound.level() : 0),
+  onStopMusic: (f) => sound.onStopMusic.add(f),
 };
 // The festivals' sounds (the bonfire, rockets and bangs, the thunder): played as they happen, or,
 // while a video is being made, noted down frame by frame for its soundtrack (video.js plays them back)
@@ -2443,6 +2644,15 @@ const meteors = new Meteors(scene); // the Perseids (sights.js)
 const murmuration = new Murmuration(scene, wildSound); // starlings at a winter dusk (sights.js)
 const balloons = new Balloons(scene, wildSound); // hot-air balloons on still summer mornings (sights2.js)
 let party = null; // a summer garden party on the east lawn (sights2.js)
+// Five more sights (sights3.js): glow-worms in the long grass, night-shining clouds, a comet, the
+// blossom in April, and snow falling at night lit by the lamps (the first and the blossom once the
+// grounds are laid out)
+const nightClouds = new NightClouds(scene);
+const comet = new Comet(scene);
+const nightSnow = new NightSnow(scene);
+let glowWorms = null;
+let blossom = null;
+// (end of the five more sights' block)
 const santa = new Santa(scene, wildSound, { roof: { at: new THREE.Vector3(-6.6, 11.36, -19.9), dir: new THREE.Vector3(1, 0, 0) } });
 
 // Making a video of a flyby (video.js): the viewer, as the video maker sees it
@@ -2603,6 +2813,9 @@ window.manor = {
   scene,
   camera,
   renderer,
+  get splitSeasons() {
+    return splitSeasons;
+  },
   orbit,
   keys,
   setMode,
@@ -2657,14 +2870,30 @@ window.manor = {
   },
   meteors,
   murmuration,
+  // (sights3.js)
+  nightClouds,
+  comet,
+  nightSnow,
+  get glowWorms() {
+    return glowWorms;
+  },
+  get blossom() {
+    return blossom;
+  },
   get haunt() {
     return haunt;
+  },
+  get graves() {
+    return graves;
   },
   get lure() {
     return lure;
   },
   get hauntIn() {
     return hauntIn;
+  },
+  get xmasIn() {
+    return xmasIn;
   },
   get statue() {
     return statue;
@@ -2680,6 +2909,9 @@ window.manor = {
   },
   get bonfire() {
     return bonfire;
+  },
+  get lightShow() {
+    return lightShow;
   },
   get festive() {
     return festive;

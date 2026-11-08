@@ -50,6 +50,8 @@ export class Soundscape {
     this._tickSide = 0;
     this.snow = 0;
     this.volume = 1; // the volume control, 0 to 1 (a video's soundtrack is made at full volume)
+    this._music = new Set(); // the long recordings playing now (stopMusic)
+    this.onStopMusic = new Set(); // (others that play music: called by stopMusic)
   }
 
   /** How loud, from the volume control: squared, so the control feels even to the ear. */
@@ -529,6 +531,65 @@ export class Soundscape {
     if (lowpass > 0) src.connect(this._filter('lowpass', lowpass, 0.7)).connect(g).connect(out);
     else src.connect(g).connect(out);
     src.start(this.ctx.currentTime + Math.max(0, delay));
+    // (music and other long recordings are kept track of, so another scene can stop them)
+    if (src.buffer.duration > 15) {
+      const playing = { src, gain: g };
+      this._music.add(playing);
+      src.onended = () => this._music.delete(playing);
+    }
+  }
+
+  /**
+   * Stops the music and the long recordings (the waltz, the zombies' party, the music box…), fading
+   * them out, and tells whatever else plays music (the light show) to stop: a new scene, a place, a
+   * flyby or Reset shouldn't carry the last one's music on.
+   */
+  stopMusic() {
+    for (const f of this.onStopMusic) f();
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    for (const m of this._music) {
+      m.gain.gain.cancelScheduledValues(t);
+      m.gain.gain.setValueAtTime(m.gain.gain.value, t);
+      m.gain.gain.linearRampToValueAtTime(0, t + 0.5);
+      try {
+        m.src.stop(t + 0.55);
+      } catch {}
+    }
+    this._music.clear();
+  }
+
+  /**
+   * The FPV drone's motors: four small motors' whine (detuned saws through a band-pass), rising with
+   * the speed, beating as they work against each other. level 0 silences it.
+   */
+  setWhine(level, speed = 0) {
+    if (!this.ctx || (!this._whine && level <= 0)) return;
+    const ctx = this.ctx;
+    if (!this._whine) {
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
+      const band = this._filter('bandpass', 900, 0.9);
+      const low = this._filter('lowpass', 3200, 0.7);
+      band.connect(low).connect(gain).connect(this.master);
+      const oscs = [0, 7, -9, 13].map((cents) => {
+        const o = ctx.createOscillator();
+        o.type = 'sawtooth';
+        o.detune.value = cents;
+        o.frequency.value = 180;
+        o.connect(band);
+        o.start();
+        return o;
+      });
+      this._whine = { gain, band, oscs };
+    }
+    const w = this._whine;
+    const t = ctx.currentTime;
+    const v = Math.min(1, speed / 26);
+    const f = 150 + 260 * v; // (the motors spool up as it speeds up)
+    w.oscs.forEach((o, i) => o.frequency.setTargetAtTime(f * (1 + i * 0.012), t, 0.08));
+    w.band.frequency.setTargetAtTime(700 + 1400 * v, t, 0.1);
+    w.gain.gain.setTargetAtTime(level * (0.035 + 0.05 * v), t, 0.12);
   }
 
   /** Whether a recording is loaded (otherwise the synthesised sound is used). */

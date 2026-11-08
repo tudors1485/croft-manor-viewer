@@ -100,6 +100,7 @@ export class Lamps {
     this.houseOn = true; // the panel's switch for the whole house
     this.dark = false; // Halloween: the house dark (seen from outside; inside, the lights still come on)
     this.cut = 0; // the lights failing in a storm (spooky.js): 0 on .. 1 all out
+    this.flicker = 0; // Halloween night: how much the lamps outside falter (0 steady .. 1)
     this.houseBox = new THREE.Box3(new THREE.Vector3(-14.6, -1, -32.2), new THREE.Vector3(29.4, 13, -9.3));
 
     const flames = []; // [x, y, z, size, phase, kind]
@@ -458,7 +459,23 @@ export class Lamps {
       this._want[i] = want;
       l.on += (want - l.on) * (1 - Math.exp(-dt * 3.5));
       if (Math.abs(want - l.on) < 0.002) l.on = want;
-      u.uOn.value[i] = l.on * (1 - this.cut);
+      // Halloween night: the lamps outside falter now and then (a stutter, a dip, out for a moment),
+      // and are never quite steady between
+      l.flv = 1;
+      if (this.flicker > 0 && l.outdoor) {
+        const T = u.uTime.value;
+        const F = (l.fl ??= { next: hash(i) * 7, until: 0, kind: 0 });
+        if (T >= F.next) {
+          F.until = T + 0.15 + Math.random() * 1.2;
+          F.kind = Math.random();
+          F.next = F.until + 2 + Math.random() * 10;
+        }
+        let f;
+        if (T < F.until) f = F.kind < 0.6 ? (Math.sin(T * 47 + i * 3.7) > 0.15 ? 1 : 0.06) * (0.65 + 0.35 * Math.sin(T * 13 + i)) : F.kind < 0.85 ? 0.35 : 0.02;
+        else f = 0.93 + 0.07 * Math.sin(T * 9 + i * 2.1) * Math.sin(T * 3.3 + i);
+        l.flv = 1 - this.flicker * (1 - f);
+      }
+      u.uOn.value[i] = l.on * (1 - this.cut) * l.flv;
       lit = Math.max(lit, l.on);
       if (l.kind === 'tube') tubes = Math.max(tubes, l.on);
       if (!l.outdoor) {
@@ -532,7 +549,7 @@ Lamps.prototype._handOut = function (camera, inside, dt) {
     p.light.position.copy(l.pos);
     p.light.color.copy(l.colour);
     p.light.distance = l.range;
-    p.light.intensity = l.power * l.on * cut * l.pooled;
+    p.light.intensity = l.power * l.on * cut * l.pooled * (l.flv ?? 1);
   }
 };
 

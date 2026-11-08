@@ -155,7 +155,23 @@ export function bulbs(list, size, kind = 'twinkle') {
   geo.setAttribute('along', new THREE.Float32BufferAttribute(list.map((b) => b.along ?? 0), 1));
   const mat = new THREE.ShaderMaterial({
     defines: { KIND: kind === 'chase' ? 1 : kind === 'icicle' ? 2 : 0 },
-    uniforms: { uMap: { value: glowSprite() }, uOn: { value: 0 }, uTime: { value: 0 }, uScale: { value: 800 }, uSize: { value: size }, uShow: { value: 0 } },
+    uniforms: {
+      uMap: { value: glowSprite() },
+      uOn: { value: 0 },
+      uTime: { value: 0 },
+      uScale: { value: 800 },
+      uSize: { value: size },
+      uShow: { value: 0 },
+      // the light show (lightshow.js): how far it has taken over (0 not at all), and what it says
+      uSync: { value: 0 },
+      uSyncColour: { value: new THREE.Color(1, 0.84, 0.58) },
+      uSyncMix: { value: 1 },
+      uSyncLevel: { value: 0 },
+      uSweep: { value: new THREE.Vector3(0, 60, 0) }, // x, width, how much
+      uHalves: { value: new THREE.Vector3(7.5, 1, 1) }, // the middle's x, the west half, the east half
+      uChase: { value: new THREE.Vector2(0, 0) }, // where, how much
+      uSparkle: { value: 0 },
+    },
     vertexShader: /* glsl */ `
       attribute vec3 colour;
       attribute float phase;
@@ -164,6 +180,14 @@ export function bulbs(list, size, kind = 'twinkle') {
       uniform float uScale;
       uniform float uSize;
       uniform float uShow;
+      uniform float uSync;
+      uniform vec3 uSyncColour;
+      uniform float uSyncMix;
+      uniform float uSyncLevel;
+      uniform vec3 uSweep;
+      uniform vec3 uHalves;
+      uniform vec2 uChase;
+      uniform float uSparkle;
       varying vec3 vColour;
       void main() {
         vec4 mv = modelViewMatrix * vec4(position, 1.0);
@@ -183,8 +207,25 @@ export function bulbs(list, size, kind = 'twinkle') {
           float drip = pow(fract(phase - uTime * 0.45 + along * 0.18), 8.0);
           c = colour * (0.35 + 0.1 * tw + 1.1 * drip);
         #endif
+        // the light show: its colour and brightness, through a band of light along the house (x), the
+        // house's two halves, a chase along the string and a sparkle, mixed over the usual look
+        float boost = 1.0;
+        if (uSync > 0.0) {
+          float x = (modelMatrix * vec4(position, 1.0)).x;
+          float l = uSyncLevel;
+          float band = exp(-pow((x - uSweep.x) / max(uSweep.y, 0.05), 2.0));
+          l *= mix(1.0, band, uSweep.z);
+          l *= mix(uHalves.y, uHalves.z, smoothstep(uHalves.x - 1.5, uHalves.x + 1.5, x));
+          float block = step(0.5, fract(along / 6.0 - uChase.x));
+          l *= mix(1.0, block, uChase.y);
+          float h = fract(sin(dot(vec2(phase * 91.7, floor(uTime * 12.0 + phase * 5.0)), vec2(12.9898, 78.233))) * 43758.5453);
+          l *= mix(1.0, step(0.78, h) * 2.4, uSparkle);
+          vec3 s = mix(colour, uSyncColour, uSyncMix) * l;
+          c = mix(c, s, uSync);
+          boost = 1.0 + uSync * 0.5 * clamp(l, 0.0, 2.0); // (a flash swells the bulbs a little)
+        }
         vColour = c;
-        gl_PointSize = clamp(uSize * uScale / -mv.z, 2.0, 22.0);
+        gl_PointSize = clamp(uSize * uScale / -mv.z * boost, 2.0, 26.0);
       }`,
     fragmentShader: /* glsl */ `
       uniform sampler2D uMap;
@@ -252,8 +293,9 @@ export class Festive {
    * @param {{centre: THREE.Vector3, normal: THREE.Vector3, y0: number}} o.door the front door
    * @param {{x:number, z:number, r:number}[]} o.oaks the two oaks inside the gate
    * @param {{x:number, z:number}} o.gate
+   * @param {(faceIndex: number) => string} [o.materialAt] the material's name at a face of the collision tree
    */
-  constructor(scene, { bvh, door, oaks, gate }) {
+  constructor(scene, { bvh, door, oaks, gate, materialAt = () => '' }) {
     this.halloween = new THREE.Group();
     this.halloween.name = 'Halloween';
     this.christmas = new THREE.Group();
@@ -320,11 +362,19 @@ export class Festive {
       const lo = Math.min(zNear, zFar);
       const hi = Math.max(zNear, zFar);
       for (let x = x0; x <= x1; x += 0.24) {
+        // (the pool's glass roof and its ribs are passed over, for the parapet in front of them; but
+        // never a wall behind the glass, seen through it)
+        let glass = Infinity;
         for (let y = yTop; y > 1.5; y -= 0.08) {
           ray.set(face.axis === 'x' ? new THREE.Vector3(x, y, zFrom) : new THREE.Vector3(zFrom, y, x), face.dir);
           const hit = bvh.raycastFirst(ray, THREE.DoubleSide, 0, 60);
           const p = hit ? (face.axis === 'x' ? hit.point.z : hit.point.x) : 0;
           if (!hit || p > hi || p < lo) continue;
+          if (/glass|window|skylight/i.test(materialAt(hit.faceIndex))) {
+            glass = Math.min(glass, hit.distance);
+            continue;
+          }
+          if (hit.distance > glass - 0.05) continue;
           if (Math.abs(hit.face.normal.dot(face.dir)) < 0.6) continue; // a roof, not a wall
           const at = hit.point.clone().addScaledVector(face.dir, -dz);
           outline.push({ pos: [at.x, y - 0.06, at.z], colour: warm(), phase: Math.random(), along: outline.length });
@@ -468,35 +518,57 @@ export class Festive {
     if (door) {
       const out = door.normal.clone();
       if (out.z < 0) out.negate();
-      const wreath = new THREE.Group();
       const green = new THREE.MeshStandardMaterial({ color: 0x1c4425, roughness: 0.85 });
       const red = new THREE.MeshStandardMaterial({ color: 0xa3120f, roughness: 0.45, emissive: 0x200202 });
-      wreath.add(new THREE.Mesh(new THREE.TorusGeometry(0.33, 0.1, 10, 28), green));
-      // (sprigs round it, berries, and a bow at the bottom)
-      const sprig = new THREE.ConeGeometry(0.05, 0.16, 5);
-      for (let k = 0; k < 36; k++) {
-        const a = (k / 36) * Math.PI * 2;
-        const m = new THREE.Mesh(sprig, green);
-        m.position.set(Math.cos(a) * (0.33 + (k % 2 ? 0.07 : -0.05)), Math.sin(a) * (0.33 + (k % 2 ? 0.07 : -0.05)), 0.05);
-        m.rotation.z = a + (k % 3) * 0.6;
-        wreath.add(m);
+      const makeWreath = () => {
+        const wreath = new THREE.Group();
+        wreath.add(new THREE.Mesh(new THREE.TorusGeometry(0.33, 0.1, 10, 28), green));
+        // (sprigs round it, berries, and a bow at the bottom)
+        const sprig = new THREE.ConeGeometry(0.05, 0.16, 5);
+        for (let k = 0; k < 36; k++) {
+          const a = (k / 36) * Math.PI * 2;
+          const m = new THREE.Mesh(sprig, green);
+          m.position.set(Math.cos(a) * (0.33 + (k % 2 ? 0.07 : -0.05)), Math.sin(a) * (0.33 + (k % 2 ? 0.07 : -0.05)), 0.05);
+          m.rotation.z = a + (k % 3) * 0.6;
+          wreath.add(m);
+        }
+        for (let k = 0; k < 14; k++) {
+          const a = Math.random() * Math.PI * 2;
+          const b = new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 4), red);
+          b.position.set(Math.cos(a) * 0.33, Math.sin(a) * 0.33, 0.1);
+          wreath.add(b);
+        }
+        for (const s of [-1, 1]) {
+          const loop = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.16, 4), red);
+          loop.position.set(s * 0.08, -0.33, 0.1);
+          loop.rotation.z = (s * Math.PI) / 2;
+          wreath.add(loop);
+        }
+        wreath.traverse((o) => o.isMesh && (o.castShadow = true));
+        return wreath;
+      };
+      // a wreath on each leaf of the door, hung on the leaf itself so it swings open with it
+      // (the door's pair of leaves: each wreath a little smaller, to fit its leaf)
+      this.doorWreaths = [];
+      const leaves = door.leaves ?? [];
+      const leafWidth = door.width / Math.max(1, leaves.length);
+      for (const leaf of leaves) {
+        const wreath = makeWreath();
+        wreath.scale.setScalar(Math.min(1, (leafWidth * 0.78) / 0.96));
+        const p = door.centre.clone().addScaledVector(out, 0.14).setY(door.y0 + 2.0);
+        p[door.wide] = leaf.pivot.position[door.wide] + (leaf.freeDir * leafWidth) / 2;
+        wreath.position.copy(p);
+        wreath.lookAt(p.clone().add(out));
+        leaf.pivot.updateMatrixWorld(true);
+        leaf.pivot.attach(wreath); // (keeps where it is, in the leaf's own frame)
+        this.doorWreaths.push(wreath);
       }
-      for (let k = 0; k < 14; k++) {
-        const a = Math.random() * Math.PI * 2;
-        const b = new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 4), red);
-        b.position.set(Math.cos(a) * 0.33, Math.sin(a) * 0.33, 0.1);
-        wreath.add(b);
+      if (!leaves.length) {
+        const wreath = makeWreath();
+        wreath.position.copy(door.centre).addScaledVector(out, 0.14).setY(door.y0 + 2.05);
+        wreath.lookAt(wreath.position.clone().add(out));
+        this.eve.add(wreath);
       }
-      for (const s of [-1, 1]) {
-        const loop = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.16, 4), red);
-        loop.position.set(s * 0.08, -0.33, 0.1);
-        loop.rotation.z = (s * Math.PI) / 2;
-        wreath.add(loop);
-      }
-      wreath.position.copy(door.centre).addScaledVector(out, 0.14).setY(door.y0 + 2.05);
-      wreath.lookAt(wreath.position.clone().add(out));
-      wreath.traverse((o) => o.isMesh && (o.castShadow = true));
-      this.eve.add(wreath);
       // small trees in tubs either side of the door, white lights on them
       const side = new THREE.Vector3(out.z, 0, -out.x);
       const tubLights = [];
@@ -551,6 +623,7 @@ export class Festive {
     const christmas = inRange(Math.floor(day), CHRISTMAS);
     this.halloween.visible = halloween;
     this.christmas.visible = christmas;
+    if (!christmas) for (const w of this.doorWreaths ?? []) w.visible = false;
     const t = (this._t = (this._t ?? 0) + dt);
     if (halloween) {
       // candles inside: a flicker, lit from dusk (and a little by day, in the shade of the porch),
@@ -570,17 +643,58 @@ export class Festive {
       // (by day they show a little less against the light)
       const allDay = inRange(Math.floor(day), ALL_DAY);
       const late = hours > 0.5 && hours < 6.5;
-      const on = !houseOn ? 0 : allDay ? Math.max(level, 0.75) : late ? 0 : level;
+      const usual = !houseOn ? 0 : allDay ? Math.max(level, 0.75) : late ? 0 : level;
+      // the light show (lightshow.js) has them on, even by day, and tells each set what to do
+      const sync = this.sync;
+      const showing = !!sync && sync.amount > 0.001;
+      const on = showing ? Math.max(usual, sync.amount) : usual;
+      const eve = inRange(Math.floor(day), [357, 5]);
       for (const p of [this.outline, this.icicles, this.treeLights, ...this.extra]) {
-        p.material.uniforms.uOn.value = on;
-        p.material.uniforms.uTime.value = t;
-        p.material.uniforms.uShow.value = this.show;
-        p.visible = on > 0.01;
+        const u = p.material.uniforms;
+        u.uOn.value = on;
+        u.uTime.value = t;
+        u.uShow.value = this.show;
+        // (the dressing's lights, like the dressing, from Christmas Eve)
+        p.visible = on > 0.01 && (!this.extra.includes(p) || eve);
+        u.uSync.value = showing ? sync.amount : 0;
+        if (showing) {
+          const g = sync.groups[this._role(p)];
+          if (!g) continue;
+          u.uSyncColour.value.setRGB(g.colour[0], g.colour[1], g.colour[2]);
+          u.uSyncMix.value = g.mix;
+          u.uSyncLevel.value = g.level;
+          u.uSweep.value.set(g.sweepX, g.sweepW, g.sweepAmt);
+          u.uHalves.value.set(7.5, g.halfL, g.halfR);
+          u.uChase.value.set(g.chase, g.chaseAmt);
+          u.uSparkle.value = g.sparkle;
+        }
       }
       // the dressing from Christmas Eve (the wreath, the trees) to Twelfth Night
       if (this.eve) this.eve.visible = inRange(Math.floor(day), [357, 5]);
+      for (const w of this.doorWreaths ?? []) w.visible = this.eve?.visible ?? false;
       if (this.star) this.star.rotation.y = t * 0.3;
     }
+  }
+
+  /** Are the Christmas lights up on this day of the year (1 December to Twelfth Night)? */
+  static isChristmas(day) {
+    return inRange(Math.floor(day), CHRISTMAS);
+  }
+
+  /** Which set of lights a string is, for the light show: the roofline, the icicles, the window
+   * frames, the candles on the sills, the trees (the oaks, the fairy lights, the gate's pillars, the
+   * small trees and the big one) or the big tree's star. */
+  _role(p) {
+    if (p.userData.showRole) return p.userData.showRole;
+    let role = 'trees';
+    if (p === this.outline) role = 'roof';
+    else if (p === this.icicles) role = 'icicles';
+    else if (p === this.treeLights) role = 'trees';
+    else if (p.geometry.attributes.position.count === 1) role = 'star';
+    else if (p === this.extra[0]) role = 'windows'; // (decorate adds the window frames first, then the candles)
+    else if (p === this.extra[1]) role = 'candles';
+    p.userData.showRole = role;
+    return role;
   }
 
   /** Points need the screen's size to size their bulbs in metres. */

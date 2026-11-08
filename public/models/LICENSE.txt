@@ -39,6 +39,12 @@ dress-form.glb      "Dress form" by reyshapes, https://poly.pizza/m/tYwjQJvcFX  
 doll.glb            "Doll" by CreativeTrio, https://poly.pizza/m/YUAwclCDrF                  CC0 1.0
 birdcage.glb        "Victorian birdcage" by Poly by Google, https://poly.pizza/m/0d4ExMmqXUV   CC BY 3.0
 gramophone.glb      "Gramophone" by Don Carson, https://poly.pizza/m/9MZ0sCt1REv            CC BY 3.0
+                    (also on the side table at the summer garden party, sights2.js)
 witch-hat.glb       "Witch hat" by J-Toastie, https://poly.pizza/m/fy1Elzr3nl                CC BY 3.0
 (textures shrunk; some scaled to metres or decimated)
 CC BY 3.0: https://creativecommons.org/licenses/by/3.0/
+
+party/ (the summer garden party, sights2.js):
+table-chair-set.glb  "Outdoor Table Chair Set 01" by James Ray Cock, https://polyhaven.com/a/outdoor_table_chair_set_01
+                     CC0 1.0 (textures shrunk, decimated): its folding chair round the long tables, its table and chairs on the lawn
+(the marquee, the tablecloths, the place settings and the hot-air balloons are drawn in code)

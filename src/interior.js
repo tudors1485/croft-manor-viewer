@@ -143,103 +143,235 @@ export function dressInterior(scene, model) {
 
 /**
  * The grandfather clock in the great hall keeping the viewer's time: a dial laid over its painted
- * one (whose hands are painted at ten past ten), an enamel chapter ring with Roman numerals round a
- * brass centre, and blued-steel hands; a seconds hand with the tick. When the clock is run (the ▶ by
- * the time), the hands spin.
+ * one (whose hands are painted at ten past ten), drawn after it: a silvered chapter ring, a matted
+ * brass centre with a seconds dial and the date, pierced blued-steel hands; the seconds hand steps
+ * with the tick. When the clock is run (the ▶ by the time), the hands spin.
  */
 export function hallClock(scene) {
   const C = new THREE.Vector3(-1.85, 1.475, -19.957); // the dial's middle, on the front of the hood
   const R = 0.118;
+  // drawn as the model's own dial is (an eighteenth-century longcase dial): a silvered chapter ring
+  // with Roman hours and the minutes in fives outside, a matted brass centre with a seconds dial
+  // above and a date in an aperture below, two winding holes; the brass spandrels in the corners
+  // are the model's own
+  const N = 1024;
   const c = document.createElement('canvas');
-  c.width = c.height = 512;
+  c.width = c.height = N;
   const g = c.getContext('2d');
-  // the brass dial plate, engraved, with the enamel chapter ring on it
-  const brass = g.createRadialGradient(256, 230, 20, 256, 256, 256);
-  brass.addColorStop(0, '#e7c977');
-  brass.addColorStop(1, '#9a7a34');
+  const K = N / 512; // (drawn on a 512 grid)
+  g.scale(K, K);
+  const ring = (r, w, colour) => {
+    g.strokeStyle = colour;
+    g.lineWidth = w;
+    g.beginPath();
+    g.arc(256, 256, r, 0, Math.PI * 2);
+    g.stroke();
+  };
+  // the brass plate, matted (a fine stipple), darker towards the edge
+  const brass = g.createRadialGradient(240, 230, 10, 256, 256, 260);
+  brass.addColorStop(0, '#a99566');
+  brass.addColorStop(0.7, '#8c7848');
+  brass.addColorStop(1, '#6a5730');
   g.fillStyle = brass;
   g.fillRect(0, 0, 512, 512);
-  g.strokeStyle = 'rgba(80,55,15,0.35)';
-  for (let r = 40; r < 140; r += 9) {
-    g.beginPath();
-    g.arc(256, 256, r, 0, Math.PI * 2);
-    g.stroke();
+  for (let i = 0; i < 9000; i++) {
+    const v = Math.random();
+    g.fillStyle = v < 0.5 ? `rgba(60,42,10,${0.05 + v * 0.1})` : `rgba(255,236,170,${(v - 0.5) * 0.12})`;
+    g.fillRect(Math.random() * 512, Math.random() * 512, 1.2, 1.2);
   }
-  g.fillStyle = '#f2ede0';
+  // the silvered chapter ring: from 132 to 252, a soft sheen across it
+  const silver = g.createLinearGradient(80, 40, 430, 470);
+  silver.addColorStop(0, '#dcd9d1');
+  silver.addColorStop(0.45, '#c9c5bc');
+  silver.addColorStop(0.55, '#d3cfc6');
+  silver.addColorStop(1, '#b3aea3');
+  g.fillStyle = silver;
   g.beginPath();
-  g.arc(256, 256, 250, 0, Math.PI * 2);
-  g.arc(256, 256, 160, 0, Math.PI * 2, true);
+  g.arc(256, 256, 252, 0, Math.PI * 2);
+  g.arc(256, 256, 132, 0, Math.PI * 2, true);
   g.fill('evenodd');
-  g.strokeStyle = '#2a2420';
-  g.lineWidth = 2;
-  for (const r of [250, 228, 160]) {
-    g.beginPath();
-    g.arc(256, 256, r, 0, Math.PI * 2);
-    g.stroke();
+  for (let i = 0; i < 2600; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const r = 132 + Math.random() * 120;
+    g.fillStyle = `rgba(90,85,75,${Math.random() * 0.05})`;
+    g.fillRect(256 + Math.cos(a) * r, 256 + Math.sin(a) * r, 1.5, 1.5);
   }
-  // the minute track, and the hours in Roman numerals
+  const ink = '#1d1b19';
+  ring(252, 1.5, 'rgba(60,50,30,0.6)');
+  ring(132, 1.2, 'rgba(60,50,30,0.5)');
+  // the minute track: two fine circles, a tick each minute, a longer one each five
+  ring(212, 1.4, ink);
+  ring(198, 1.4, ink);
+  g.strokeStyle = ink;
   for (let m = 0; m < 60; m++) {
     const a = (m / 60) * Math.PI * 2;
-    const r0 = m % 5 ? 236 : 230;
-    g.lineWidth = m % 5 ? 2 : 4;
+    g.lineWidth = m % 5 ? 1.3 : 2.2;
+    const r0 = m % 5 ? 198 : 194;
     g.beginPath();
     g.moveTo(256 + Math.sin(a) * r0, 256 - Math.cos(a) * r0);
-    g.lineTo(256 + Math.sin(a) * 248, 256 - Math.cos(a) * 248);
+    g.lineTo(256 + Math.sin(a) * 212, 256 - Math.cos(a) * 212);
     g.stroke();
   }
-  const roman = ['XII', 'I', 'II', 'III', 'IIII', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI'];
-  g.fillStyle = '#1e1a16';
-  g.font = '600 44px Georgia, serif';
+  // the half hours: a small fleur between the hours, inside the track
+  g.fillStyle = ink;
+  for (let h = 0; h < 12; h++) {
+    const a = ((h + 0.5) / 12) * Math.PI * 2;
+    g.save();
+    g.translate(256 + Math.sin(a) * 186, 256 - Math.cos(a) * 186);
+    g.rotate(a);
+    g.beginPath();
+    g.moveTo(0, -6);
+    g.quadraticCurveTo(4, 0, 0, 6);
+    g.quadraticCurveTo(-4, 0, 0, -6);
+    g.fill();
+    g.restore();
+  }
+  // the minutes in fives, outside the track, upright as they are on the dial
+  g.font = 'italic 400 21px Georgia, "Times New Roman", serif';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
+  for (let k = 1; k <= 12; k++) {
+    const a = (k / 12) * Math.PI * 2;
+    g.fillText(String(k * 5), 256 + Math.sin(a) * 232, 256 - Math.cos(a) * 232);
+  }
+  // the Roman hours, radial (their feet towards the middle), tall and slender
+  const roman = ['XII', 'I', 'II', 'III', 'IIII', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI'];
+  g.font = '400 36px Georgia, "Times New Roman", serif';
   roman.forEach((t, h) => {
     const a = (h / 12) * Math.PI * 2;
     g.save();
-    g.translate(256 + Math.sin(a) * 194, 256 - Math.cos(a) * 194);
+    g.translate(256 + Math.sin(a) * 162, 256 - Math.cos(a) * 162);
     g.rotate(a);
+    g.scale(0.86, 1.3);
     g.fillText(t, 0, 0);
     g.restore();
   });
+  // the maker's name at the bottom of the ring, between VII and V, as such dials have
+  g.font = 'italic 400 13px Georgia, serif';
+  g.save();
+  g.translate(256, 256);
+  for (const [txt, a] of [['Croft', 0.36], ['Surrey', -0.36]]) {
+    g.save();
+    g.rotate(a);
+    g.fillText(txt, 0, 236);
+    g.restore();
+  }
+  g.restore();
+  // the seconds dial above the middle: a small silvered ring with its own track
+  const S = { x: 256, y: 184, r: 36 };
+  g.fillStyle = '#cfcbc2';
+  g.beginPath();
+  g.arc(S.x, S.y, S.r, 0, Math.PI * 2);
+  g.arc(S.x, S.y, S.r - 15, 0, Math.PI * 2, true);
+  g.fill('evenodd');
+  g.strokeStyle = ink;
+  g.lineWidth = 1;
+  for (const r of [S.r, S.r - 15]) {
+    g.beginPath();
+    g.arc(S.x, S.y, r, 0, Math.PI * 2);
+    g.stroke();
+  }
+  for (let k = 0; k < 60; k++) {
+    const a = (k / 60) * Math.PI * 2;
+    g.lineWidth = k % 5 ? 0.8 : 1.4;
+    const r0 = k % 5 ? S.r - 6 : S.r - 10;
+    g.beginPath();
+    g.moveTo(S.x + Math.sin(a) * r0, S.y - Math.cos(a) * r0);
+    g.lineTo(S.x + Math.sin(a) * S.r, S.y - Math.cos(a) * S.r);
+    g.stroke();
+  }
+  // the winding holes, either side, a little below the middle
+  for (const dx of [-58, 58]) {
+    const h = g.createRadialGradient(256 + dx, 282, 1, 256 + dx, 282, 9);
+    h.addColorStop(0, '#0c0a08');
+    h.addColorStop(0.75, '#231a0c');
+    h.addColorStop(1, 'rgba(120,95,40,0.9)');
+    g.fillStyle = h;
+    g.beginPath();
+    g.arc(256 + dx, 282, 9, 0, Math.PI * 2);
+    g.fill();
+  }
+  // the date aperture below the middle: a crescent opening (the date is drawn into it as the day changes)
+  const D = { x: 256, y: 338 };
+  const drawDate = (n) => {
+    g.save();
+    g.beginPath();
+    g.arc(D.x, D.y - 46, 66, 0.28 * Math.PI, 0.72 * Math.PI);
+    g.arc(D.x, D.y - 72, 70, 0.66 * Math.PI, 0.34 * Math.PI, true);
+    g.closePath();
+    g.fillStyle = '#d6d2c8';
+    g.fill();
+    g.strokeStyle = '#3a2c12';
+    g.lineWidth = 1.5;
+    g.stroke();
+    g.clip();
+    g.fillStyle = ink;
+    g.font = '600 15px Georgia, serif';
+    g.fillText(String(n), D.x, D.y + 8);
+    g.restore();
+  };
+  drawDate(1);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 8;
   const group = new THREE.Group();
   group.position.copy(C);
-  const dial = new THREE.Mesh(new THREE.CircleGeometry(R, 48), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.45, metalness: 0.1 }));
+  const dial = new THREE.Mesh(new THREE.CircleGeometry(R, 64), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.42, metalness: 0.25 }));
   group.add(dial);
-  const steel = new THREE.MeshStandardMaterial({ color: 0x14182a, metalness: 0.7, roughness: 0.3 });
-  // a hand: a tapering blade from the middle, with a tail
-  const hand = (len, width, z) => {
-    const s = new THREE.Shape();
-    s.moveTo(-width * 0.5, -len * 0.18);
-    s.lineTo(width * 0.5, -len * 0.18);
-    s.lineTo(width * 0.32, len * 0.7);
-    s.lineTo(0, len);
-    s.lineTo(-width * 0.32, len * 0.7);
-    s.closePath();
-    const m = new THREE.Mesh(new THREE.ShapeGeometry(s), steel);
-    m.position.z = z;
-    group.add(m);
-    return m;
+  // blued steel hands, pierced as the old ones are
+  const blued = new THREE.MeshStandardMaterial({ color: 0x182038, metalness: 0.75, roughness: 0.28 });
+  const u = R / 256; // (a canvas pixel, in metres)
+  const shapeHand = (pts, holes = []) => {
+    const s = new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x * u, y * u)));
+    for (const [x, y, r] of holes) {
+      const h = new THREE.Path();
+      h.absarc(x * u, y * u, r * u, 0, Math.PI * 2, true);
+      s.holes.push(h);
+    }
+    return new THREE.ShapeGeometry(s, 16);
   };
-  const hour = hand(R * 0.55, R * 0.11, 0.003);
-  const minute = hand(R * 0.86, R * 0.075, 0.005);
-  const second = hand(R * 0.9, R * 0.02, 0.007);
-  second.material = new THREE.MeshStandardMaterial({ color: 0x5a1610, metalness: 0.4, roughness: 0.4 });
-  const boss = new THREE.Mesh(new THREE.CircleGeometry(R * 0.06, 16), new THREE.MeshStandardMaterial({ color: 0xc9a14a, metalness: 1, roughness: 0.3 }));
-  boss.position.z = 0.009;
+  // the hour hand: a spade with a round piercing, reaching the inner edge of the hours
+  const hourGeo = shapeHand(
+    [[-4, -24], [4, -24], [3, 58], [11, 78], [14, 98], [7, 116], [0, 132], [-7, 116], [-14, 98], [-11, 78], [-3, 58]],
+    [[0, 95, 6.5]],
+  );
+  // the minute hand: long and slender, a small scroll near the boss, out to the minute track
+  const minuteGeo = shapeHand(
+    [[-6, -34], [6, -34], [4, 20], [12, 34], [3, 46], [2.5, 196], [0, 208], [-2.5, 196], [-3, 46], [-12, 34], [-4, 20]],
+    [[0, 34, 4.5]],
+  );
+  const hour = new THREE.Mesh(hourGeo, blued);
+  hour.position.z = 0.003;
+  const minute = new THREE.Mesh(minuteGeo, blued);
+  minute.position.z = 0.005;
+  group.add(hour, minute);
+  // the seconds hand on its own little dial
+  const seconds = new THREE.Mesh(shapeHand([[-1.6, -8], [1.6, -8], [1, 34], [0, 37], [-1, 34]]), blued);
+  seconds.position.set(0, (256 - S.y) * u, 0.004);
+  group.add(seconds);
+  const boss = new THREE.Mesh(new THREE.CircleGeometry(7 * u, 16), new THREE.MeshStandardMaterial({ color: 0xb8913c, metalness: 1, roughness: 0.3 }));
+  boss.position.z = 0.007;
   group.add(boss);
   group.traverse((o) => o.isMesh && (o.receiveShadow = true));
   scene.add(group);
+  let shownDate = 1;
   return {
     group,
-    /** The hands at `hours` (the viewer's clock, with its seconds). */
-    update(hours) {
-      const s = ((hours * 3600) % 60 + 60) % 60;
+    /** The hands at `hours` (the viewer's clock, with its seconds) and the date in its aperture. */
+    update(hours, dateOfMonth = null) {
+      const sec = ((hours * 3600) % 60 + 60) % 60;
       hour.rotation.z = -(((hours % 12) + 12) % 12 / 12) * Math.PI * 2;
       minute.rotation.z = -(((hours % 1) + 1) % 1) * Math.PI * 2;
       // (the seconds hand steps with the tick)
-      second.rotation.z = -(Math.floor(s) / 60) * Math.PI * 2;
+      seconds.rotation.z = -(Math.floor(sec) / 60) * Math.PI * 2;
+      if (dateOfMonth && dateOfMonth !== shownDate) {
+        shownDate = dateOfMonth;
+        g.save();
+        g.setTransform(K, 0, 0, K, 0, 0);
+        drawDate(dateOfMonth);
+        g.restore();
+        tex.needsUpdate = true;
+      }
     },
   };
 }

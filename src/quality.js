@@ -192,6 +192,7 @@ export class Quality {
     this._time = 0;
     this._cooldown = 2;
     this.onResize = null; // called after the drawing buffer changes size
+    this.split = 0; // the seasons-at-once flybys: the picture drawn in 2 or 4 parts (splitseasons.js)
 
     this.composer = new EffectComposer(renderer);
     this.ao = new N8AOPass(scene, camera, innerWidth, innerHeight);
@@ -247,18 +248,21 @@ export class Quality {
   apply() {
     const p = PRESETS[this.preset];
     this.ao.configuration.halfRes = p.halfRes;
+    // (drawn in parts, the post-processing works at one part's size: splitseasons.js)
+    const cols = this.split >= 2 ? 2 : 1;
+    const rows = this.split >= 4 ? 2 : 1;
     if (this.fixed) {
       // a video: exactly this many pixels, whatever the window
       this.renderer.setPixelRatio(1);
       this.renderer.setSize(this.fixed.w, this.fixed.h, false);
       this.composer.setPixelRatio(1);
-      this.composer.setSize(this.fixed.w, this.fixed.h);
+      this.composer.setSize(Math.ceil(this.fixed.w / cols), Math.ceil(this.fixed.h / rows));
     } else {
       this.renderer.setPixelRatio(this.ratio);
       this.renderer.setSize(innerWidth, innerHeight);
       this.composer.setPixelRatio(this.ratio);
-      this.composer.setSize(innerWidth, innerHeight);
-      this.sharpenPass.uniforms.uTexel.value.set(1 / (innerWidth * this.ratio), 1 / (innerHeight * this.ratio));
+      this.composer.setSize(Math.ceil(innerWidth / cols), Math.ceil(innerHeight / rows));
+      this.sharpenPass.uniforms.uTexel.value.set(cols / (innerWidth * this.ratio), rows / (innerHeight * this.ratio));
     }
     this.onResize?.();
   }
@@ -326,6 +330,40 @@ export class Quality {
       this.renderer.render(this.scene, this.camera);
     }
     this._adapt(dt);
+  }
+
+  /**
+   * The picture in parts (the seasons-at-once flybys): each part drawn through the post-processing
+   * on its own, the camera's view offset to its part of the frustum, into its part of the canvas.
+   * `before(i)` puts on part i's state first; `after(i)` follows its drawing.
+   * @param {number} dt
+   * @param {{x:number, y:number, w:number, h:number}[]} parts in CSS pixels from the top left
+   * @param {(i: number) => void} before
+   * @param {(i: number) => void} [after]
+   */
+  renderParts(dt, parts, before, after) {
+    const r = this.renderer;
+    const { x: W, y: H } = r.getSize(this._full ?? (this._full = new THREE.Vector2()));
+    const adaptive = this.adaptive;
+    this.adaptive = false;
+    r.setScissorTest(true);
+    try {
+      parts.forEach((p, i) => {
+        before(i);
+        this.camera.setViewOffset(W, H, p.x, p.y, p.w, p.h);
+        const y = H - p.y - p.h; // (the canvas's viewport counts from the bottom)
+        r.setViewport(p.x, y, p.w, p.h);
+        r.setScissor(p.x, y, p.w, p.h);
+        this.render(i === 0 ? dt : 0);
+        after?.(i);
+      });
+    } finally {
+      this.camera.clearViewOffset();
+      r.setViewport(0, 0, W, H);
+      r.setScissor(0, 0, W, H);
+      r.setScissorTest(false);
+      this.adaptive = adaptive;
+    }
   }
 
   _adapt(dt) {

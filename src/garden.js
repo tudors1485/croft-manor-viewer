@@ -303,8 +303,9 @@ export class Garden {
    * @param {import('three-mesh-bvh').MeshBVH} o.bvh the collision tree (to find walls)
    * @param {{x:number,z:number}} o.gate
    */
-  constructor(scene, { landscape, bvh, gate, materialAt = () => '' }) {
+  constructor(scene, { landscape, bvh, gate, materialAt = () => '', doors = [] }) {
     this.scene = scene;
+    this.doors = doors; // (the doors that open: nothing grows across them)
     this.landscape = landscape;
     this.bvh = bvh;
     this.gate = gate;
@@ -862,6 +863,8 @@ export class Garden {
         const g = this._ground(foot.x, foot.z);
         if (g === null || g > 0.35) continue;
         if (R() < 0.3) continue; // (not every stretch)
+        // (not by a door that opens: its leaves would hang across the doorway as it swings)
+        if (this.doors.some((d) => Math.hypot(foot.x - d.centre.x, foot.z - d.centre.z) < d.width / 2 + 1.2)) continue;
         spots.push({ foot: new THREE.Vector3(foot.x, g, foot.z), out, up: top - 0.2 - R() * 1.2 });
         last = s;
       }

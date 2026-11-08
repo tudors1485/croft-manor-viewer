@@ -59,6 +59,8 @@ export class HauntInside {
     this.houseBox = houseBox;
     this.pool = poolUniforms;
     this.sound = sound;
+    // (another scene stops the music: the waltz starts afresh next time the party is on)
+    sound?.onStopMusic?.(() => (this.nextMusic = 0));
     this.say = say;
     this.group = new THREE.Group();
     this.group.name = 'Halloween inside';

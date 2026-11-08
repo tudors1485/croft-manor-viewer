@@ -39,6 +39,13 @@
     </div>
 
     <div id="loading">
+      <!-- the house through the seasons while it loads, one after another -->
+      <div class="shots" aria-hidden="true">
+        <figure style="--i: 0"><img src="loading/spring.jpg" alt="" fetchpriority="high" /><figcaption>Spring</figcaption></figure>
+        <figure style="--i: 1"><img src="loading/summer.jpg" alt="" /><figcaption>Summer</figcaption></figure>
+        <figure style="--i: 2"><img src="loading/autumn.jpg" alt="" /><figcaption>Autumn</figcaption></figure>
+        <figure style="--i: 3"><img src="loading/winter.jpg" alt="" /><figcaption>Christmas Eve</figcaption></figure>
+      </div>
       <div class="loader">
         <p class="loader-word">Loading</p>
         <div class="bar"><div id="loading-bar"><div id="loading-cover"></div></div></div>
@@ -80,6 +87,7 @@
                 <option value="bonfire">Bonfire Night</option>
                 <option value="christmas">Christmas Eve</option>
                 <option value="newyear">New Year</option>
+                <option value="lightshow">The Christmas light show</option>
               </optgroup>
               <optgroup label="Sights">
                 <option value="aurora">Northern lights</option>
@@ -94,6 +102,11 @@
                 <option value="party">A summer garden party</option>
                 <option value="moving">Moving in</option>
                 <option value="timelapse">The hall clock, a day</option>
+                <option value="glowworms">Glow-worms on a June night</option>
+                <option value="nlc">Night-shining clouds</option>
+                <option value="comet">A comet</option>
+                <option value="blossom">Blossom in April</option>
+                <option value="snownight">Snow falling at night</option>
               </optgroup>
             </select><button id="scene-next" class="arrow" title="The next scene" aria-label="The next scene">›</button></span>
           </div>

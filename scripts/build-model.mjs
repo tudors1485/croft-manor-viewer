@@ -13,7 +13,8 @@ import { fileURLToPath } from 'node:url';
 import obj2gltf from 'obj2gltf';
 import sharp from 'sharp';
 import { NodeIO } from '@gltf-transform/core';
-import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
+import { ALL_EXTENSIONS, EXTMeshoptCompression } from '@gltf-transform/extensions';
+import { MeshoptEncoder, MeshoptDecoder } from 'meshoptimizer';
 import {
   dedup,
   flatten,
@@ -85,7 +86,7 @@ async function prepareWork() {
   log(`working copy ready, ${dds} DDS textures decoded`);
 }
 
-const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
+const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ 'meshopt.encoder': MeshoptEncoder, 'meshopt.decoder': MeshoptDecoder });
 
 // 2. Each OBJ -> glTF document, flattened and joined by material.
 async function convert(objPath, label) {
@@ -219,6 +220,11 @@ async function main() {
   }
 
   await fs.mkdir(path.dirname(OUT), { recursive: true });
+  // the geometry meshopt-compressed (positions and texcoords as they are; normals octahedral, 8-bit,
+  // which looks the same): 83 MB down to 55, a third less to download; the viewer's GLTFLoader decodes it
+  await MeshoptEncoder.ready;
+  await MeshoptDecoder.ready;
+  doc.createExtension(EXTMeshoptCompression).setRequired(true).setEncoderOptions({ method: EXTMeshoptCompression.EncoderMethod.FILTER });
   await io.write(OUT, doc);
   const size = (await fs.stat(OUT)).size;
   log(`wrote ${path.relative(ROOT, OUT)}: ${(size / 1e6).toFixed(1)} MB`);

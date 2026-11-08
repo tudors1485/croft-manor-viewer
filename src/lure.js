@@ -1,7 +1,8 @@
 // Halloween night outside: the one who lures you away, and the house dressed for it.
 //
-// - In the gateway stands a dark figure, still, facing the house. Come near and it turns and runs,
-//   out through the gate and down the drive, and stops again further off, in the fog, waiting;
+// - In the gateway stands a dark figure, still, facing the house: only once your back has been
+//   turned on the gate (it is never there while you watch; turn round and it is). Come near and it is
+//   gone, in a breath of smoke; a little later it stands further off down the drive, in the fog, waiting;
 //   whispering, giggling, moaning, whistling to draw you on. Follow it and it runs on, off the drive
 //   and across the fields, to a place in a clearing: an old graveyard behind an iron fence round a
 //   dead tree with a swing. Step inside and the candles on the graves flare, a music box plays, the
@@ -66,7 +67,7 @@ function webTexture() {
 }
 
 /** Weathered grey stone for the headstones. */
-function stoneTexture() {
+export function stoneTexture() {
   return canvasTex((g, W, H) => {
     g.fillStyle = '#8c8a84';
     g.fillRect(0, 0, W, H);
@@ -89,7 +90,7 @@ function stoneTexture() {
 }
 
 /** A headstone: a slab with a rounded top (or a cross), set crooked in the ground. */
-function headstone(mat, kind) {
+export function headstone(mat, kind) {
   if (kind === 'cross') {
     const g = new THREE.Group();
     g.add(new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.2, 0.12).translate(0, 0.6, 0), mat));
@@ -112,6 +113,22 @@ function headstone(mat, kind) {
   for (let i = 0; i < uv.count; i++) uv.setXY(i, p.getX(i) / w + 0.5, p.getY(i) / h);
   const m = new THREE.Mesh(geo, mat);
   return m;
+}
+
+/** A soft dark breath of smoke (where the figure in the gateway was). */
+function puffTexture() {
+  return canvasTex((g, w, h) => {
+    for (let i = 0; i < 26; i++) {
+      const x = w / 2 + (Math.random() - 0.5) * w * 0.36;
+      const y = h / 2 + (Math.random() - 0.5) * h * 0.36;
+      const r = w * (0.12 + Math.random() * 0.16);
+      const grad = g.createRadialGradient(x, y, 0, x, y, r);
+      grad.addColorStop(0, 'rgba(255,255,255,0.22)');
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = grad;
+      g.fillRect(0, 0, w, h);
+    }
+  }, 128, 128);
 }
 
 /** A dark figure in a long coat, whole, from head to foot: the same outline as spooky.js's. */
@@ -181,13 +198,23 @@ export class Lure {
     this.heading = Math.PI; // facing the house (-z)
     this.callIn = 4;
     this.rearm = 0;
+    // in the gateway: there only once you have turned your back on it for a moment, gone when you near
+    this.shown = false;
+    this.unseen = 0;
+    this.away = 0; // (gone from the gate: how long until it stands down the drive)
+    this._frustum = new THREE.Frustum();
+    this._m = new THREE.Matrix4();
+    this._sphere = new THREE.Sphere(new THREE.Vector3(), 1.1);
+    this.puff = new THREE.Sprite(new THREE.SpriteMaterial({ map: puffTexture(), color: 0x0b0a0c, transparent: true, depthWrite: false, opacity: 0, fog: true }));
+    this.puff.visible = false;
+    this.puffT = 0;
     // a clearing for the graveyard: the woods' billboards there taken away
     this._clearing(landscape, this.grave, 22);
     this._buildGraveyard();
     this._dressHouse({ gate: g, bvh, landscape, door });
     // the figure: a dark silhouette until the walker model loads (then a dark robed figure)
     this.sil = new THREE.Mesh(new THREE.PlaneGeometry(0.66, 1.85).translate(0, 0.92, 0), new THREE.MeshBasicMaterial({ map: figureTexture(), color: 0x020203, transparent: true, alphaTest: 0.05, depthWrite: false, fog: true }));
-    this.group.add(this.sil);
+    this.group.add(this.sil, this.puff);
     this.figure = null;
   }
 
@@ -386,6 +413,7 @@ export class Lure {
     this.group.add(this.candles);
     this.graveLight = new THREE.PointLight(0xffa04a, 0, 30, 1.2);
     this.graveLight.position.set(c.x, c.y + 1.2, c.z);
+    this.graveHome = this.graveLight.position.clone(); // (graves.js borrows the light while it is dark)
     this.scene.add(this.graveLight);
     // the dark ones among the stones (hidden till the moment)
     const figTex = figureTexture();
@@ -519,6 +547,8 @@ export class Lure {
   reset() {
     this.stop = 0;
     this.state = 'wait';
+    this.shown = false;
+    this.unseen = 0;
     this.pos.copy(this.stops[0]);
     this.heading = Math.PI;
     this.moment = 0;
@@ -588,8 +618,50 @@ export class Lure {
     const fig = this.figure;
     const d = Math.hypot(cam.x - this.pos.x, cam.z - this.pos.z);
     let moving = false;
+    // the gateway: is it in view? (there only once it has been behind you for a moment, and you a
+    // little way off; never appearing while you look)
+    if (this.stop === 0 && this.state === 'wait' && !this.shown) {
+      camera.updateMatrixWorld();
+      this._frustum.setFromProjectionMatrix(this._m.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+      this._sphere.center.copy(this.pos).setY(this.pos.y + 1);
+      const seen = this._frustum.intersectsSphere(this._sphere);
+      this.unseen = seen ? 0 : this.unseen + dt;
+      if (this.unseen > 1.2 && d > 14 && !flight) this.shown = true;
+    }
     if (!flight) {
-      if (this.state === 'wait') {
+      if (this.state === 'vanished') {
+        // gone from the gate: a little later it stands further down the drive
+        this.away -= dt;
+        if (this.away <= 0) {
+          this.pos.copy(this.stops[this.stop]);
+          this.state = 'wait';
+          this.callIn = 2.5;
+        }
+      } else if (this.state === 'wait' && this.stop === 0) {
+        if (this.shown) {
+          // facing you, calling you on now and then
+          const want = Math.atan2(cam.x - this.pos.x, cam.z - this.pos.z);
+          let dy = want - this.heading;
+          dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+          this.heading += dy * (1 - Math.exp(-dt * 1.5));
+          this.callIn -= dt;
+          if (this.callIn <= 0 && d < 120) {
+            this.callIn = 7 + Math.random() * 8;
+            this._call(['whispers', 'child-giggle', 'moan', 'eerie-whistle'][Math.floor(Math.random() * 4)], 0.75);
+          }
+          // come close and it is gone, in a breath of smoke
+          if (d < 9) {
+            this.puff.position.copy(this.pos).setY(this.pos.y + 1.1);
+            this.puff.visible = true;
+            this.puffT = 0.001;
+            this._call('whispers', 0.9);
+            this.shown = false;
+            this.state = 'vanished';
+            this.stop = 1;
+            this.away = 2.5;
+          }
+        }
+      } else if (this.state === 'wait') {
         // facing you
         const want = Math.atan2(cam.x - this.pos.x, cam.z - this.pos.z);
         let dy = want - this.heading;
@@ -601,8 +673,7 @@ export class Lure {
           this.callIn = 7 + Math.random() * 8;
           this._call(['whispers', 'child-giggle', 'moan', 'eerie-whistle'][Math.floor(Math.random() * 4)], 0.75);
         }
-        // (in the gateway it lets you come closer: from the fountain you can see it standing there)
-        if (d < (this.stop === 0 ? 8 : NEAR) && this.stop < this.stops.length - 1) {
+        if (d < NEAR && this.stop < this.stops.length - 1) {
           this.state = 'run';
           this.stop++;
           this._call('child-giggle', 0.9);
@@ -664,14 +735,31 @@ export class Lure {
     this.swing.rotation.x = this.swingA;
     this.candles.material.uniforms.uOn.value = candles * flick;
     this.candles.material.uniforms.uTime.value = t;
-    this.graveLight.intensity = 26 * candles * flick;
+    if (this.moment !== 0) {
+      this.graveLight.position.copy(this.graveHome);
+      this.graveLight.distance = 30;
+      this.graveLight.decay = 1.2;
+      this.graveLight.intensity = 26 * candles * flick;
+    } else this.graveLight.intensity = 0; // (graves.js may light it over another graveyard after this)
     for (const w of this.watchers) {
       w.visible = watchers > 0.01;
       w.material.opacity = watchers;
       w.rotation.y = Math.atan2(cam.x - w.position.x, cam.z - w.position.z);
     }
-    // the figure (in the grave during the moment; gone after it)
-    const hidden = this.moment < 0;
+    // the breath of smoke where it stood
+    if (this.puffT > 0) {
+      this.puffT += dt;
+      const k = this.puffT / 1.4;
+      this.puff.scale.setScalar(0.8 + 2.4 * k);
+      this.puff.material.opacity = 0.85 * (1 - k) * Math.min(1, this.puffT * 8);
+      this.puff.position.y += dt * 0.4;
+      if (k >= 1) {
+        this.puffT = 0;
+        this.puff.visible = false;
+      }
+    }
+    // the figure (in the grave during the moment; gone after it; in the gateway only once shown)
+    const hidden = this.moment < 0 || this.state === 'vanished' || (this.stop === 0 && !this.shown);
     const where = this.moment > 0 ? this.grave.clone().add(new THREE.Vector3(0, -0.5, -1.6)) : this.pos;
     if (fig) {
       fig.holder.visible = !hidden;

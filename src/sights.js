@@ -1,11 +1,13 @@
 // Sights of the sky and the fields:
 //
 // - Meteors: on the Perseids' nights (10 to 15 August, best on the night of the 12th) shooting
-//   stars streak out from Perseus, low in the north-east, a few a minute (more on the Sight); the
-//   odd bright one leaves a glowing trail. Drawn at the sky's distance, behind everything.
+//   stars streak out from Perseus, in the north-east, a few a minute (more on the Sight): most faint
+//   and quick, a thin line with a brighter head, fading as they go; now and then a bright one, and
+//   rarely a fireball, greenish, that flares as it breaks up and leaves a glowing train hanging in
+//   the sky for a few seconds. Drawn at the sky's distance, behind everything (the house hides them).
 // - A starling murmuration: on clear winter evenings at dusk, thousands of starlings over the
-//   fields beyond the gate, one dark cloud folding and pouring and turning over on itself, with
-//   the rush of their wings when it turns, before they drop into the woods to roost.
+//   woods and the lawn just west of the house, one dark cloud folding and pouring and turning over
+//   on itself, with the rush of their wings when it turns, before they drop into the woods to roost.
 // - The harvest moon: the full moon nearest the autumn equinox, found from the moon's real place,
 //   rising huge and orange behind the house (main.js frames it through a long lens).
 
@@ -13,6 +15,23 @@ import * as THREE from 'three';
 import { moonAt, sunAt } from './sky.js';
 
 const SKY = 1200; // where the meteors are drawn (beyond everything; the sky's far plane does the rest)
+
+/** A soft round glow (a meteor's head). */
+let _headGlow = null;
+function headGlow() {
+  if (_headGlow) return _headGlow;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  const r = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  r.addColorStop(0, 'rgba(255,255,255,1)');
+  r.addColorStop(0.18, 'rgba(255,255,255,0.55)');
+  r.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = r;
+  g.fillRect(0, 0, 64, 64);
+  _headGlow = new THREE.CanvasTexture(c);
+  return _headGlow;
+}
 
 export class Meteors {
   constructor(scene) {
@@ -40,9 +59,11 @@ export class Meteors {
           uniform vec3 uColour;
           varying vec2 vUv;
           void main() {
-            float across = 1.0 - abs(vUv.x * 2.0 - 1.0);
-            float a = pow(vUv.y, 2.2) * across * across * uAlpha;
-            gl_FragColor = vec4(uColour * a * 2.2, 1.0);
+            // a thin bright core with a soft edge, brightest at the head, gone at the tail
+            float d = abs(vUv.x * 2.0 - 1.0);
+            float core = exp(-d * d * 18.0) + 0.25 * exp(-d * d * 3.0);
+            float a = pow(vUv.y, 2.6) * core * uAlpha;
+            gl_FragColor = vec4(uColour * a * 2.4, 1.0);
           }`,
         transparent: true,
         depthWrite: false,
@@ -53,7 +74,16 @@ export class Meteors {
       m.frustumCulled = false;
       m.visible = false;
       this.group.add(m);
-      this.pool.push({ mesh: m, t: 1, life: 1 });
+      // the head: a small glow running in front
+      const head = new THREE.Sprite(new THREE.SpriteMaterial({ map: headGlow(), color: 0xffffff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, fog: false }));
+      head.visible = false;
+      head.renderOrder = 2;
+      head.material.onBeforeCompile = (sh) => {
+        // (at the sky's distance, behind everything, as the streak is)
+        sh.vertexShader = sh.vertexShader.replace('#include <logdepthbuf_vertex>', 'gl_Position.z = gl_Position.w * 0.99998;\n  #include <logdepthbuf_vertex>');
+      };
+      this.group.add(head);
+      this.pool.push({ mesh: m, head, t: 1, life: 1 });
     }
     this.next = 2;
     this.boost = 0; // the Sight: seconds of a busier sky left
@@ -94,6 +124,7 @@ export class Meteors {
       p.t += dt / p.life;
       if (p.t >= 1 + p.linger) {
         p.mesh.visible = false;
+        p.head.visible = false;
         continue;
       }
       // the head runs from start to end; the tail follows a little behind
@@ -102,16 +133,32 @@ export class Meteors {
       const a = this._a.copy(p.from).lerp(p.to, tail).normalize().multiplyScalar(SKY);
       const b = this._b.copy(p.from).lerp(p.to, head).normalize().multiplyScalar(SKY);
       const along = b.clone().sub(a);
-      const side = along.clone().cross(b).normalize().multiplyScalar(p.width);
+      // (a train, once the meteor has gone, slowly widening as it drifts)
+      const spread = p.t > 1 ? 1 + (p.t - 1) * 2.2 : 1;
+      const side = along.clone().cross(b).normalize().multiplyScalar(p.width * spread);
       const pos = p.mesh.geometry.attributes.position;
-      pos.setXYZ(0, a.x - side.x, a.y - side.y, a.z - side.z);
-      pos.setXYZ(1, a.x + side.x, a.y + side.y, a.z + side.z);
+      // (the tail thinner than the head)
+      pos.setXYZ(0, a.x - side.x * 0.35, a.y - side.y * 0.35, a.z - side.z * 0.35);
+      pos.setXYZ(1, a.x + side.x * 0.35, a.y + side.y * 0.35, a.z + side.z * 0.35);
       pos.setXYZ(2, b.x + side.x, b.y + side.y, b.z + side.z);
       pos.setXYZ(3, b.x - side.x, b.y - side.y, b.z - side.z);
       pos.needsUpdate = true;
-      // bright quickly, fading at the end; a fireball's trail lingers, glowing
-      const fade = p.t < 1 ? Math.sin(Math.PI * Math.min(1, p.t)) ** 0.6 : (1 - (p.t - 1) / p.linger) * 0.35;
+      // bright almost at once, fading as it burns out; a fireball flares as it breaks up near the
+      // end, and its train hangs on, glowing green, then fades
+      let fade;
+      if (p.t < 1) {
+        fade = Math.min(1, p.t * 6) * (1 - 0.55 * p.t);
+        if (p.fireball) fade *= 1 + 1.6 * Math.exp(-((p.t - 0.8) ** 2) * 90) * (0.7 + 0.3 * Math.sin(p.t * 90));
+      } else fade = (1 - (p.t - 1) / p.linger) ** 1.5 * 0.3;
       p.mesh.material.uniforms.uAlpha.value = fade * p.bright;
+      if (p.t > 1 && p.fireball) p.mesh.material.uniforms.uColour.value.setRGB(0.45, 1, 0.6);
+      // the head's glow, with the streak
+      p.head.visible = p.t < 1;
+      if (p.head.visible) {
+        p.head.position.copy(b);
+        p.head.scale.setScalar(p.width * (p.fireball ? 8 : 6));
+        p.head.material.opacity = Math.min(1, fade * p.bright * 0.9);
+      }
     }
   }
 
@@ -125,10 +172,16 @@ export class Meteors {
     if (from.y < 0.15) from.y = 0.15 + Math.random() * 0.3;
     from.normalize();
     const dir = from.clone().sub(radiant).normalize();
-    const to = from.clone().addScaledVector(dir, 0.18 + Math.random() * 0.3).normalize();
-    const fireball = Math.random() < 0.12;
-    Object.assign(p, { from, to, t: 0, life: 0.35 + Math.random() * 0.6, len: 0.35 + Math.random() * 0.3, linger: fireball ? 1.6 : 0.01, width: fireball ? 9 : 4.5, bright: fireball ? 2.2 : 1.1 + Math.random() * 0.7 });
-    p.mesh.material.uniforms.uColour.value.setRGB(fireball ? 1 : 0.92, fireball ? 0.95 : 0.96, fireball ? 0.78 : 1);
+    // most are faint and quick; a few bright; rarely a fireball (the Perseids are fast: a short life)
+    const roll = Math.random();
+    const fireball = roll < 0.06;
+    const bright = fireball ? 2.6 : roll < 0.25 ? 1.6 + Math.random() * 0.6 : 0.75 + Math.random() * 0.6;
+    const to = from.clone().addScaledVector(dir, (fireball ? 0.35 : 0.12) + Math.random() * 0.22).normalize();
+    Object.assign(p, { from, to, t: 0, fireball, life: (fireball ? 0.9 : 0.22) + Math.random() * 0.45, len: fireball ? 0.55 : 0.3 + Math.random() * 0.3, linger: fireball ? 3.2 : 0.01, width: fireball ? 5 : 1.8 + bright * 1.3, bright });
+    // (white, a touch of yellow or blue; a fireball greener)
+    const tint = Math.random();
+    p.mesh.material.uniforms.uColour.value.setRGB(fireball ? 0.85 : tint < 0.5 ? 1 : 0.9, fireball ? 1 : 0.97, fireball ? 0.7 : tint < 0.5 ? 0.86 : 1);
+    p.head.material.color.copy(p.mesh.material.uniforms.uColour.value);
     p.mesh.visible = true;
   }
 }
@@ -179,7 +232,8 @@ export class Murmuration {
     this.points.visible = false;
     scene.add(this.points);
     this.t = 0;
-    this.centre = new THREE.Vector3(-70, 42, 95);
+    this.centre = new THREE.Vector3(-40, 25, -16); // (over the woods and the lawn just west of the house)
+    this.roam = new THREE.Vector3(18, 4, 12); // (how far its middle wanders)
     this.always = false; // (the Sight: tonight, whatever the luck)
     this.nextRush = 0;
   }
@@ -204,9 +258,9 @@ export class Murmuration {
     // the flock's middle drifts over the fields; its shape folds: a ball that stretches into a
     // ribbon, pours, turns over on itself, splits and joins
     const c = this.centre;
-    const cx = c.x + Math.sin(t * 0.05) * 40;
-    const cy = c.y + Math.sin(t * 0.09) * 8;
-    const cz = c.z + Math.cos(t * 0.04) * 30;
+    const cx = c.x + Math.sin(t * 0.05) * this.roam.x;
+    const cy = c.y + Math.sin(t * 0.09) * this.roam.y;
+    const cz = c.z + Math.cos(t * 0.04) * this.roam.z;
     const sx = 28 + 16 * Math.sin(t * 0.21);
     const sy = 7 + 5 * Math.sin(t * 0.17 + 1);
     const sz = 22 + 14 * Math.cos(t * 0.19);

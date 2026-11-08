@@ -22,15 +22,73 @@ body {
   inset: 0;
   z-index: 20;
   display: grid;
-  place-content: center;
+  place-content: end center;
+  padding-bottom: max(7vh, 36px);
   background: #000;
   transition: opacity 0.6s;
+}
+/* the house through the seasons behind it: each in turn, fading, drifting slowly closer */
+#loading .shots {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+#loading .shots figure {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  animation: loading-shot 24s infinite;
+  animation-delay: calc(var(--i) * 6s);
+}
+#loading .shots img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  animation: loading-drift 24s infinite linear;
+  animation-delay: calc(var(--i) * 6s);
+}
+#loading .shots figcaption {
+  position: absolute;
+  top: max(3vh, 18px);
+  left: max(3vw, 18px);
+  font: 600 12px/1 system-ui, -apple-system, sans-serif;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.82);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+}
+/* (dark at the foot, where the bar is, and round the edges) */
+#loading .shots::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(to top, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.6) 26%, rgba(0, 0, 0, 0) 52%),
+    radial-gradient(ellipse at center, transparent 58%, rgba(0, 0, 0, 0.45));
+}
+@keyframes loading-shot {
+  0% { opacity: 0; }
+  5% { opacity: 1; }
+  25% { opacity: 1; }
+  30% { opacity: 0; }
+  100% { opacity: 0; }
+}
+@keyframes loading-drift {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.06); }
+  100% { transform: scale(1.06); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #loading .shots img { animation: none; }
 }
 #loading.done {
   opacity: 0;
   pointer-events: none;
 }
 #loading .loader {
+  position: relative;
+  z-index: 1;
   width: min(560px, 80vw);
   display: grid;
   gap: 8px;
@@ -80,7 +138,7 @@ body {
   min-height: 2.6em;
   font-size: 13px;
   line-height: 1.35;
-  color: #8d8a84;
+  color: #b3afa7;
   transition: opacity 0.35s;
 }
 #loading-tip::before {

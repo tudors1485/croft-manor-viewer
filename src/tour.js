@@ -399,6 +399,52 @@ export const FLYBYS = {
       k([0, 9.5, 4], [-1.85, 5.5, -12], { speed: 0.8 }),
     ],
   },
+  // FPV: a racing drone's flight, seen through its camera: it looks where it goes, banks hard into
+  // its turns, rolls right over once, a wide lens, its motors whining. Down from high over the fields
+  // to the drive, fast and low through the gate, a tight turn round the fountain, straight up the
+  // front of the house and over the roof, down the back, weaving through the assault course, a roll
+  // on the climb, and up and away, turning back to look at the house. (`fpv`: the drone's camera;
+  // a key's `ahead` 0..1, how much it looks where it is going rather than at the key's look point;
+  // `flip`, degrees of roll added there.)
+  fpv: {
+    label: 'FPV drone',
+    fpv: true,
+    fov: 96,
+    keys: [
+      k([4.6, 46, 104], [4.6, 0, 40], { speed: 14 }),
+      k([4.6, 20, 72], [4.6, 0, 30], { speed: 24 }),
+      k([4.6, 4, 44], [4.6, 2, 20], { speed: 26 }),
+      k([4.6, 1.9, 30], [4.6, 2, 10], { speed: 22 }),
+      k([4.6, 1.9, 21], [4.6, 2, 8], { speed: 18 }),
+      // round the fountain, banking hard
+      k([5.2, 1.6, 15.2], [8, 1.6, 10], { speed: 15 }),
+      k([9.1, 1.5, 12], [10, 1.5, 6], { speed: 15 }),
+      k([10.3, 1.5, 8.3], [8.5, 1.5, 3], { speed: 15 }),
+      k([8.6, 1.5, 4.0], [4.6, 1.5, 2], { speed: 15 }),
+      k([4.6, 1.6, 2.5], [0.5, 1.6, 4], { speed: 15 }),
+      k([0.6, 1.7, 4.1], [-1.5, 1.8, 0], { speed: 14 }),
+      // up the front of the house, and over the roof
+      k([-1.85, 2.2, -2.5], [-1.85, 4, -10], { speed: 13 }),
+      k([-1.85, 5.5, -6.2], [-1.85, 9, -10], { speed: 13, ahead: 0.25 }),
+      k([-1.85, 11, -7.4], [-1.85, 13.5, -11], { speed: 14, ahead: 0.35 }),
+      k([-1.85, 16, -12], [-1.85, 16, -30], { speed: 15 }),
+      k([-1.85, 16.5, -21], [-1.85, 8, -40], { speed: 16 }),
+      // down the back, low over the lawn, into the assault course
+      k([-1.0, 10, -38], [2, 2, -50], { speed: 20 }),
+      k([1, 3.2, -49], [6, 3, -62], { speed: 20 }),
+      k([6, 3.6, -60], [2, 3.6, -70], { speed: 16 }),
+      k([2, 3.6, -68], [-6, 4, -74], { speed: 15 }),
+      k([-6, 4, -72], [-14, 6, -86], { speed: 15 }),
+      k([-14, 6, -86], [2, 7, -94], { speed: 16 }),
+      k([2, 7, -94], [16, 10, -84], { speed: 18 }),
+      // a roll on the climb, then up and away, turning to look back at the house
+      k([16, 11, -84], [30, 22, -70], { speed: 20, flip: 0 }),
+      k([26, 19, -74], [40, 30, -60], { speed: 20, flip: 360 }),
+      k([36, 30, -58], [10, 5, -24], { speed: 14, flip: 360, ahead: 0.5 }),
+      k([36, 40, -30], [4, 4, -18], { speed: 6, flip: 360, ahead: 0 }),
+      k([30, 44, -12], [4, 4, -18], { speed: 2, flip: 360, ahead: 0 }),
+    ],
+  },
   grounds: {
     label: 'The grounds',
     keys: [
@@ -435,7 +481,36 @@ export const FLYBYS = {
       k([24, 18, -54], [4, 4, -24], { speed: 4 }),
     ],
   },
+  // Seasons at once (splitseasons.js): the same picture split down the middle into summer and
+  // winter, or into the four seasons' quarters, on a slow sweep across the front of the house, high
+  // enough to keep all of it in view, then in towards the porch. (`split`: how many parts; the scene
+  // is the one the rest of the viewer keeps meanwhile: the sound, the animals, the lamps.)
+  seasons2: {
+    label: 'Two seasons at once',
+    split: 2,
+    lapse: { what: 'scenes', every: 1e9, fixed: true, scenes: [{ day: 188, hours: 14, weather: 'clear', title: 'Summer and winter, at once' }] },
+    keys: splitSweep(),
+  },
+  seasons4: {
+    label: 'Four seasons at once',
+    split: 4,
+    lapse: { what: 'scenes', every: 1e9, fixed: true, scenes: [{ day: 188, hours: 14, weather: 'clear', title: 'The four seasons, at once' }] },
+    keys: splitSweep(),
+  },
 };
+
+/** The seasons-at-once flybys' path: across the front, the house in the middle of the picture. */
+function splitSweep() {
+  return [
+    k([-46, 22, 34], [3, 4.5, -18], { speed: 2.4 }),
+    k([-26, 19, 44], [3, 4.5, -18], { speed: 3 }),
+    k([-4, 18, 50], [3, 4.5, -18], { speed: 3 }),
+    k([16, 18, 48], [4, 4.5, -18], { speed: 3 }),
+    k([36, 20, 38], [5, 4.5, -18], { speed: 3 }),
+    k([24, 17, 42], [4, 5, -16], { speed: 2.6 }),
+    k([4.6, 15, 40], [1, 5, -13], { speed: 1.2 }),
+  ];
+}
 
 const FADE = 0.4; // seconds to black and back at a cut
 const FLYBY_FOV = 68; // the flyby lens (the fisheye magnifies the middle a little)
@@ -477,7 +552,7 @@ class Move {
     const u = (p.s0 + Math.min(s, p.L)) / this.length;
     const local = Math.min(1, s / p.L);
     // the key you are coming up to counts from halfway along (for captions)
-    return { u: this.pos.getUtoTmapping(u), key: local > 0.55 ? i + 1 : i };
+    return { u: this.pos.getUtoTmapping(u), key: local > 0.55 ? i + 1 : i, part: i, local };
   }
 }
 
@@ -531,6 +606,8 @@ export class Tour {
     this._fwd = new THREE.Vector3();
     this._q = new THREE.Quaternion();
     this._qRoll = new THREE.Quaternion();
+    this._qShake = new THREE.Quaternion();
+    this._eShake = new THREE.Euler();
     this._axis = new THREE.Vector3(0, 0, 1);
     this.tourMoves = TOUR.map((shot) => new Move(shot.keys));
     this.flybyMoves = Object.fromEntries(Object.entries(FLYBYS).map(([id, f]) => [id, new Move(f.keys)]));
@@ -555,9 +632,11 @@ export class Tour {
     this.onFade?.(0);
     this.onCaption?.('');
     // a flyby starts with its lens on: the fisheye and the wider view from the first frame
-    this.fisheye = this.flyby ? 1 : 0;
+    this.fpv = !!(flybyId && FLYBYS[flybyId]?.fpv);
+    this.fisheye = this.flyby ? (this.fpv ? 1.6 : 1) : 0;
+    this.speed = 0; // (the FPV drone's speed, m/s, for its motors' sound)
     if (this.flyby) {
-      this.camera.fov = FLYBY_FOV;
+      this.camera.fov = FLYBYS[flybyId]?.fov ?? FLYBY_FOV;
       this.camera.updateProjectionMatrix();
     }
   }
@@ -565,6 +644,9 @@ export class Tour {
   stop() {
     if (!this.running) return;
     this.running = false;
+    this.fpv = false;
+    this.speed = 0;
+    this._prev = null;
     this.fisheye = 0;
     this.onCaption?.('');
     this.onFade?.(0);
@@ -612,9 +694,21 @@ export class Tour {
       move = this.moves[this.shot];
       this._heading = null;
     }
-    const { u, key } = move.at(this.t);
+    const { u, key, part, local } = move.at(this.t);
+    const before = this._prev ?? this.camera.position.clone();
     this.camera.position.copy(move.pos.getPoint(u));
     this._look.copy(move.look.getPoint(u));
+    if (this.fpv) {
+      // the drone looks where it is going (half a second ahead along its path), as much as the
+      // keys say (`ahead`), and rolls over where they say (`flip`)
+      const lerp = (name, d) => THREE.MathUtils.lerp(move.keys[part][name] ?? d, move.keys[part + 1]?.[name] ?? move.keys[part][name] ?? d, local * local * (3 - 2 * local));
+      const ahead = lerp('ahead', 1);
+      const next = move.pos.getPoint(move.at(this.t + 0.45).u);
+      if (next.distanceTo(this.camera.position) > 0.3) this._look.lerp(next, ahead);
+      this._flip = THREE.MathUtils.degToRad(lerp('flip', 0));
+      this.speed = dt > 0 ? this.camera.position.distanceTo(before) / dt : this.speed;
+      this._prev = (this._prev ?? new THREE.Vector3()).copy(this.camera.position);
+    }
     this.camera.up.set(0, 1, 0);
     this.camera.lookAt(this._look);
 
@@ -655,13 +749,23 @@ export class Tour {
       turn = dh / dt; // radians a second, positive turning left
     }
     this._heading = heading;
-    // bank into the turn: turning left rolls the horizon clockwise (left wing down)
-    const want = THREE.MathUtils.clamp(turn * 0.42, -0.42, 0.42);
-    this._roll += (want - this._roll) * (1 - Math.exp(-dt * 2.2));
+    // bank into the turn: turning left rolls the horizon clockwise (left wing down); the FPV drone
+    // far harder and quicker, as a quad does
+    const want = this.fpv ? THREE.MathUtils.clamp(turn * 0.85, -1.1, 1.1) : THREE.MathUtils.clamp(turn * 0.42, -0.42, 0.42);
+    this._roll += (want - this._roll) * (1 - Math.exp(-dt * (this.fpv ? 5 : 2.2)));
     // the roll is a rotation about the camera's own view axis, composed onto its orientation
-    this._qRoll.setFromAxisAngle(this._axis, this._roll);
+    this._qRoll.setFromAxisAngle(this._axis, this._roll + (this.fpv ? this._flip ?? 0 : 0));
     this.camera.quaternion.multiply(this._qRoll);
-    this.fisheye = 1;
+    if (this.fpv) {
+      // the motors' buzz in the picture: a fine fast shake, and a slower wobble in the air
+      this._shakeT = (this._shakeT ?? 0) + dt;
+      const t = this._shakeT;
+      const v = Math.min(1, (this.speed ?? 0) / 20);
+      const jx = (Math.sin(t * 71) * 0.6 + Math.sin(t * 113 + 1.3) * 0.4) * 0.0028 * (0.4 + v) + Math.sin(t * 2.1) * 0.006;
+      const jy = (Math.sin(t * 89 + 0.7) * 0.6 + Math.sin(t * 131) * 0.4) * 0.0028 * (0.4 + v) + Math.sin(t * 1.7 + 2) * 0.005;
+      this.camera.quaternion.multiply(this._qShake.setFromEuler(this._eShake.set(jx, jy, 0)));
+    }
+    this.fisheye = this.fpv ? 1.6 : 1;
   }
 
   /** Where the camera is looking right now (for handing over to orbit). */

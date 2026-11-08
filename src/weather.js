@@ -41,6 +41,7 @@ export const WEATHERS = {
   fog: 'Fog',
   frost: 'A frosty morning',
   snow: 'Snow',
+  snownight: 'Snow on a still night',
 };
 
 /**
@@ -134,6 +135,9 @@ export function weatherAt(day, hours, snow, choice = 'auto', live = null) {
     w = { ...w, clouds: 0.05, density: 0.4, overcast: 0, fog: 0.32, wind: 0, frost: 1 };
   } else if (choice === 'fog') {
     w = { ...w, clouds: 0.9, density: 0.7, overcast: 0.7, fog: 1, wind: 0 };
+  } else if (choice === 'snownight') {
+    // big flakes coming down slowly through still air (the snow lying as the season has it)
+    w = { ...w, clouds: 1, density: 0.8, overcast: 0.75, snowing: 0.55, wind: 0.03, fog: 0.08 };
   } else if (choice === 'snow') {
     w = { ...w, clouds: 1, density: 0.85, overcast: 0.85, snowing: 1, wind: 0.3 };
   }
