@@ -8,6 +8,10 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.58.0, 8 November 2026
+
+- **Your light is bigger** (Tudor: "like the Diablo light"): the glow round you now lights the ground a good way about, about twice as far, and fades softly at its rim, from a little higher above your head. The torch and the flaming torch also carry a soft wide pool of light round you, so you see where you are going as well as where you point; the flaming torch's own light reaches further and flickers the pool with it.
+
 ## 0.57.0, 8 November 2026
 
 - **Seasons carousel** (a new flyby): the four seasons in upright strips that slide to the left as a carousel turns. Each strip that goes out at the left comes back at the right as the next season, so every part of the picture goes on through the year as they pass over it (a year every 13 seconds), on a slow drift round the front. The labels ride with their strips and stay in sight at the left edge until their strip has gone.

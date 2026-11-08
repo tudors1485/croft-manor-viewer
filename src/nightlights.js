@@ -251,7 +251,7 @@ function findCrates(meshes) {
 /**
  * Your own light while you walk at night (each goes into the scene the first time you choose it,
  * then stays, dark when off: adding a light recompiles every shader, a moment's pause).
- * 'glow': a soft warm light all round you, lighting the ground several metres about.
+ * 'glow': a wide warm light all round you, as in Diablo, lighting the ground a good way about and fading softly at its rim.
  * 'flashlight': a torch in your right hand, its beam where you look, a faint cone of it in the air.
  * 'torch': a flaming torch held out on your right, the flame at the end of its stick, flickering,
  * throwing sparks, lighting you and all round you.
@@ -261,8 +261,11 @@ export class MyLight {
   constructor(scene) {
     this.scene = scene;
     this.kind = 'off';
-    this.glow = new THREE.PointLight(0xffd9a8, 0, 16, 1.3);
-    this.fire = new THREE.PointLight(0xff8a3a, 0, 15, 1.7);
+    // (v0.58.0, Tudor: "bigger, like the Diablo light": a wide warm pool round you that fades softly at its rim)
+    this.glow = new THREE.PointLight(0xffd9a8, 0, 34, 1.05);
+    this.fire = new THREE.PointLight(0xff8a3a, 0, 28, 1.25);
+    // a broad, soft fill that the flaming torch and the torch carry with them, lighting the ground all round you
+    this.pool = new THREE.PointLight(0xffc68a, 0, 30, 1.1);
     this.beam = new THREE.SpotLight(0xf6f2ea, 0, 55, 0.42, 0.65, 1.5);
     scene.add(this.beam.target);
 
@@ -387,6 +390,7 @@ export class MyLight {
     this.kind = kind;
     const light = { glow: this.glow, flashlight: this.beam, torch: this.fire }[kind];
     if (light && !light.parent) this.scene.add(light);
+    if ((kind === 'torch' || kind === 'flashlight') && !this.pool.parent) this.scene.add(this.pool);
   }
 
   /**
@@ -417,7 +421,10 @@ export class MyLight {
 
     // the glow, a little above your head
     this.glow.position.copy(camera.position).add(UP_HALF);
-    this.glow.intensity = 12 * on('glow');
+    this.glow.intensity = 34 * on('glow');
+    // the pool round you with a torch in hand: higher up, so it spreads wide and soft over the ground
+    this.pool.position.copy(camera.position).add(UP_POOL);
+    this.pool.intensity = 10 * on('torch') + 5 * on('flashlight');
 
     // the torch's beam, from its lens, where you look
     if (this.kind === 'flashlight') {
@@ -438,7 +445,8 @@ export class MyLight {
     // (the light just behind the flame, towards you: never on the far side of a wall you are facing)
     this.fire.position.copy(this._head).lerp(camera.position, 0.35);
     this.fire.position.y += 0.08;
-    this.fire.intensity = 8 * f * flick;
+    this.fire.intensity = 15 * f * flick;
+    this.pool.intensity *= 0.85 + 0.15 * flick;
     this.cloth.color.setScalar(0.65 + 0.4 * flick);
     this.wood.color.setScalar(0.75 + 0.3 * flick);
     const fl = this.flames;
@@ -495,7 +503,8 @@ export class MyLight {
   }
 }
 
-const UP_HALF = new THREE.Vector3(0, 0.5, 0);
+const UP_HALF = new THREE.Vector3(0, 1.2, 0);
+const UP_POOL = new THREE.Vector3(0, 2.4, 0);
 
 /** Paints a geometry's vertices: `paint(normal, position)` gives a grey level or [r, g, b]. */
 function shade(geo, paint) {
