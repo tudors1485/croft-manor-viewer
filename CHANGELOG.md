@@ -8,6 +8,13 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.53.0, 8 November 2026
+
+A new intro: the house as a miniature on a turntable.
+
+- **The loading screen** plays a film made in the viewer itself: the house, the forecourt, the fountain and the gate cut out of the estate as a model on a block of earth over a walnut plinth with a brass plate, on a studio table, turning once round while a year goes by: the bare trees of March come into blossom and leaf, high summer, autumn colour and a shower, snow falling and lying through midwinter, the thaw; the sun swinging round it, the shadows sweeping across the lawn. Sixteen seconds, looping without a seam; full HD (4.8 MB), a lighter version on a phone (1.3 MB), a still (54 KB) shown at once; on the still alone for anyone who has asked for less motion; stopped and let go once the house is in. It replaces the four photographs of the seasons.
+- **The film-maker** (`src/dev/diorama.js`, development only, loaded on demand: `window.manor.dev.diorama()`, with `dev.hold` and `dev.frame` drawing frames one at a time): the estate cut to a block by clipping planes, given per material so the trees stand whole, their branches over the edge, and the custom shaders cut too; a studio backdrop instead of the sky; its own rain and snow; the sun's shadows fitted to the block; three films (A turntable, B studio lamp, C tilt-shift), A chosen.
+
 ## 0.52.0, 8 November 2026
 
 Christmas inside and out, with a doorbell that starts a light show; Halloween's graveyards and the dead in them; an FPV drone flight and the seasons split on one screen; five more sights; a loading screen of the house through the year; the house a third smaller to download.

@@ -39,12 +39,13 @@
     </div>
 
     <div id="loading">
-      <!-- the house through the seasons while it loads, one after another -->
+      <!-- while it loads: the house as a miniature on a turntable, a year going by (a film made in the
+           viewer: src/dev/diorama.js); the still first, the lighter film on a phone -->
       <div class="shots" aria-hidden="true">
-        <figure style="--i: 0"><img src="loading/spring.jpg" alt="" fetchpriority="high" /><figcaption>Spring</figcaption></figure>
-        <figure style="--i: 1"><img src="loading/summer.jpg" alt="" /><figcaption>Summer</figcaption></figure>
-        <figure style="--i: 2"><img src="loading/autumn.jpg" alt="" /><figcaption>Autumn</figcaption></figure>
-        <figure style="--i: 3"><img src="loading/winter.jpg" alt="" /><figcaption>Christmas Eve</figcaption></figure>
+        <video id="intro" autoplay muted loop playsinline preload="auto" poster="loading/intro-poster.jpg">
+          <source src="loading/intro-540.mp4" type="video/mp4" media="(max-width: 800px)" />
+          <source src="loading/intro-1080.mp4" type="video/mp4" />
+        </video>
       </div>
       <div class="loader">
         <p class="loader-word">Loading</p>

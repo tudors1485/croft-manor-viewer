@@ -1152,6 +1152,8 @@ function resizeWater() {
   renderer.getDrawingBufferSize(drawSize);
   water.setSize(drawSize.x, drawSize.y);
 }
+// (the intro film stays on its still for anyone who has asked for less motion)
+if (matchMedia('(prefers-reduced-motion: reduce)').matches) $('intro')?.pause();
 // the loading bar, at the real pace (loading.js); nothing is drawn behind it until everything is in
 const loadingBar = new LoadingBar({ cover: $('loading-cover'), text: $('loading-text'), tip: $('loading-tip'), bytes: 55_000_000 });
 let ready = false;
@@ -1434,6 +1436,15 @@ function doneLoading() {
   }
   loadingBar.finish();
   $('loading').classList.add('done');
+  // the intro film: stopped once the loading screen has faded, and let go (its decoder and memory)
+  setTimeout(() => {
+    const v = $('intro');
+    if (!v) return;
+    v.pause();
+    v.removeAttribute('poster');
+    for (const s of v.querySelectorAll('source')) s.remove();
+    v.load();
+  }, 900);
   $('panel').hidden = false;
   placeDock();
 }
@@ -2957,5 +2968,13 @@ window.manor = {
   sound,
   dev: {
     measureTrees: () => import('./dev/measure-trees.js').then((m) => m.measure()),
+    // the intro film (dev/diorama.js): frames drawn one at a time while the live loop stands aside
+    hold(on) {
+      exporting = on;
+    },
+    frame(dt) {
+      step(dt, true);
+    },
+    diorama: () => import('./dev/diorama.js'),
   },
 };
