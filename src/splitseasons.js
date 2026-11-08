@@ -5,7 +5,7 @@
 //
 // How: every frame each part is drawn on its own. Its season's state is put on (the shared season
 // uniforms, the sky, the sun, the fog and the ambient light through TimeOfDay.update, the snow and
-// rain falling, the fallen leaves, the snowman, the daffodils, the fountain's jet) and the picture
+// rain falling, the fallen leaves, the snowman, the daffodils, the blossom, the fountain's jet) and the picture
 // is drawn through the post-processing at the part's size, with the camera's view offset to that
 // part of the frustum, into that part of the canvas (Quality.renderParts). Then the real state is
 // put back, so nothing else ever sees a part's season. Each season has its own environment map,
@@ -22,17 +22,20 @@ import { weatherAt } from './weather.js';
 // the parts' seasons, in the order of the parts: two side by side (left, right), four quarters
 // (top left, top right, bottom left, bottom right), or four upright strips side by side, the year
 // from left to right ('v4'). All at two in the afternoon, the winter sun low.
-const SPRING = { day: 112, hours: 14, weather: 'clouds', name: 'Spring' };
+const SPRING = { day: 100, hours: 14, weather: 'clouds', name: 'Spring' }; // (10 April: the daffodils out and the trees round the lawns in blossom, against the bare winter and the green summer)
 const SUMMER = { day: 188, hours: 14, weather: 'clear', name: 'Summer' };
 const AUTUMN = { day: 291, hours: 14, weather: 'clear', name: 'Autumn', tweak: { fog: 0.12 } }; // (a light haze)
 const WINTER = { day: 22, hours: 14, weather: 'snow', name: 'Winter', tweak: { snowing: 0.55, fog: 0.1 } }; // (snow falling, the house still to be seen)
-// how each is laid out: [columns, rows]
-const LAYOUTS = { 2: [2, 1], 4: [2, 2], v4: [4, 1] };
+// how each is laid out: [columns, rows] ('carousel': four upright strips sliding to the left, a
+// fifth coming in at the right as the first goes out at the left, each the season after the last)
+const LAYOUTS = { 2: [2, 1], 4: [2, 2], v4: [4, 1], carousel: [4, 1] };
+const SLIDE = 3.2; // (the carousel: seconds for a strip to slide its own width, so a year in 13 s)
 
 export const SPLITS = {
   2: [SUMMER, WINTER],
   4: [SPRING, SUMMER, WINTER, AUTUMN],
   v4: [SPRING, SUMMER, AUTUMN, WINTER],
+  carousel: [SPRING, SUMMER, AUTUMN, WINTER],
 };
 
 /** A season's state: the uniforms' values and the weather, worked out once. */
@@ -61,7 +64,7 @@ export class SplitSeasons {
    * @param {object} o.snowfall (season.js Snowfall)
    * @param {object} o.rainfall (weather.js Rainfall)
    * @param {() => object} o.world what else changes with the season, made later: { landscape,
-   *   leaves, snowman, easter, water, jetAllowed: boolean, perPart?: (state) => void }
+   *   leaves, snowman, easter, blossom, water, jetAllowed: boolean, perPart?: (state) => void }
    */
   constructor({ renderer, quality, camera, tod, snowfall, rainfall, world }) {
     this.renderer = renderer;
@@ -95,6 +98,8 @@ export class SplitSeasons {
   begin(n) {
     if (!SPLITS[n]) return;
     this.id = n;
+    this.carousel = n === 'carousel';
+    this.slide = 0; // (the carousel: seconds slid)
     [this.cols, this.rows] = LAYOUTS[n];
     this.n = this.cols * this.rows;
     this.states = SPLITS[n].map(stateOf);
@@ -203,6 +208,28 @@ export class SplitSeasons {
     return out;
   }
 
+  /**
+   * The carousel's strips, in CSS pixels: five of a quarter of the width each, slid to the left by
+   * however far they have gone (the first going out at the left, the fifth coming in at the right),
+   * cut to the screen; each with its season (the next to the right of each), and where the whole
+   * strip is (`left`, `width`, for its line and its label).
+   */
+  _carouselRegions() {
+    const { x: W, y: H } = this.renderer.getSize(this._size);
+    const w = W / this.cols;
+    const slid = this.slide / SLIDE;
+    const shift = Math.floor(slid);
+    const off = (slid - shift) * w;
+    const out = [];
+    for (let i = 0; i <= this.cols; i++) {
+      const left = i * w - off;
+      const a = Math.max(0, Math.round(left));
+      const b = Math.min(W, Math.round(left + w));
+      if (b - a >= 1) out.push({ x: a, y: 0, w: b - a, h: H, state: (i + shift) % this.n, left, width: w });
+    }
+    return out;
+  }
+
   /** Draws the picture in its parts (instead of Quality.render), each in its season. */
   render(dt, n) {
     if (this.id !== n) {
@@ -213,29 +240,130 @@ export class SplitSeasons {
     this.quality.fisheye = 0; // (each part would bend on its own: the seams wouldn't meet)
     this.tod.scene.environment = this.envShared.texture; // (in case TimeOfDay made a new one meanwhile)
     this._adapt();
-    const regions = this._regions();
+    if (this.carousel) this.slide += dt;
+    const regions = this.carousel ? this._carouselRegions() : this._regions();
     const sh = this.tod.light.shadow;
-    // (one part's shadows refreshed every other frame; any part without its map yet, now)
+    // (one season's shadows refreshed every other frame; any without its map yet, now; once a frame
+    // each, though the carousel can show a season in two strips)
     const refresh = this.frame % 2 === 0 ? (this.frame / 2) % this.n : -1;
     this.frame++;
+    const drawn = new Set();
+    const season = (i) => regions[i].state ?? i;
     this.quality.renderParts(
       dt,
       regions,
       (i) => {
-        this._apply(this.states[i]);
-        const c = this.shadows[i];
+        const k = season(i);
+        this._apply(this.states[k]);
+        const c = this.shadows[k];
         sh.map = c.map;
         if (c.map) sh.matrix.copy(c.matrix);
-        sh.needsUpdate = !c.map || i === refresh;
+        sh.needsUpdate = !c.map || (k === refresh && !drawn.has(k));
+        drawn.add(k);
       },
       (i) => {
-        const c = this.shadows[i];
+        const c = this.shadows[season(i)];
         c.map = sh.map;
         c.matrix.copy(sh.matrix);
       },
     );
     this._apply(base);
-    this._drawOverlay(regions);
+    if (this.carousel) this._drawCarouselOverlay(regions);
+    else this._drawOverlay(regions);
+  }
+
+  /**
+   * The carousel's lines and labels, which move every frame: drawn as small quads (a line, a label
+   * made once per season) rather than by painting the whole picture's canvas again each frame. Each
+   * label rides at the top left of its strip, and stays in sight at the screen's left edge until its
+   * strip has nearly gone.
+   */
+  _drawCarouselOverlay(regions) {
+    const r = this.renderer;
+    const { x: W, y: H } = r.getSize(this._size);
+    const buf = r.getDrawingBufferSize(this._buffer);
+    const u = buf.y / 1080;
+    const sx = buf.x / W;
+    if (!this._co) {
+      const scene = new THREE.Scene();
+      const plane = new THREE.PlaneGeometry(1, 1);
+      const quad = (colour, opacity, map = null) => {
+        const m = new THREE.Mesh(plane, new THREE.MeshBasicMaterial({ color: colour, opacity, map, transparent: true, depthTest: false, depthWrite: false, toneMapped: false }));
+        m.frustumCulled = false;
+        scene.add(m);
+        return m;
+      };
+      const lines = Array.from({ length: this.cols + 1 }, () => [quad(0x000000, 0.28), quad(0xfffaf0, 0.85)]);
+      const labels = Array.from({ length: this.cols + 1 }, () => quad(0xffffff, 1));
+      this._co = { scene, lines, labels, key: '', tex: [] };
+    }
+    const co = this._co;
+    // the labels' pictures, at this size (again when it changes)
+    const key = `${buf.x}x${buf.y}`;
+    if (co.key !== key) {
+      co.key = key;
+      for (const t of co.tex) t.texture.dispose();
+      co.tex = this.states.map((st) => {
+        const c = document.createElement('canvas');
+        const g = c.getContext('2d');
+        const font = `600 ${Math.round(26 * u)}px system-ui, -apple-system, 'Segoe UI', sans-serif`;
+        g.font = font;
+        const ph = Math.round(44 * u);
+        const pw = Math.round(g.measureText(st.label).width + 30 * u);
+        c.width = pw;
+        c.height = ph;
+        g.font = font;
+        g.textBaseline = 'middle';
+        g.fillStyle = 'rgba(12,13,16,0.55)';
+        g.beginPath();
+        g.roundRect(0, 0, pw, ph, ph / 2);
+        g.fill();
+        g.fillStyle = 'rgba(250,246,236,0.96)';
+        g.fillText(st.label, 15 * u, ph / 2 + 1 * u);
+        const texture = new THREE.CanvasTexture(c);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.minFilter = THREE.LinearFilter;
+        texture.generateMipmaps = false;
+        return { texture, pw, ph };
+      });
+    }
+    // (from buffer pixels to the ortho camera's -1..1)
+    const nx = (px) => (px / buf.x) * 2 - 1;
+    const ny = (py) => 1 - (py / buf.y) * 2;
+    let li = 0;
+    for (const p of regions) {
+      const left = p.left * sx;
+      const right = (p.left + p.width) * sx;
+      // the line at the strip's left edge (if it is on the screen)
+      if (left > 0.5 && left < buf.x - 0.5) {
+        const [shadow, light] = co.lines[li++];
+        for (const [m, width] of [[shadow, 6 * u], [light, 2.2 * u]]) {
+          m.visible = true;
+          m.position.set(nx(left), 0, 0);
+          m.scale.set((Math.max(1, width) / buf.x) * 2, 2, 1);
+        }
+      }
+    }
+    for (; li < co.lines.length; li++) for (const m of co.lines[li]) m.visible = false;
+    const bar = 0.105 * buf.y;
+    co.labels.forEach((m, i) => {
+      const p = regions[i];
+      if (!p) return void (m.visible = false);
+      const t = co.tex[p.state];
+      const left = p.left * sx;
+      const right = (p.left + p.width) * sx;
+      const x = Math.min(Math.max(left, 0), right - t.pw - 14 * u) + 7 * u;
+      m.visible = true;
+      m.material.map = t.texture;
+      m.position.set(nx(x + t.pw / 2), ny(bar + 34 * u), 0);
+      m.scale.set((t.pw / buf.x) * 2, (t.ph / buf.y) * 2, 1);
+    });
+    r.setRenderTarget(null);
+    r.setViewport(0, 0, W, H);
+    const auto = r.autoClear;
+    r.autoClear = false;
+    r.render(co.scene, this.oCam);
+    r.autoClear = auto;
   }
 
   /** The real state, to be put back after the parts. */
@@ -262,6 +390,8 @@ export class SplitSeasons {
       jet: w.water?.jet?.visible ?? false,
       snowmanDay: w.snowman?._day,
       snowmanLying: w.snowman?._lying,
+      blossomShown: w.blossom?.group.visible ?? false,
+      petals: w.blossom?.petals.material.uniforms.uAmount.value ?? 0,
     };
   }
 
@@ -299,6 +429,13 @@ export class SplitSeasons {
       w.snowman.update(s.base ? (s.snowmanDay ?? s.day) : s.day);
     }
     w.easter?.update(0, { day: s.day, night: t.night, snow: s.snow, wind: s.w.wind ?? 0, feet: null });
+    // the blossom round the lawns (sights3.js), in its own part only: at once, not eased in
+    if (w.blossom) {
+      const b = w.blossom;
+      const bloom = s.base ? 0 : b.constructor.bloom(s.day) * (s.snow > 0.4 ? 0 : 1);
+      b.group.visible = s.base ? s.blossomShown : bloom > 0.02;
+      b.petals.material.uniforms.uAmount.value = s.base ? s.petals : bloom * (this.camera.position.y < 30 ? 1 : 0);
+    }
     if (w.water?.jet) w.water.jet.visible = s.base ? s.jet : s.ice < 0.5 && w.jetAllowed;
     w.perPart?.(s);
   }
@@ -344,6 +481,10 @@ export class SplitSeasons {
     if (key !== this._oKey) {
       this._oKey = key;
       const c = this.oCanvas;
+      // (at a new size the texture is made again: three keeps the first one's storage and would put
+      // the smaller picture in a corner of it, over the old lines, so the lines seemed to jump each
+      // time the resolution came down)
+      if (c.width !== buf.x || c.height !== buf.y) this.oTexture.dispose();
       c.width = buf.x;
       c.height = buf.y;
       const g = c.getContext('2d');

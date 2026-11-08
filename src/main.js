@@ -1602,7 +1602,7 @@ async function prepareWalking(ground) {
       console.info(`night lights: ${night.fixtures.length}; on the assault course ${night.crates} crates, ${night.strips} LED strips, ${night.glows} glows; ${lamps.lightCount} lights in all`);
     }
     await part(0.6, 'Planting the daffodils');
-    easter = new Easter(scene, { isLawn: (x, z) => landscape._grassAt(x, z), ground: (x, z) => landscape.groundHeight(x, z), obstacles: landscape.obstacles, gate: landscape.gate, drive: landscape.drive, lawnEdge: lawn.max.z });
+    easter = new Easter(scene, { isLawn: (x, z) => landscape._grassAt(x, z), ground: (x, z) => landscape.groundHeight(x, z), obstacles: landscape.obstacles, gate: landscape.gate, drive: landscape.drive, lawnEdge: lawn.max.z, crowns: landscape.crowns, box: lawn });
     easter.onFound = (n, total) => {
       sound.chime();
       toast(n === total ? `All ${total} Easter eggs found` : `Easter eggs found: ${n} of ${total}`);
@@ -2636,7 +2636,7 @@ const splitSeasons = new SplitSeasons({
   tod,
   snowfall,
   rainfall,
-  world: () => ({ landscape, leaves, snowman, easter, water, jetAllowed: !oakScene }),
+  world: () => ({ landscape, leaves, snowman, easter, blossom, water, jetAllowed: !oakScene }),
 });
 
 /** What the sound needs to know about this moment. */

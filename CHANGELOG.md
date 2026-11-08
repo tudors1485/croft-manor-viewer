@@ -8,6 +8,16 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.57.0, 8 November 2026
+
+- **Seasons carousel** (a new flyby): the four seasons in upright strips that slide to the left as a carousel turns. Each strip that goes out at the left comes back at the right as the next season, so every part of the picture goes on through the year as they pass over it (a year every 13 seconds), on a slow drift round the front. The labels ride with their strips and stay in sight at the left edge until their strip has gone.
+- **Spring in bloom** in the seasons-at-once flybys: spring is now 10 April, with the trees round the lawns in blossom, pink and white, and daffodils under them, against the bare woods, the green summer and the snow.
+- **Drifts of daffodils** round the trees, in the estate and in the woods outside its walls, from mid-March to mid-April, so from the air the grass under the bare trees goes yellow (besides the clumps along the drive and the lawns).
+
+Fixes:
+
+- **Four seasons at once**: the lines between the quarters, and their labels, no longer jump. Whenever the resolution came down during the flyby (as it does on a slower screen), a smaller copy of the lines was drawn over the old ones.
+
 ## 0.56.0, 8 November 2026
 
 A new look, and the intro with the year's busiest days at the door.

@@ -64,6 +64,62 @@ function daffodil() {
   return mergeGeometries(parts);
 }
 
+/**
+ * A tuft of daffodils painted on a card (for the drifts): strap leaves, stems and ten flowers,
+ * the heads drawn generously so that from the air a drift reads as yellow, not as a few specks.
+ */
+function tuftTexture() {
+  const W = 256;
+  const H = 216;
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = H;
+  const g = c.getContext('2d');
+  const R = mulberry(3172027);
+  g.lineCap = 'round';
+  // the leaves: long straps, a little bent, two greens
+  for (let i = 0; i < 14; i++) {
+    const x = 20 + R() * (W - 40);
+    const lean = (R() - 0.5) * 70;
+    g.strokeStyle = R() < 0.5 ? '#4f7a2c' : '#64903a';
+    g.lineWidth = 5 + R() * 4;
+    g.beginPath();
+    g.moveTo(x, H);
+    g.quadraticCurveTo(x + lean * 0.3, H * 0.6, x + lean, H * (0.25 + R() * 0.3));
+    g.stroke();
+  }
+  // the flowers: a stem each, six pale petals round a deeper trumpet, facing every way a little
+  const heads = [];
+  for (let i = 0; i < 10; i++) heads.push([22 + ((i + R() * 0.7) / 10) * (W - 44), 30 + R() * 80]);
+  for (const [x, y] of heads) {
+    g.strokeStyle = '#4a7428';
+    g.lineWidth = 4;
+    g.beginPath();
+    g.moveTo(x + (R() - 0.5) * 20, H);
+    g.lineTo(x, y + 8);
+    g.stroke();
+  }
+  for (const [x, y] of heads) {
+    const r = 18 + R() * 6;
+    const turn = R() * Math.PI;
+    g.fillStyle = R() < 0.25 ? '#fbeea0' : '#f8d940';
+    for (let p = 0; p < 6; p++) {
+      const a = turn + (p / 6) * Math.PI * 2;
+      g.beginPath();
+      g.ellipse(x + Math.cos(a) * r * 0.55, y + Math.sin(a) * r * 0.45, r * 0.5, r * 0.3, a, 0, Math.PI * 2);
+      g.fill();
+    }
+    g.fillStyle = '#f0a822';
+    g.beginPath();
+    g.arc(x, y, r * 0.38, 0, Math.PI * 2);
+    g.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+
 /** A painted egg's pattern: bands, zigzags or dots in two pastel colours. */
 function eggTexture(k) {
   const c = document.createElement('canvas');
@@ -108,8 +164,10 @@ export class Easter {
    * @param {{x: number, z: number}|null} o.gate
    * @param {{x0: number, x1: number}|null} o.drive the drive outside the gate
    * @param {number} o.lawnEdge where the estate ends to the south (z)
+   * @param {{x: number, z: number, r: number}[]} [o.crowns] the trees (for the drifts under them)
+   * @param {THREE.Box3|null} [o.box] the estate inside its walls (inside it the drifts keep to the grass)
    */
-  constructor(scene, { isLawn, ground, obstacles, gate, drive, lawnEdge }) {
+  constructor(scene, { isLawn, ground, obstacles, gate, drive, lawnEdge, crowns = [], box = null }) {
     this.group = new THREE.Group();
     this.group.name = 'Spring and Easter';
     scene.add(this.group);
@@ -148,7 +206,7 @@ export class Easter {
     this.grow = { value: 1 };
     this.sway = { value: 0 };
     this.time = { value: 0 };
-    mat.onBeforeCompile = (shader) => {
+    const grower = (shader) => {
       shader.uniforms.uGrow = this.grow;
       shader.uniforms.uSway = this.sway;
       shader.uniforms.uTime = this.time;
@@ -164,6 +222,7 @@ export class Easter {
           transformed.x += h * h * 6.0 * uSway * sin(uTime * 1.9 + phase);`,
         );
     };
+    mat.onBeforeCompile = grower;
     const geo = daffodil();
     this.flowers = new THREE.InstancedMesh(geo, mat, Math.max(1, spots.length));
     const m = new THREE.Matrix4();
@@ -179,6 +238,50 @@ export class Easter {
     this.flowers.frustumCulled = false;
     this.group.add(this.flowers);
     this.daffodils = spots.length;
+
+    // --- drifts of them round the trees, in the estate and in the woods outside its walls ---
+    // (crossed cards with a handful of flowers painted on each: cheap enough for thousands, so that
+    // seen from the air, in the flybys, the grass under the bare trees goes yellow in March)
+    const inEstate = (x, z) => !!box && x > box.min.x && x < box.max.x && z > box.min.z && z < box.max.z;
+    const tufts = [];
+    const under = crowns.filter(() => R() >= 0.3).map((c) => ({ c, r: Math.min(6, Math.max(1.6, c.r * 0.95)) }));
+    // (about six cards to the square metre of drift, fewer all round if that would pass 9000)
+    const share = Math.min(1, 9000 / Math.max(1, under.reduce((a, { r }) => a + r * r * 6, 0)));
+    for (const { c, r } of under) {
+      const lean = R() * Math.PI * 2; // (a drift is lopsided, thicker on one side)
+      const n = Math.round(r * r * 6 * share);
+      for (let k = 0; k < n; k++) {
+        const a = R() * Math.PI * 2;
+        const d = (0.3 + 0.7 * Math.sqrt(R())) * r * (1 + 0.4 * Math.cos(a - lean));
+        const x = c.x + Math.cos(a) * d;
+        const z = c.z + Math.sin(a) * d;
+        if (inEstate(x, z) ? !isLawn(x, z) : drive && z > lawnEdge && x > drive.x0 - 1.2 && x < drive.x1 + 1.2) continue;
+        if (!clear(x, z, 0.25)) continue;
+        const y = ground(x, z);
+        if (y !== null) tufts.push([x, y, z]);
+      }
+    }
+    // (four single-sided cards, two crossed pairs back to back, with their normals up: lit as the
+    // grass is, from above, on both faces)
+    const card = new THREE.PlaneGeometry(0.7, 0.5).translate(0, 0.25, 0);
+    const cards = [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2].map((a) => card.clone().rotateY(a));
+    const tuftGeo = mergeGeometries(cards);
+    const nrm = tuftGeo.attributes.normal;
+    for (let i = 0; i < nrm.count; i++) nrm.setXYZ(i, 0, 1, 0);
+    const tuftMat = new THREE.MeshStandardMaterial({ map: tuftTexture(), alphaTest: 0.3, roughness: 0.8 });
+    tuftMat.onBeforeCompile = grower;
+    this.drifts = new THREE.InstancedMesh(tuftGeo, tuftMat, Math.max(1, tufts.length));
+    tufts.forEach(([x, y, z], i) => {
+      q.setFromEuler(new THREE.Euler(0, R() * Math.PI * 2, 0));
+      const s = 0.8 + R() * 0.5;
+      m.compose(new THREE.Vector3(x, y - 0.02, z), q, new THREE.Vector3(s, s * (0.85 + R() * 0.3), s));
+      this.drifts.setMatrixAt(i, m);
+    });
+    this.drifts.count = tufts.length;
+    this.drifts.receiveShadow = true;
+    this.drifts.frustumCulled = false;
+    this.group.add(this.drifts);
+    this.tufts = tufts.length;
 
     // --- the eggs ---
     const homes = [
@@ -230,7 +333,7 @@ export class Easter {
     const bloom = ss(day, BLOOM[0], BLOOM[1]) * (1 - ss(day, BLOOM[2], BLOOM[3]));
     // (they come up from the ground, and lie down as they go over, under snow they hide)
     this.grow.value = 0.25 + 0.75 * bloom;
-    this.flowers.visible = bloom > 0.02 && snow < 0.4;
+    this.flowers.visible = this.drifts.visible = bloom > 0.02 && snow < 0.4;
     this.sway.value = 0.004 + 0.02 * wind;
     // the eggs: the Easter weekend, by day
     const hunt = Easter.weekend(day) && night < 0.5;

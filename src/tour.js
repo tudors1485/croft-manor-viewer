@@ -505,7 +505,27 @@ export const FLYBYS = {
     lapse: { what: 'scenes', every: 1e9, fixed: true, scenes: [{ day: 188, hours: 14, weather: 'clear', title: 'The four seasons, side by side' }] },
     keys: splitSweep(),
   },
+  // the four seasons' strips sliding to the left, one after another, as a carousel turns: each
+  // strip that goes out at the left comes back at the right as the next season, so every part of
+  // the picture goes on through the year as they pass over it
+  seasonsCarousel: {
+    label: 'Seasons carousel',
+    split: 'carousel',
+    lapse: { what: 'scenes', every: 1e9, fixed: true, scenes: [{ day: 188, hours: 14, weather: 'clear', title: 'The year, going round' }] },
+    keys: carouselDrift(),
+  },
 };
+
+/** The seasons carousel's path: a slow drift round the front, so the strips' sliding is the move. */
+function carouselDrift() {
+  return [
+    k([-20, 14, 46], [2, 5, -14], { speed: 1.5 }),
+    k([-4, 13, 50], [2, 5, -14], { speed: 1.5 }),
+    k([14, 13, 48], [3, 5, -14], { speed: 1.5 }),
+    k([24, 13, 42], [3, 5, -14], { speed: 1.4 }),
+    k([6, 11.5, 40], [2, 5, -13], { speed: 1.2 }),
+  ];
+}
 
 /** The seasons-at-once flybys' path: across the front, the house in the middle of the picture. */
 function splitSweep() {
