@@ -49,13 +49,24 @@ export class Soundscape {
     this._nextTick = 0;
     this._tickSide = 0;
     this.snow = 0;
+    this.volume = 1; // the volume control, 0 to 1 (a video's soundtrack is made at full volume)
+  }
+
+  /** How loud, from the volume control: squared, so the control feels even to the ear. */
+  level() {
+    return this._context ? 1 : this.volume * this.volume;
+  }
+
+  setVolume(v) {
+    this.volume = Math.min(1, Math.max(0, v));
+    if (this.on && this.master) this.master.gain.setTargetAtTime(0.9 * this.level(), this.ctx.currentTime, 0.08);
   }
 
   async enable() {
     if (!this.ctx) this._build();
     if (!this._context) await this.ctx.resume(); // (an offline context starts when it renders)
     this.on = true;
-    this.master.gain.setTargetAtTime(0.9, this.ctx.currentTime, 0.4);
+    this.master.gain.setTargetAtTime(0.9 * this.level(), this.ctx.currentTime, 0.4);
   }
 
   disable() {

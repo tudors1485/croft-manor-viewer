@@ -95,8 +95,9 @@ function updateSeason(force = true) {
   seasonUniforms.uGrassTint.value.setRGB(...season.grass);
   seasonUniforms.uIce.value = season.ice;
   snowman?.update(day);
-  $('season-label').textContent = dateLabel(day);
-  $('season-label').title = season.name;
+  // (short in the panel, "30 Sep": the whole date and the season in its tooltip)
+  $('season-label').textContent = dateLabel(day).replace(/^(\d+ \w{3})\w*/, '$1');
+  $('season-label').title = `${dateLabel(day)}, ${season.name}`;
   refreshWeather();
   tod.update(force);
   $('time-label').textContent = tod.label();
@@ -350,6 +351,34 @@ function placeDock() {
 }
 window.addEventListener('resize', placeDock);
 $('video-section').addEventListener('toggle', placeDock);
+$('settings-section').addEventListener('toggle', placeDock);
+// The panel folds away to its title (kept for your next visit; folded at first on a small screen)
+function foldPanel(folded) {
+  $('panel').classList.toggle('folded', folded);
+  const b = $('panel-fold');
+  b.setAttribute('aria-expanded', String(!folded));
+  b.title = folded ? 'Open the panel' : 'Fold the panel away';
+  b.setAttribute('aria-label', b.title);
+  placeDock();
+}
+{
+  let folded = innerWidth < 600 || innerHeight < 500;
+  try {
+    const saved = localStorage.getItem('croft-panel');
+    if (saved) folded = saved === 'folded';
+  } catch {}
+  foldPanel(folded);
+}
+$('panel-fold').onclick = (e) => {
+  e.currentTarget.blur();
+  const folded = !$('panel').classList.contains('folded');
+  try {
+    localStorage.setItem('croft-panel', folded ? 'folded' : 'open');
+  } catch {}
+  foldPanel(folded);
+};
+// (a click on the title opens a folded panel too)
+document.querySelector('#panel .title').addEventListener('click', () => $('panel').classList.contains('folded') && $('panel-fold').click());
 // the keys in the dock work like the real ones while you hold them
 for (const b of document.querySelectorAll('#dock [data-key]')) {
   const code = b.dataset.key;
@@ -525,6 +554,8 @@ function updateLockHint() {
 let tourReturn = null;
 function startTour(id = null) {
   setOakScene(false);
+  showScene(-1);
+  $('viewpoint').value = '';
   if (lens) {
     // (a flyby has its own lens)
     lens = null;
@@ -767,19 +798,65 @@ function showLeaveHint(text) {
   hintTimer = setTimeout(() => el.classList.remove('show'), 5000);
 }
 $('tour-stop').onclick = () => leaveTour();
-$('sound').addEventListener('change', async (e) => {
-  soundChosen = true;
-  if (e.target.checked) await sound.enable();
-  else sound.disable();
-  e.target.blur();
-});
-// The sound comes on with the first click on a mode, a flyby, the tour, Now, the lights or a
-// holiday (browsers only allow sound after a click), unless you have switched it off yourself
+// Sound: it comes on with the first click on a mode, a flyby, the tour, Now, the lights, a place or
+// a scene (browsers only allow sound after a click), unless you have muted it. The volume, and
+// whether you muted it, are kept for your next visit.
+let soundOn = false;
 let soundChosen = false;
+try {
+  const v = localStorage.getItem('croft-volume');
+  if (v !== null && Number.isFinite(Number(v))) $('volume').value = String(Math.min(100, Math.max(0, Number(v))));
+  soundChosen = localStorage.getItem('croft-muted') === '1';
+} catch {}
+sound.setVolume(Number($('volume').value) / 100);
+function showSound() {
+  const v = Number($('volume').value);
+  const b = $('sound');
+  const silent = !soundOn || v === 0;
+  b.classList.toggle('muted', silent);
+  b.classList.toggle('quiet', v < 45);
+  b.setAttribute('aria-pressed', String(!soundOn));
+  b.title = soundOn ? 'Mute' : 'Sound on';
+  b.setAttribute('aria-label', b.title);
+  $('volume-label').textContent = `${v}%`;
+  b.parentElement.classList.toggle('muted', !soundOn);
+}
+function setSound(on) {
+  soundOn = on;
+  showSound();
+  if (on) sound.enable();
+  else sound.disable();
+}
+function chooseSound(on) {
+  soundChosen = true;
+  try {
+    localStorage.setItem('croft-muted', on ? '0' : '1');
+  } catch {}
+  setSound(on);
+}
+$('sound').onclick = (e) => {
+  e.currentTarget.blur();
+  // (unmuted at no volume: half way up)
+  if (!soundOn && Number($('volume').value) === 0) {
+    $('volume').value = '50';
+    sound.setVolume(0.5);
+  }
+  chooseSound(!soundOn);
+};
+$('volume').addEventListener('input', (e) => {
+  const v = Number(e.target.value);
+  sound.setVolume(v / 100);
+  try {
+    localStorage.setItem('croft-volume', String(v));
+  } catch {}
+  if (!soundOn && v > 0) chooseSound(true); // (turning it up unmutes)
+  else showSound();
+});
+$('volume').addEventListener('change', (e) => e.target.blur());
+showSound();
 function wakeSound() {
-  if (soundChosen || $('sound').checked || exporting) return;
-  $('sound').checked = true;
-  sound.enable();
+  if (soundChosen || soundOn || exporting) return;
+  setSound(true);
 }
 // (the browser refuses the mouse for a second after Esc has freed it: then just try again)
 function lockMouse() {
@@ -916,11 +993,23 @@ const viewpoints = [['Overview', null, null]];
 async function loadViewpoints() {
   try {
     const res = await fetch('/viewpoints.json');
-    if (res.ok) for (const v of await res.json()) viewpoints.push([v.name, new THREE.Vector3(...v.pos), new THREE.Vector3(...v.target), v]);
+    if (res.ok)
+      for (const v of await res.json()) {
+        const pos = new THREE.Vector3(...v.pos);
+        const target = new THREE.Vector3(...v.target);
+        viewpoints.push([v.name, pos, target, v]);
+        // a place high up has another just after it, a little higher still (and further back, so
+        // it looks at the same thing; at most 30 m further, or the haze takes it)
+        if (pos.y >= 12) {
+          const far = pos.distanceTo(target);
+          const up = target.clone().add(pos.clone().sub(target).multiplyScalar(Math.min(1.45, 1 + 30 / far)));
+          viewpoints.push([`${v.name}, a little higher`, up, target.clone(), v]);
+        }
+      }
   } catch {}
   const sel = $('viewpoint');
   sel.innerHTML = '';
-  sel.add(new Option('Go to a place…', ''));
+  sel.add(new Option('Choose…', ''));
   // (the places matching TRJTA's renders of the house, each with the day, the hour and the lens of
   // its picture, together under their own heading)
   const pictures = document.createElement('optgroup');
@@ -930,8 +1019,8 @@ async function loadViewpoints() {
   sel.onchange = () => {
     if (sel.value === '') return;
     const i = Number(sel.value);
-    sel.value = '';
     sel.blur();
+    wakeSound();
     goToPlace(i);
   };
   // ‹ and ›: the place before and after the last one you went to, round the list
@@ -953,6 +1042,8 @@ let placeAt = -1; // the last place gone to (for ‹ and ›)
 function goToPlace(i, named = false) {
   {
     placeAt = i;
+    $('viewpoint').value = String(i);
+    showScene(-1);
     const [name, pos, target, v] = viewpoints[i];
     setOakScene(name === 'Under the oak');
     tod.moonBig = 1;
@@ -989,6 +1080,7 @@ function holdLens(fov) {
 }
 function releaseLens() {
   if (lens) lens.held = false;
+  if (mode !== 'tour') $('viewpoint').value = '';
 }
 function stepLens(dt) {
   if (!lens || lens.held) return;
@@ -1198,13 +1290,10 @@ function addStatue() {
     const dressed = new THREE.MeshStandardMaterial({ map: sandstone(), color: 0xd2bf9c, roughness: 0.86, envMapIntensity: 0.6 });
     weatherShader(dressed);
     const g = new THREE.Group();
-    // a round stepped plinth, as wide as the basin was
-    let y = 0;
-    // (the lowest step covers the hole the lawn has under the basin)
+    // a round plinth on one step (sunk a little into the lawn)
+    let y = -0.08;
     for (const [r0, r1, h] of [
-      [3.7, 3.7, 0.28],
-      [3.0, 3.0, 0.3],
-      [2.3, 2.3, 0.28],
+      [2.3, 2.3, 0.38],
       [1.25, 1.35, 1.35],
       [1.48, 1.48, 0.12],
     ]) {
@@ -1218,9 +1307,8 @@ function addStatue() {
     let grass = null;
     model.traverse((o) => o.isMesh && o.material.name === 'cm_grass' && (grass = o.material));
     if (grass) {
-      const lawnY = (landscape.groundHeight(at.x - 4.6, at.z) ?? 0.2) + 0.006;
       const patch = new THREE.Mesh(new THREE.CircleGeometry(4.5, 48).rotateX(-Math.PI / 2), grass);
-      patch.position.y = lawnY - ((landscape.groundHeight(at.x - 3.3, at.z) ?? 0) - 0.04);
+      patch.position.y = 0.006;
       patch.receiveShadow = true;
       g.add(patch);
     }
@@ -1230,7 +1318,14 @@ function addStatue() {
     holder.position.y = y;
     holder.rotation.y = -Math.PI / 2 + 0.5;
     g.add(holder);
-    g.position.set(at.x, (landscape.groundHeight(at.x - 3.3, at.z) ?? 0) - 0.04, at.z);
+    // the lawn's height round the basin (the basin's hidden rim still stands in the collision mesh,
+    // so it's measured outside it): the lowest of eight points
+    let lawn = Infinity;
+    for (let k = 0; k < 8; k++) {
+      const h = landscape.groundHeight(at.x + 4.7 * Math.cos((k * Math.PI) / 4), at.z + 4.7 * Math.sin((k * Math.PI) / 4));
+      if (h != null && h < lawn) lawn = h;
+    }
+    g.position.set(at.x, Number.isFinite(lawn) ? lawn : 0, at.z);
     g.visible = oakScene;
     scene.add(g);
     statue = g;
@@ -1309,7 +1404,6 @@ function doneLoading() {
   ready = true;
   if (camera.position.distanceTo(SPAWN.eye) < 0.5) {
     holdLens(OPENING_LENS);
-    setOakScene(true);
   }
   loadingBar.finish();
   $('loading').classList.add('done');
@@ -1688,7 +1782,9 @@ $('reset').onclick = (e) => {
   sight = null;
   flight = null;
   moving?.set(false);
-  setOakScene(true);
+  setOakScene(false);
+  showScene(-1);
+  $('viewpoint').value = '';
   $('weather').value = 'live';
   forcedWeather = null;
   goToNow();
@@ -1891,26 +1987,34 @@ window.addEventListener('keydown', (e) => {
   toggleRoom();
 });
 document.querySelector('#dock [data-key="KeyL"]')?.addEventListener('pointerdown', () => toggleRoom());
-{
-  // each holiday's flyby, from the same menu
-  const fly = document.createElement('optgroup');
-  fly.label = 'Flybys';
-  for (const [id, f] of Object.entries(FLYBYS)) if (f.holiday) fly.appendChild(new Option(f.label, `fly:${id}`));
-  $('holiday').appendChild(fly);
+// The scenes, in the menu's order (the holidays' flybys are in the Flybys menu)
+const sceneIds = [...$('holiday').options].map((o) => o.value).filter((v) => Object.hasOwn(HOLIDAYS, v));
+let sceneAt = -1; // the last scene chosen (for ‹ and ›)
+/** The scenes menu shows scene i (or "Choose a scene…" for -1); the arrows go on from the last. */
+function showScene(i) {
+  if (i >= 0) sceneAt = i;
+  $('holiday').value = i >= 0 ? sceneIds[i] : '';
 }
 $('holiday').onchange = (e) => {
-  const value = e.target.value;
-  const h = Object.hasOwn(HOLIDAYS, value) ? HOLIDAYS[value] : null;
-  e.target.value = '';
   e.target.blur();
-  const flyby = value.startsWith('fly:') ? value.slice(4) : null;
-  if (flyby && Object.hasOwn(FLYBYS, flyby) && FLYBYS[flyby].holiday) {
-    wakeSound();
-    setOakScene(false);
-    startTour(flyby);
-    return;
-  }
-  if (!h) return;
+  const i = sceneIds.indexOf(e.target.value);
+  if (i >= 0) playScene(i);
+};
+for (const [id, d] of [
+  ['scene-prev', -1],
+  ['scene-next', 1],
+]) {
+  $(id).onclick = (e) => {
+    e.currentTarget.blur();
+    const n = sceneIds.length;
+    playScene((((sceneAt < 0 ? (d > 0 ? -1 : 0) : sceneAt) + d) % n + n) % n, true);
+  };
+}
+function playScene(i, named = false) {
+  const h = HOLIDAYS[sceneIds[i]];
+  if (named) toast([...$('holiday').options].find((o) => o.value === sceneIds[i]).textContent);
+  showScene(i);
+  $('viewpoint').value = '';
   wakeSound();
   moving?.set(false); // (another holiday or sight: the crates go)
   setOakScene(false);
@@ -2002,6 +2106,7 @@ function clockMoved() {
 }
 $('now').onclick = (e) => {
   wakeSound();
+  showScene(-1);
   goToNow();
   e.currentTarget.blur();
 };
@@ -2029,6 +2134,7 @@ $('weather').addEventListener('change', (e) => {
 });
 $('season').addEventListener('input', () => {
   setPlayingYear(false);
+  showScene(-1); // (another day: no longer the scene's)
   clockMoved();
   seasonDay = Number($('season').value);
   updateSeason();
@@ -2313,6 +2419,7 @@ const wildSound = {
     return sound.has(name);
   },
   duration: (name) => sound.duration(name),
+  voice: () => (sound.on && !exporting ? sound.level() : 0),
 };
 // The festivals' sounds (the bonfire, rockets and bangs, the thunder): played as they happen, or,
 // while a video is being made, noted down frame by frame for its soundtrack (video.js plays them back)

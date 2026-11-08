@@ -8,6 +8,16 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.51.0, 8 November 2026
+
+The panel redone, a volume control, arrows for the scenes, and the fountain back.
+
+- **The panel**, reordered and redesigned: how to move at the top, then *Explore* (the place, the scene, the tour and the flybys), *Time and weather*, *Lights* and *Sound*, each under its own heading; *Make a video* and *Picture and settings* fold away; Photo mode, Save a picture, Copy this view and Reset at the foot, Report a bug under them. The ⌃ by the title folds the whole panel away to its title (remembered; folded at first on a small screen). The time and the date sit beside their sliders ("8 Nov", the whole date in its tooltip), and the weather's label and source on one line under its menu.
+- **Sound**: a speaker that mutes it and a volume bar beside it, both remembered for your next visit. Turning the volume up unmutes; the attic ghost's voice follows the volume too.
+- **Scenes**: ‹ and › go through the holidays and the sights one by one, and the menu shows the scene you are in. The holidays' flybys left this menu (they were in *Flybys* too).
+- **Places**: the menu shows the place you went to until you move off; every place high up has another right after it, *a little higher* (over the gate, straight down, the assault course, TRJTA 1 and 9).
+- **The fountain is back** in the opening view and everywhere else: the stone horse stands in its place only when you choose *Under the oak* from the places. It stands on the lawn now (it floated half a metre up, on the fountain's hidden rim), on one step instead of three.
+
 ## 0.50.0, 7 November 2026
 
 Halloween: the lure, the graveyard, the house dressed, and every room haunted.

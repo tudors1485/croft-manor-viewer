@@ -50,7 +50,7 @@ export class HauntInside {
    * @param {import('three-mesh-bvh').MeshBVH} o.bvh
    * @param {THREE.Box3} o.houseBox
    * @param {object} o.poolUniforms the indoor pool's water uniforms (uBlood)
-   * @param {{ sample: Function, has?: Function, duration?: Function }} [o.sound]
+   * @param {{ sample: Function, has?: Function, duration?: Function, voice?: Function }} [o.sound]
    * @param {(text: string) => void} [o.say] shows what the ghost says
    */
   constructor(scene, { bvh, houseBox, poolUniforms = null, sound = null, say = null }) {
@@ -406,12 +406,13 @@ export class HauntInside {
   _speak(text) {
     try {
       const synth = window.speechSynthesis;
-      if (!synth) return;
+      const level = this.sound?.voice?.() ?? 1; // (silent with the sound off or muted)
+      if (!synth || level <= 0) return;
       synth.cancel();
       const u = new SpeechSynthesisUtterance(text);
       u.pitch = 0.1;
       u.rate = 0.72;
-      u.volume = 0.85;
+      u.volume = 0.85 * level;
       const voice = synth.getVoices().find((v) => /en-GB/i.test(v.lang)) ?? synth.getVoices().find((v) => /^en/i.test(v.lang));
       if (voice) u.voice = voice;
       synth.speak(u);
