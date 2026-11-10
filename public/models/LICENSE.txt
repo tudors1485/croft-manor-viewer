@@ -48,3 +48,9 @@ party/ (the summer garden party, sights2.js):
 table-chair-set.glb  "Outdoor Table Chair Set 01" by James Ray Cock, https://polyhaven.com/a/outdoor_table_chair_set_01
                      CC0 1.0 (textures shrunk, decimated): its folding chair round the long tables, its table and chairs on the lawn
 (the marquee, the tablecloths, the place settings and the hot-air balloons are drawn in code)
+
+site/ (the roofers in, scaffold.js):
+worker.glb           "Worker" by Quaternius, Ultimate Modular Men Pack (February 2022), https://poly.pizza/m/Yg2bQZO6Hj
+                     CC0 1.0 (the pack's License.txt): the three builders, as he comes, with his own Idle, Walk and Wave;
+                     the hammering arm is posed in code
+(the scaffold, the skip, the chute, the fencing, the mixer, the van and the rest are drawn in code)

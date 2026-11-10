@@ -2593,7 +2593,7 @@ function step(dt, exporting = false) {
   meteors.update(dt, { day: seasonDay, night: tod.night, clouds: weather.clouds ?? 0, compass: Number($('sun-azim').value), camera });
   balloons.update(dt, { day: seasonDay, hours: tod.hours, wind, camera });
   party?.update(dt, { day: seasonDay, hours: tod.hours, rain: weather.rain ?? 0, dusk: tod.lamps, camera, scale: lamps?.glowMat.uniforms.uScale.value });
-  scaffold?.update(dt, { hours: tod.hours });
+  scaffold?.update(dt, { hours: tod.hours, camera });
   murmuration.update(dt, { day: seasonDay, sunDeg: THREE.MathUtils.radToDeg(Math.asin(THREE.MathUtils.clamp(tod.sunDir.y, -1, 1))), clouds: weather.clouds ?? 0, rain: weather.rain ?? 0, scale: lamps?.glowMat.uniforms.uScale.value });
   // (the five more sights: sights3.js)
   {

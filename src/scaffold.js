@@ -6,13 +6,20 @@
 // fencing with a site sign, a cement mixer, a heap of sand, pallets under tarpaulins, a site cabin,
 // cones. And from the scaffold, in working hours, hammering and the odd power saw (sound.js).
 //
-// Everything is built here from boxes, tubes and canvases (no models to download). The scaffold is
+// Three builders are about (Quaternius's Worker, Ultimate Modular Men Pack, CC0, public/models/site/):
+// one walks the top lift with a bucket, one hammers at the wall from the second lift (each blow a
+// knock in the sound), one stands at the compound's gate with a clipboard and waves when you come
+// near; they knock off outside working hours.
+//
+// Everything else is built here from boxes, tubes and canvases (nothing to download). The scaffold is
 // fitted to the measured wall: the front wall at z -12.19 from the porch's east side (x 1.18) to the
 // gabled bay (x 9.9), the chimney breast standing 0.44 m proud between x 4.95 and 6.05, the parapet
 // topping out at 8.07, the roof behind it rising at 54° from the gutter to its ridge at z -15.
 // Another scene, a place or Reset takes it all down again.
 
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { weatherShader } from './materials.js';
 
 const R = 0.024; // scaffold tube: 48 mm
@@ -29,6 +36,9 @@ const LIFTS = [1.95, 3.95, 5.95, 7.95]; // the boards' top faces
 const TOP = 9.0; // the standards' top (the parapet is 8.07)
 const LADDER_BAY = BAYS - 1; // the ladders go up through the east bay
 const HATCH = 0.75; // the hatch for them, at the east end of that bay
+const WORK = { from: 7.5, to: 17 }; // the builders' hours: before and after, nobody about
+// the fixer's elbow: which of the lower arm's axes bends it, and which way (sheet tests, 10 Nov)
+const ELBOW = { axis: 'x', sign: -1 }; // (x, and negative bends the forearm up towards the shoulder)
 const FENCE_Z = -4.4; // the compound's fence along the front
 const FENCE_X0 = 0.9;
 const FENCE_X1 = 14.9;
@@ -278,6 +288,66 @@ function tarpPicture() {
   });
 }
 
+/** Ground trodden to mud: dark blotches, fading out at the edges. */
+function mudPicture() {
+  return canvasTexture(256, 256, (g, w, h) => {
+    const R = rng(19);
+    g.clearRect(0, 0, w, h);
+    for (let i = 0; i < 260; i++) {
+      const x = w / 2 + (R() - 0.5) * w * 0.95;
+      const y = h / 2 + (R() - 0.5) * h * 0.95;
+      const r = 6 + R() * 26;
+      g.fillStyle = `rgba(${48 + R() * 30 | 0}, ${36 + R() * 22 | 0}, ${22 + R() * 16 | 0}, ${0.25 + R() * 0.45})`;
+      g.beginPath();
+      g.ellipse(x, y, r * (0.7 + R() * 0.8), r * 0.6, R() * Math.PI, 0, Math.PI * 2);
+      g.fill();
+    }
+    // boot marks
+    for (let i = 0; i < 70; i++) {
+      g.fillStyle = `rgba(30, 24, 16, ${0.2 + R() * 0.3})`;
+      g.save();
+      g.translate(R() * w, R() * h);
+      g.rotate(R() * Math.PI);
+      g.fillRect(-5, -9, 10, 18);
+      g.restore();
+    }
+    const fade = g.createRadialGradient(w / 2, h / 2, w * 0.2, w / 2, h / 2, w * 0.5);
+    fade.addColorStop(0, 'rgba(0,0,0,1)');
+    fade.addColorStop(1, 'rgba(0,0,0,0)');
+    g.globalCompositeOperation = 'destination-in';
+    g.fillStyle = fade;
+    g.fillRect(0, 0, w, h);
+  });
+}
+
+/** The banner tied to the netting. */
+function bannerPicture() {
+  return canvasTexture(1024, 256, (g, w, h) => {
+    g.fillStyle = '#f7f6f1';
+    g.fillRect(0, 0, w, h);
+    g.fillStyle = '#c8102e';
+    g.font = 'bold 92px system-ui, Helvetica, Arial, sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText('ROOF REPAIRS IN PROGRESS', w / 2, 98);
+    g.fillStyle = '#222';
+    g.font = 'bold 46px system-ui, Helvetica, Arial, sans-serif';
+    g.fillText('Scaffold alarmed  ·  No unauthorised access', w / 2, 190);
+    g.strokeStyle = '#999';
+    g.lineWidth = 6;
+    g.strokeRect(3, 3, w - 6, h - 6);
+    // eyelets along the edges
+    g.fillStyle = '#777';
+    for (let x = 40; x < w; x += 120) {
+      for (const y of [18, h - 18]) {
+        g.beginPath();
+        g.arc(x, y, 9, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+  });
+}
+
 // --- the scene -------------------------------------------------------------------------------
 
 export class Scaffold {
@@ -302,26 +372,249 @@ export class Scaffold {
     this.group.visible = false;
     scene.add(this.group);
     this.nextSound = 0;
+    this.time = 0;
+    this.net = null;
+    this.workers = null; // the three builders (Quaternius's Worker, CC0), once loaded
+    this.workersLoading = false;
     this.soundAt = [new THREE.Vector3(7.6, 8.4, -11.0), new THREE.Vector3(3.2, 6.3, -10.9), new THREE.Vector3(8.2, 9.0, -14.3)];
   }
 
   set(on) {
     this.on = on;
     if (on && !this.built) this._build();
+    if (on && !this.workers) this._loadWorkers().catch((err) => console.warn('the builders did not turn up:', err.message));
     this.group.visible = on;
-    if (on) this.nextSound = 3 + Math.random() * 6;
+    if (on) this.nextSound = 12 + Math.random() * 10;
   }
 
   /** Builders at work: hammering, the odd saw, in working hours (the scaffold's own clock is the viewer's). */
-  update(dt, { hours = 12 } = {}) {
-    if (!this.on || !this.sound) return;
-    if (hours < 7.8 || hours > 17.2) return;
+  update(dt, { hours = 12, camera = null } = {}) {
+    if (!this.on) return;
+    this.time += dt;
+    // the netting stirs where it isn't tied
+    if (this.net) {
+      const { geo, base } = this.net;
+      const pos = geo.attributes.position;
+      const t = this.time;
+      for (let i = 0; i < pos.count; i++) {
+        const z = base[i * 3 + 2];
+        if (z < 0.004) continue;
+        pos.setZ(i, z + z * 0.45 * Math.sin(t * 1.6 + base[i * 3] * 1.1 + base[i * 3 + 1] * 0.6));
+      }
+      pos.needsUpdate = true;
+    }
+    const working = hours >= WORK.from && hours <= WORK.to;
+    if (this.workers) this._updateWorkers(dt, working, camera);
+    if (!this.sound || !working) return;
     this.nextSound -= dt;
     if (this.nextSound > 0) return;
-    const at = this.soundAt[Math.floor(Math.random() * this.soundAt.length)];
-    if (Math.random() < 0.72) this.sound.hammering?.(at, 3 + Math.floor(Math.random() * 5));
-    else this.sound.powerSaw?.(at, 0.9 + Math.random() * 1.4);
-    this.nextSound = 5 + Math.random() * 14;
+    // (the hammering comes from the fixer's own blows, once he is here; until then, from the lifts)
+    if (this.workers) this.sound.powerSaw?.(this.soundAt[0], 0.9 + Math.random() * 1.4);
+    else {
+      const at = this.soundAt[Math.floor(Math.random() * this.soundAt.length)];
+      if (Math.random() < 0.72) this.sound.hammering?.(at, 3 + Math.floor(Math.random() * 5));
+      else this.sound.powerSaw?.(at, 0.9 + Math.random() * 1.4);
+    }
+    this.nextSound = this.workers ? 18 + Math.random() * 25 : 5 + Math.random() * 14;
+  }
+
+  /**
+   * The builders: Quaternius's Worker (Ultimate Modular Men Pack, CC0), three of him. The carrier
+   * walks the top lift with a bucket, the fixer stands on the second lift hammering at the wall (each
+   * blow is a knock in the sound), and the gaffer stands at the compound's entrance with his
+   * clipboard, and waves when you come near. They knock off outside working hours.
+   */
+  async _loadWorkers() {
+    if (this.workersLoading) return;
+    this.workersLoading = true;
+    const gltf = await new GLTFLoader().loadAsync('models/site/worker.glb');
+    const clip = (re) => gltf.animations.find((a) => re.test(a.name));
+    const clips = { idle: clip(/Idle_Neutral$/) ?? clip(/\|Idle$/), walk: clip(/\|Walk$/), wave: clip(/\|Wave$/) };
+    const M = this.M ?? this._materials();
+    const make = (name) => {
+      const m = cloneSkinned(gltf.scene);
+      m.name = name;
+      m.scale.setScalar(0.96);
+      const bones = {};
+      m.traverse((o) => {
+        if (o.isMesh) {
+          o.castShadow = true;
+          o.frustumCulled = false;
+        }
+        if (o.isBone) bones[o.name] = o;
+      });
+      const mixer = new THREE.AnimationMixer(m);
+      const actions = Object.fromEntries(
+        Object.entries(clips)
+          .filter(([, c]) => c)
+          .map(([k, c]) => [k, mixer.clipAction(c)]),
+      );
+      const w = { name, m, mixer, actions, bones, current: null, pos: new THREE.Vector3(), yaw: 0, props: [] };
+      w.play = (k, fade = 0.25) => {
+        const a = actions[k];
+        if (!a || a === w.current) return;
+        a.reset().fadeIn(fade).play();
+        w.current?.fadeOut(fade);
+        w.current = a;
+      };
+      this.group.add(m);
+      return w;
+    };
+    // the carrier, along the top lift with a bucket
+    const carrier = make('carrier');
+    Object.assign(carrier, { lift: LIFTS[3], z: Z_IN + 0.45, x: 4.0, dir: 1, pause: 0, speed: 0.75 });
+    carrier.bucket = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.12, 0.28, 12, 1, true), M.black);
+    carrier.bucket.castShadow = true;
+    carrier.props.push(carrier.bucket);
+    // the fixer, on the second lift at the wall
+    const fixer = make('fixer');
+    fixer.pos.set(6.95, LIFTS[1], Z_IN - 0.18);
+    fixer.yaw = Math.PI; // (the model faces +z; he faces the wall, -z)
+    fixer.hammer = new THREE.Group();
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.015, 0.3, 8), M.wood);
+    handle.position.y = 0.15;
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.035, 0.035), M.fitting);
+    head.position.y = 0.3;
+    fixer.hammer.add(handle, head);
+    fixer.hammer.traverse((o) => o.isMesh && (o.castShadow = true));
+    fixer.props.push(fixer.hammer);
+    fixer.swing = { t: 0, hits: 4, rest: 1.5, raise: 0, lastPh: 0 };
+    // (his right arm is posed by hand each frame, from the rest pose, so it never drifts)
+    fixer.rest = { ua: fixer.bones.UpperArmR?.quaternion.clone() ?? null, la: fixer.bones.LowerArmR?.quaternion.clone() ?? null };
+    // the gaffer, at the compound's entrance by the gable, clipboard in hand
+    const gaffer = make('gaffer');
+    gaffer.pos.set(15.7, this.ground(15.7, -9.1), -9.1);
+    gaffer.yaw = Math.atan2(-0.5, 1);
+    gaffer.board = new THREE.Mesh(new THREE.BoxGeometry(0.23, 0.32, 0.012), M.paper);
+    gaffer.board.castShadow = true;
+    gaffer.props.push(gaffer.board);
+    gaffer.waveCooldown = 6;
+    gaffer.waveEnd = 0;
+    const list = [carrier, fixer, gaffer];
+    for (const w of list) {
+      for (const p of w.props) this.group.add(p);
+      w.play('idle', 0);
+      w.mixer.update(Math.random() * 1.5);
+    }
+    this.workers = { carrier, fixer, gaffer, list };
+  }
+
+  _updateWorkers(dt, working, camera) {
+    const W = this.workers;
+    for (const w of W.list) {
+      w.m.visible = working;
+      for (const p of w.props) p.visible = working;
+    }
+    if (!working) return;
+    const turnTowards = (a, b, step) => {
+      let d = ((b - a + Math.PI) % (Math.PI * 2)) - Math.PI;
+      if (d < -Math.PI) d += Math.PI * 2;
+      return Math.abs(d) <= step ? b : a + Math.sign(d) * step;
+    };
+    // the carrier walks the top lift from end to end, standing a while at each
+    {
+      const c = W.carrier;
+      if (c.pause > 0) {
+        c.pause -= dt;
+        c.play('idle');
+        if (c.pause <= 0) c.dir = -c.dir;
+      } else {
+        c.play('walk');
+        c.x += c.dir * c.speed * dt;
+        if (c.x > 8.6) {
+          c.x = 8.6;
+          c.pause = 2.5 + Math.random() * 3;
+        } else if (c.x < 3.0) {
+          c.x = 3.0;
+          c.pause = 2.5 + Math.random() * 3;
+        }
+      }
+      const want = c.pause > 0 ? Math.PI : c.dir > 0 ? Math.PI / 2 : -Math.PI / 2;
+      c.yaw = turnTowards(c.yaw, want, dt * 4);
+      c.pos.set(c.x, c.lift, c.z);
+    }
+    // the fixer hammers in bursts, then looks at his work a while
+    {
+      const f = W.fixer;
+      const s = f.swing;
+      f.play('idle');
+      if (s.rest > 0) {
+        s.rest -= dt;
+        s.raise = Math.max(0, s.raise - dt * 3);
+      } else {
+        s.t += dt;
+        const period = 0.3;
+        const ph = (s.t % period) / period;
+        s.raise = ph < 0.62 ? ph / 0.62 : 1 - (ph - 0.62) / 0.38;
+        if (ph < s.lastPh) {
+          // the blow lands
+          this.sound?.hammering?.(f.pos, 1, { gain: 0.7 + Math.random() * 0.5 });
+          if (--s.hits <= 0) {
+            s.rest = 3 + Math.random() * 7;
+            s.hits = 3 + Math.floor(Math.random() * 5);
+            s.t = 0;
+          }
+        }
+        s.lastPh = ph;
+      }
+    }
+    // the gaffer waves when you come near
+    {
+      const g = W.gaffer;
+      g.waveCooldown -= dt;
+      if (g.waveEnd > 0) {
+        g.waveEnd -= dt;
+        if (g.waveEnd <= 0) g.play('idle', 0.3);
+      } else if (camera && g.waveCooldown <= 0 && g.actions.wave) {
+        const d = camera.position.distanceTo(g.pos);
+        if (d > 2 && d < 14) {
+          g.play('wave', 0.3);
+          g.waveEnd = 1.6;
+          g.waveCooldown = 25;
+        }
+      }
+    }
+    for (const w of W.list) {
+      w.mixer.update(dt);
+      w.m.position.copy(w.pos);
+      w.m.rotation.y = w.yaw;
+    }
+    // after the clips: the fixer's arm raised and brought down, the hammer continuing his forearm
+    {
+      const f = W.fixer;
+      const ua = f.bones.UpperArmR;
+      const la = f.bones.LowerArmR;
+      if (ua && la && f.rest.ua && f.rest.la) {
+        ua.quaternion.copy(f.rest.ua);
+        ua.rotateY(0.5 + 0.6 * f.swing.raise);
+        la.quaternion.copy(f.rest.la);
+        if (ELBOW.axis === 'x') la.rotateX(ELBOW.sign * (0.3 + 0.95 * f.swing.raise));
+        else la.rotateY(ELBOW.sign * (0.3 + 0.95 * f.swing.raise));
+      }
+    }
+    for (const w of W.list) w.m.updateMatrixWorld(true);
+    const wristAt = (w, name, out) => (w.bones[name] ? w.bones[name].getWorldPosition(out) : null);
+    {
+      const f = W.fixer;
+      const a = wristAt(f, 'LowerArmR', _a);
+      const b = wristAt(f, 'WristR', _b);
+      if (a && b) {
+        _d.subVectors(b, a).normalize();
+        f.hammer.position.copy(b).addScaledVector(_d, 0.02);
+        f.hammer.quaternion.setFromUnitVectors(Y, _d);
+      }
+    }
+    {
+      const c = W.carrier;
+      if (wristAt(c, 'WristR', _a)) c.bucket.position.copy(_a).add(new THREE.Vector3(0, -0.2, 0));
+    }
+    {
+      const g = W.gaffer;
+      if (wristAt(g, 'WristL', _a)) {
+        g.board.position.copy(_a).add(new THREE.Vector3(Math.sin(g.yaw) * 0.12, 0.05, Math.cos(g.yaw) * 0.12));
+        g.board.rotation.set(-0.5, g.yaw, 0, 'YXZ');
+      }
+    }
   }
 
   _materials() {
@@ -370,7 +663,13 @@ export class Scaffold {
     const rustTint = () => new THREE.Color().setHSL(0.06, 0.45, 0.33 + R0() * 0.12);
     const tint = () => (R0() < 0.18 ? rustTint() : steelTint());
     const tube = (a, b, r = R) => tubes.add(tubeMatrix(a, b, r), tint());
-    const board = (c, size, rotY = 0, rotZ = 0, rotX = 0) => boards.add(boxMatrix(c, size, rotY, rotZ, rotX));
+    // (each board its own shade of weathered grey-brown, and the steel band round each end)
+    const woodTint = () => new THREE.Color().setHSL(0.08 + R0() * 0.03, 0.2 + R0() * 0.2, 0.4 + R0() * 0.3);
+    const board = (c, size, rotY = 0, rotZ = 0, rotX = 0) => {
+      boards.add(boxMatrix(c, size, rotY, rotZ, rotX), woodTint());
+      if (size[0] > 0.8 && rotY === 0 && rotZ === 0 && rotX === 0)
+        for (const s of [-1, 1]) fittings.add(boxMatrix([c[0] + s * (size[0] / 2 - 0.025), c[1], c[2]], [0.03, size[1] + 0.006, size[2] + 0.006]));
+    };
     const coupler = (c, along = 'x') => fittings.add(boxMatrix(c, along === 'x' ? [0.1, 0.07, 0.075] : [0.075, 0.07, 0.1]));
 
     const xs = Array.from({ length: BAYS + 1 }, (_, i) => X0 + i * BAY);
@@ -384,6 +683,22 @@ export class Scaffold {
       // a sleeve coupler where two tubes join
       tubes.add(tubeMatrix([f.x, 6.25, f.z], [f.x, 6.4, f.z], R * 1.35), new THREE.Color(0.35, 0.35, 0.36));
       this.obstacles.push({ x: f.x, z: f.z, r: 0.14, when: () => this.on });
+    }
+
+    // the ground under the scaffold and round the mixer, trodden to mud
+    {
+      const mud = new THREE.MeshStandardMaterial({ map: mudPicture(), transparent: true, roughness: 1, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+      weatherShader(mud);
+      const patch = (cx, cz, w, d, rot = 0) => {
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mud);
+        m.rotation.set(-Math.PI / 2, rot, 0, 'YXZ');
+        m.position.set(cx, groundAt(cx, cz) + 0.015, cz);
+        m.receiveShadow = true;
+        g.add(m);
+      };
+      patch((X0 + X1) / 2, (Z_IN + Z_OUT) / 2 + 0.35, X1 - X0 + 2.6, 3.0);
+      patch(12.2, -6.8, 4.8, 3.6, 0.4);
+      patch(9.0, -6.6, 3.4, 2.6, -0.3);
     }
 
     for (const L of LIFTS) {
@@ -408,6 +723,13 @@ export class Scaffold {
           for (const x of xs) coupler([x, yRail, Z_IN - 0.045]);
         }
       }
+      // ties into the wall at every other standard on the second and top lifts
+      if (L === LIFTS[1] || L === LIFTS[3])
+        for (const x of [xs[0], xs[2], xs[4]]) {
+          const wallZ = x > BREAST.x0 - 0.15 && x < BREAST.x1 + 0.15 ? BREAST.z : WALL_Z;
+          tube([x + 0.05, L + 0.25, Z_IN - 0.06], [x + 0.05, L + 0.25, wallZ + 0.03]);
+          coupler([x + 0.05, L + 0.25, Z_IN], 'z');
+        }
       // transoms, with an inside board's worth of hop-up (except where the chimney breast is)
       for (let k = 0; k <= BAYS * 2; k++) {
         const x = X0 + (k * BAY) / 2;
@@ -498,12 +820,32 @@ export class Scaffold {
       const h = TOP - (LIFTS[0] - 0.25);
       const yMid = (TOP + LIFTS[0] - 0.25) / 2;
       const w = X1 - X0 + 0.3;
-      const face = new THREE.Mesh(new THREE.PlaneGeometry(w, h), M.netting);
+      // tied to the standards and the rails; between the ties it bellies out, and the top edge sags
+      const geo = new THREE.PlaneGeometry(w, h, 56, 14);
+      const pos = geo.attributes.position;
+      const yLow = LIFTS[0] - 0.25;
+      for (let i = 0; i < pos.count; i++) {
+        const wx = pos.getX(i) + (X0 + X1) / 2;
+        const wy = pos.getY(i) + yMid;
+        const fx = THREE.MathUtils.clamp(((wx - X0) / BAY) % 1, 0, 1);
+        const bx = Math.sin(Math.PI * fx);
+        const by = Math.sin(Math.PI * (((wy - yLow) / 2.0) % 1));
+        pos.setZ(i, 0.075 * bx * (0.35 + 0.65 * by));
+        if (wy > TOP - 0.4) pos.setY(i, pos.getY(i) - 0.07 * bx);
+      }
+      geo.computeVertexNormals();
+      const face = new THREE.Mesh(geo, M.netting);
       face.material.map.repeat.set(w * 2.2, h * 2.2);
       face.position.set((X0 + X1) / 2, yMid, Z_OUT + 0.07);
       face.castShadow = false;
       face.receiveShadow = true;
       g.add(face);
+      this.net = { geo, base: new Float32Array(pos.array) };
+      // the banner tied across it at the second lift
+      const banner = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 0.7), new THREE.MeshStandardMaterial({ map: bannerPicture(), roughness: 0.7, side: THREE.DoubleSide }));
+      banner.position.set((X0 + X1) / 2 - 1.3, LIFTS[1] + 1.0, Z_OUT + 0.17);
+      banner.castShadow = false;
+      g.add(banner);
       for (const x of [X0 - 0.07, X1 + 0.07]) {
         const end = new THREE.Mesh(new THREE.PlaneGeometry(Z_OUT - Z_IN + 0.3, h), M.netting);
         end.rotation.y = Math.PI / 2;
@@ -530,8 +872,8 @@ export class Scaffold {
       const rope = new THREE.MeshStandardMaterial({ color: 0xcfc3a3, roughness: 1 });
       const ropes = new Batch(new THREE.CylinderGeometry(R, R, 1, 6), rope, { shadow: false });
       const gY = groundAt(X0, Z_OUT + 1.0);
-      ropes.add(tubeMatrix([X0 - 0.09, yArm - 0.16, Z_OUT + 0.9], [X0 - 0.09, gY + 1.35, Z_OUT + 0.95], 0.006));
-      ropes.add(tubeMatrix([X0 + 0.09, yArm - 0.16, Z_OUT + 0.9], [X0 + 0.1, LIFTS[3] + 0.52, Z_OUT + 0.12], 0.006));
+      ropes.add(tubeMatrix([X0 - 0.09, yArm - 0.16, Z_OUT + 0.9], [X0 - 0.09, gY + 1.35, Z_OUT + 0.95], 0.011));
+      ropes.add(tubeMatrix([X0 + 0.09, yArm - 0.16, Z_OUT + 0.9], [X0 + 0.1, LIFTS[3] + 0.52, Z_OUT + 0.12], 0.011));
       g.add(ropes.build('ropes'));
       const bucket = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.12, 0.3, 14, 1, true), M.black);
       bucket.position.set(X0 - 0.09, gY + 1.05, Z_OUT + 0.95);
@@ -567,6 +909,11 @@ export class Scaffold {
       }
       const chute = sections.build('chute');
       g.add(chute);
+      // the collars where the sections hook into each other, and the chains that hold them
+      const collars = new Batch(new THREE.TorusGeometry(0.235, 0.022, 6, 16), M.fitting);
+      const qz = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
+      for (let i = 0; i <= n; i++) collars.add(new THREE.Matrix4().compose(top.clone().addScaledVector(dir, i * 1.0), qz, new THREE.Vector3(1, 1, 1)));
+      g.add(collars.build('collars'));
       // the chain it hangs from
       const chain = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, len, 5), M.fitting);
       chain.position.copy(top).add(bottom).multiplyScalar(0.5);
@@ -606,6 +953,30 @@ export class Scaffold {
       // a few loose boards left on the second lift
       board([2.9, LIFTS[1] + BOARD.t / 2, Z_IN + 0.5], [2.3, BOARD.t, BOARD.w], 0.06);
       board([2.95, LIFTS[1] + BOARD.t * 1.5, Z_IN + 0.52], [2.1, BOARD.t, BOARD.w], -0.03);
+      // left about on the lifts: a hard hat, a tool bag, a coil of cable, the radio, and the power
+      // lead up from the cabin
+      const hat = new THREE.Mesh(new THREE.SphereGeometry(0.14, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), M.yellow);
+      hat.position.set(3.3, LIFTS[1], Z_IN + 0.5);
+      hat.castShadow = true;
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.19, 0.012, 16), M.yellow);
+      brim.position.set(3.3, LIFTS[1] + 0.012, Z_IN + 0.5);
+      const bag = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.26, 0.24), M.black);
+      bag.position.set(7.0, LIFTS[3] + 0.13, Z_IN + 0.62);
+      bag.rotation.y = 0.3;
+      bag.castShadow = true;
+      const coil = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.035, 8, 20), M.orange);
+      coil.rotation.x = Math.PI / 2;
+      coil.position.set(5.5, LIFTS[0] + 0.035, Z_OUT - 0.42);
+      const radio = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.16, 0.11), M.black);
+      radio.position.set(8.6, LIFTS[1] + 0.08, Z_IN + 0.42);
+      const aerial = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.4, 5), M.fitting);
+      aerial.position.set(8.7, LIFTS[1] + 0.36, Z_IN + 0.42);
+      aerial.rotation.z = -0.3;
+      g.add(hat, brim, bag, coil, radio, aerial);
+      const lead = new Batch(new THREE.CylinderGeometry(R, R, 1, 6), M.black, { shadow: false });
+      lead.add(tubeMatrix([2.55, 1.0, -5.6], [X0 + 0.25, 0.06, Z_OUT + 0.3], 0.008));
+      lead.add(tubeMatrix([X0 + 0.25, 0.06, Z_OUT + 0.3], [X0 + 0.07, LIFTS[3] + 0.1, Z_OUT + 0.06], 0.008));
+      g.add(lead.build('power lead'));
     }
 
     g.add(tubes.build('tubes'), rungs.build('rungs'), boards.build('boards'), fittings.build('fittings'), stiles.build('stiles'), concrete.build('blocks'));
@@ -827,6 +1198,7 @@ export class Scaffold {
     };
     pallet(12.6, -9.4, 'slates');
     pallet(14.0, -9.4, 'cement');
+    this._van(M, new THREE.Vector3(18.8, groundAt(18.8, -7.0), -7.0), Math.PI);
     // the site cabin by the porch end of the compound, its door to the yard
     {
       const at = new THREE.Vector3(2.0, groundAt(2.0, -5.6), -5.6);
@@ -888,6 +1260,53 @@ export class Scaffold {
       }
       obstacle(at.x, at.z, 0.5);
     }
+  }
+
+  /** The builders' van, a white panel van with a ladder on its roof rack, its nose along local +x. */
+  _van(M, at, yaw) {
+    const van = new THREE.Group();
+    van.position.copy(at);
+    van.rotation.y = yaw;
+    this.group.add(van);
+    const white = new THREE.MeshStandardMaterial({ color: 0xe9ecee, roughness: 0.35, metalness: 0.15 });
+    const glass = new THREE.MeshStandardMaterial({ color: 0x1c2630, roughness: 0.15, metalness: 0.6 });
+    const grime = new THREE.MeshStandardMaterial({ color: 0x8d877c, roughness: 0.9 });
+    const add = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => {
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(x, y, z);
+      m.rotation.set(rx, ry, rz);
+      m.castShadow = m.receiveShadow = true;
+      van.add(m);
+      return m;
+    };
+    add(new THREE.BoxGeometry(3.3, 1.95, 2.0), white, -0.95, 1.5, 0); // the cargo box
+    add(new THREE.BoxGeometry(1.35, 1.5, 2.0), white, 1.35, 1.28, 0); // the cab
+    add(new THREE.BoxGeometry(0.75, 0.62, 1.96), white, 2.4, 0.83, 0); // the bonnet
+    add(new THREE.BoxGeometry(0.06, 1.0, 1.9), glass, 2.05, 1.6, 0, 0, 0, 0.42); // the windscreen, raked
+    add(new THREE.BoxGeometry(0.9, 0.55, 0.04), glass, 1.4, 1.5, 1.01); // the cab's side windows
+    add(new THREE.BoxGeometry(0.9, 0.55, 0.04), glass, 1.4, 1.5, -1.01);
+    add(new THREE.BoxGeometry(5.3, 0.42, 2.03), grime, 0.1, 0.7, 0); // the dirty skirt
+    add(new THREE.BoxGeometry(0.1, 0.3, 2.0), M.fitting, 2.8, 0.6, 0); // bumpers
+    add(new THREE.BoxGeometry(0.1, 0.3, 2.0), M.fitting, -2.62, 0.6, 0);
+    const lamp = new THREE.MeshStandardMaterial({ color: 0xf4f4f0, emissive: 0x404040, roughness: 0.3 });
+    for (const dz of [-0.75, 0.75]) add(new THREE.BoxGeometry(0.05, 0.22, 0.35), lamp, 2.79, 1.0, dz);
+    const red = new THREE.MeshStandardMaterial({ color: 0xa01010, roughness: 0.4 });
+    for (const dz of [-0.85, 0.85]) add(new THREE.BoxGeometry(0.05, 0.5, 0.2), red, -2.61, 1.5, dz);
+    for (const [dx, dz] of [
+      [1.7, -1.0],
+      [1.7, 1.0],
+      [-1.6, -1.0],
+      [-1.6, 1.0],
+    ]) {
+      add(new THREE.CylinderGeometry(0.36, 0.36, 0.24, 18), M.black, dx, 0.36, dz, Math.PI / 2);
+      add(new THREE.CylinderGeometry(0.2, 0.2, 0.26, 12), M.fitting, dx, 0.36, dz, Math.PI / 2);
+    }
+    for (const dz of [-1.1, 1.1]) add(new THREE.BoxGeometry(0.12, 0.2, 0.18), M.black, 1.9, 1.5, dz); // mirrors
+    // the roof rack, a ladder on it
+    for (const dz of [-0.8, 0.8]) add(new THREE.BoxGeometry(3.2, 0.05, 0.05), M.fitting, -0.9, 2.52, dz);
+    for (const dz of [-0.17, 0.17]) add(new THREE.BoxGeometry(3.6, 0.03, 0.07), M.alu, -0.6, 2.6, dz);
+    for (let i = 0; i < 12; i++) add(new THREE.CylinderGeometry(0.013, 0.013, 0.34, 6), M.alu, -2.2 + i * 0.3, 2.6, 0, Math.PI / 2);
+    for (const dx of [-1.6, 0, 1.6]) this.obstacles.push({ x: at.x + Math.cos(yaw) * dx, z: at.z - Math.sin(yaw) * dx, r: 1.25, when: () => this.on });
   }
 
   /** The roof behind the battlements: a stretch stripped to the battens, half of it under a tarpaulin. */
