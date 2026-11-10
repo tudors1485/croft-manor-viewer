@@ -125,6 +125,70 @@ export class Soundscape {
     return f;
   }
 
+  /**
+   * Builders at work: a run of hammer blows at `position` (nails into battens: a sharp knock with a
+   * short woody ring), `taps` of them.
+   */
+  hammering(position, taps = 5, { gain = 1 } = {}) {
+    if (!this.on || !this.ctx) return;
+    const ctx = this.ctx;
+    const out = this._placed(position, { ref: 6, rolloff: 1, max: 140 });
+    let t = ctx.currentTime + 0.05;
+    for (let i = 0; i < taps; i++) {
+      const n = ctx.createBufferSource();
+      n.buffer = this.white;
+      const e = ctx.createGain();
+      e.gain.setValueAtTime(0.9 * gain, t);
+      e.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+      n.connect(this._filter('bandpass', 1700 + Math.random() * 700, 1.1)).connect(e).connect(out);
+      n.start(t, Math.random() * 1.5, 0.08);
+      const o = ctx.createOscillator();
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(430 + Math.random() * 90, t);
+      o.frequency.exponentialRampToValueAtTime(170, t + 0.09);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.3 * gain, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+      o.connect(g).connect(out);
+      o.start(t);
+      o.stop(t + 0.14);
+      t += 0.25 + Math.random() * 0.09;
+    }
+  }
+
+  /** A power saw at `position` running for `seconds`: a buzz that drops in pitch as it bites, with its whine of dust. */
+  powerSaw(position, seconds = 1.4, { gain = 1 } = {}) {
+    if (!this.on || !this.ctx) return;
+    const ctx = this.ctx;
+    const out = this._placed(position, { ref: 8, rolloff: 1, max: 180 });
+    const t = ctx.currentTime + 0.05;
+    const o = ctx.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(150, t);
+    o.frequency.exponentialRampToValueAtTime(118, t + 0.35);
+    o.frequency.setValueAtTime(118, t + seconds - 0.2);
+    o.frequency.exponentialRampToValueAtTime(165, t + seconds);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.22 * gain, t + 0.08);
+    g.gain.setValueAtTime(0.22 * gain, t + seconds - 0.12);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + seconds + 0.15);
+    o.connect(this._filter('lowpass', 2600, 0.8)).connect(g).connect(out);
+    o.start(t);
+    o.stop(t + seconds + 0.2);
+    const n = ctx.createBufferSource();
+    n.buffer = this.white;
+    n.loop = true;
+    const ne = ctx.createGain();
+    ne.gain.setValueAtTime(0.0001, t);
+    ne.gain.exponentialRampToValueAtTime(0.09 * gain, t + 0.1);
+    ne.gain.setValueAtTime(0.09 * gain, t + seconds - 0.1);
+    ne.gain.exponentialRampToValueAtTime(0.0001, t + seconds + 0.12);
+    n.connect(this._filter('highpass', 2800, 0.7)).connect(ne).connect(out);
+    n.start(t);
+    n.stop(t + seconds + 0.15);
+  }
+
   _build() {
     const ctx = (this.ctx = this._context ?? new (window.AudioContext || window.webkitAudioContext)());
     this.master = ctx.createGain();

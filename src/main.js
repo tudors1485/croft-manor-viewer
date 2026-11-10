@@ -12,6 +12,7 @@ import { Lamps } from './lamps.js';
 import { Landscape, makeTerrain, makeHillHeight } from './landscape.js';
 import { Garden } from './garden.js';
 import { MovingIn } from './movingin.js';
+import { Scaffold } from './scaffold.js';
 import { Meteors, Murmuration, harvestMoon } from './sights.js';
 import { Balloons, GardenParty } from './sights2.js';
 import { Fireflies, NightClouds, Comet, Blossom, NightSnow, duskHour } from './sights3.js';
@@ -137,6 +138,7 @@ const dateOfMonth = (() => {
   };
 })();
 let moving = null; // Moving in (Sights): crates in the hall (movingin.js)
+let scaffold = null; // The roofers in (Sights): scaffolding up the front, the site compound (scaffold.js)
 let garden = null; // hedges, shrub borders, long grass, clipped evergreens, chimney smoke (garden.js)
 const rainfall = new Rainfall(scene);
 const rainbow = new Rainbow(scene); // when the sun comes out after a shower
@@ -1584,6 +1586,7 @@ async function prepareWalking(ground) {
     console.info('interior', dressInterior(scene, model));
     clockHands = hallClock(scene);
     moving = new MovingIn(scene, model, landscape.obstacles);
+    scaffold = new Scaffold(scene, { ground: (x, z) => landscape.groundHeight(x, z), bvh: geo.boundsTree, obstacles: landscape.obstacles, sound });
     await part(0.4, 'Clipping the hedges and planting the borders');
     garden = new Garden(scene, { landscape, bvh: geo.boundsTree, gate: landscape.gate, materialAt: (fi) => meshAtFace(geo, fi)?.material.name || '', doors: doors.usable });
     console.info('garden', garden.build());
@@ -1907,6 +1910,7 @@ $('reset').onclick = (e) => {
   endSight();
   flight = null;
   moving?.set(false);
+  scaffold?.set(false);
   setOakScene(false);
   showScene(-1);
   sound.stopMusic();
@@ -2070,6 +2074,9 @@ const HOLIDAYS = {
   } },
   // Moving in: the hall on the day the crates came (a spring morning, the sun in at the windows)
   moving: { day: 100, hours: 10.5, weather: 'clear', pos: [-1.85, 1.7, -12.9], look: [-1.85, 3.0, -24], then: () => moving?.set(true) },
+  // a bright morning late in September, from the lawn east of the drive: the scaffolding up the
+  // front east of the porch, the site compound on the forecourt, the roofers at work (scaffold.js)
+  scaffold: { day: 268, hours: 10.5, weather: 'clear', pos: [12.5, 1.7, 3.5], look: [4.5, 4.8, -12], then: () => scaffold?.set(true) },
   // an autumn afternoon, the crows going over to roost
   crows: { day: 300, hours: 15.6, weather: 'clear', pos: [4.6, 3, 3.5], look: [5.5, 32, -40], orbit: true, then: () => wildlife?.crowsNow() },
 };
@@ -2212,6 +2219,7 @@ function playScene(i, named = false) {
   sound.stopMusic(); // (the last scene's music doesn't carry on into this one)
   wakeSound();
   moving?.set(false); // (another holiday or sight: the crates go)
+  scaffold?.set(false); // (and the scaffolding comes down)
   setOakScene(false);
   setDate(typeof h.day === 'function' ? h.day() : h.day);
   setTime(typeof h.hours === 'function' ? h.hours() : h.hours);
@@ -2585,6 +2593,7 @@ function step(dt, exporting = false) {
   meteors.update(dt, { day: seasonDay, night: tod.night, clouds: weather.clouds ?? 0, compass: Number($('sun-azim').value), camera });
   balloons.update(dt, { day: seasonDay, hours: tod.hours, wind, camera });
   party?.update(dt, { day: seasonDay, hours: tod.hours, rain: weather.rain ?? 0, dusk: tod.lamps, camera, scale: lamps?.glowMat.uniforms.uScale.value });
+  scaffold?.update(dt, { hours: tod.hours });
   murmuration.update(dt, { day: seasonDay, sunDeg: THREE.MathUtils.radToDeg(Math.asin(THREE.MathUtils.clamp(tod.sunDir.y, -1, 1))), clouds: weather.clouds ?? 0, rain: weather.rain ?? 0, scale: lamps?.glowMat.uniforms.uScale.value });
   // (the five more sights: sights3.js)
   {
@@ -2924,6 +2933,9 @@ window.manor = {
   },
   get moving() {
     return moving;
+  },
+  get scaffold() {
+    return scaffold;
   },
   meteors,
   murmuration,

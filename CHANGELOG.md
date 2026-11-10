@@ -8,6 +8,11 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.59.0, 10 November 2026
+
+- **The roofers in** (a new scene, *Scene › Sights*): scaffolding up the front of the house east of the porch, from the ground to above the battlements. Four lifts of boards on tube-and-coupler steel, fitted to the wall (round the chimney breast, up to the gabled bay), guard rails and toe boards, ladders from lift to lift through a hatch at the east end, zig-zag bracing, green debris netting over the face, a gin wheel with its rope and bucket at the west end, a rubbish chute down into a yellow skip at the east. Behind the battlements a stretch of roof is stripped to the battens under a blue tarpaulin weighted with slates, a roof ladder hooked over the ridge, and the new slates are stacked on the top lift. The forecourt is fenced off as the site compound (temporary fencing on concrete feet, the site safety sign facing the drive), with a cement mixer, a heap of sand and a shovel, pallets of slates and cement under tarpaulins, a site cabin, a wheelbarrow and cones. The scene opens on a bright late-September morning from the lawn east of the drive. Everything is built in the viewer from tubes, boxes and drawn textures, nothing to download; the poles, the skip, the fence and the rest stop you when you walk; another scene, a place or Reset takes it all down.
+- **Builders at work** (`src/sound.js`): from the scaffold, in working hours (8 to 5), runs of hammering and the odd power saw, placed where they happen, so they come from above and to one side as you walk past.
+
 ## 0.58.0, 8 November 2026
 
 - **Your light is bigger** (Tudor: "like the Diablo light"): the glow round you now lights the ground a good way about, about twice as far, and fades softly at its rim, from a little higher above your head. The torch and the flaming torch also carry a soft wide pool of light round you, so you see where you are going as well as where you point; the flaming torch's own light reaches further and flickers the pool with it.
