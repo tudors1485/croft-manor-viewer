@@ -13,6 +13,7 @@ import { Landscape, makeTerrain, makeHillHeight } from './landscape.js';
 import { Garden } from './garden.js';
 import { MovingIn } from './movingin.js';
 import { Scaffold } from './scaffold.js';
+import { Abandoned } from './abandoned.js';
 import { Meteors, Murmuration, harvestMoon } from './sights.js';
 import { Balloons, GardenParty } from './sights2.js';
 import { Fireflies, NightClouds, Comet, Blossom, NightSnow, duskHour } from './sights3.js';
@@ -139,6 +140,7 @@ const dateOfMonth = (() => {
 })();
 let moving = null; // Moving in (Sights): crates in the hall (movingin.js)
 let scaffold = null; // The roofers in (Sights): scaffolding up the front, the site compound (scaffold.js)
+let abandoned = null; // Fifty years empty (Sights): the house left to rot since the seventies (abandoned.js)
 let garden = null; // hedges, shrub borders, long grass, clipped evergreens, chimney smoke (garden.js)
 const rainfall = new Rainfall(scene);
 const rainbow = new Rainbow(scene); // when the sun comes out after a shower
@@ -1587,9 +1589,11 @@ async function prepareWalking(ground) {
     clockHands = hallClock(scene);
     moving = new MovingIn(scene, model, landscape.obstacles);
     scaffold = new Scaffold(scene, { ground: (x, z) => landscape.groundHeight(x, z), bvh: geo.boundsTree, obstacles: landscape.obstacles, sound });
+    abandoned = new Abandoned(scene, { landscape, bvh: geo.boundsTree, materialAt: (fi) => meshAtFace(geo, fi)?.material.name || '', model, water, sound, doors: doors.usable.map((d) => d.centre) });
     await part(0.4, 'Clipping the hedges and planting the borders');
     garden = new Garden(scene, { landscape, bvh: geo.boundsTree, gate: landscape.gate, materialAt: (fi) => meshAtFace(geo, fi)?.material.name || '', doors: doors.usable });
     console.info('garden', garden.build());
+    abandoned.garden = garden; // (its clipped and potted things go when the house is empty)
     await part(0.5, 'Putting up the lights at the gate and the fountain');
     // lights at the gateway, in the fountain and on the assault course (before the first frame: new lights recompile every shader)
     {
@@ -1911,6 +1915,7 @@ $('reset').onclick = (e) => {
   flight = null;
   moving?.set(false);
   scaffold?.set(false);
+  abandoned?.set(false);
   setOakScene(false);
   showScene(-1);
   sound.stopMusic();
@@ -2077,6 +2082,12 @@ const HOLIDAYS = {
   // a bright morning late in September, from the lawn east of the drive: the scaffolding up the
   // front east of the porch, the site compound on the forecourt, the roofers at work (scaffold.js)
   scaffold: { day: 268, hours: 10.5, weather: 'clear', pos: [12.5, 1.7, 3.5], look: [4.5, 4.8, -12], then: () => scaffold?.set(true) },
+  // Fifty years empty: a grey afternoon at the end of October, the house as it would be if nobody
+  // had lived in it since the seventies, from the long grass on the lawn by the dry fountain (abandoned.js)
+  abandoned: { day: 296, hours: 14.6, weather: 'overcast', orbit: true, pos: [12, 2.7, 9], look: [1.5, 4.4, -12], then: () => {
+    abandoned?.set(true);
+    wildlife?.crowsNow();
+  } },
   // an autumn afternoon, the crows going over to roost
   crows: { day: 300, hours: 15.6, weather: 'clear', pos: [4.6, 3, 3.5], look: [5.5, 32, -40], orbit: true, then: () => wildlife?.crowsNow() },
 };
@@ -2220,6 +2231,7 @@ function playScene(i, named = false) {
   wakeSound();
   moving?.set(false); // (another holiday or sight: the crates go)
   scaffold?.set(false); // (and the scaffolding comes down)
+  abandoned?.set(false); // (and the house is put back as it was)
   setOakScene(false);
   setDate(typeof h.day === 'function' ? h.day() : h.day);
   setTime(typeof h.hours === 'function' ? h.hours() : h.hours);
@@ -2485,11 +2497,12 @@ function step(dt, exporting = false) {
   updateExposure(dt);
   if (lamps) {
     lamps.flicker = Spooky.isOn(seasonDay, tod.night) ? 1 : 0; // (Halloween night: the lamps outside falter)
-    lamps.update(camera, tod.lamps, dt, renderer, tod.hours);
+    lamps.update(camera, abandoned?.on ? 0 : tod.lamps, dt, renderer, tod.hours); // (no lamps in the empty house)
     if (festive) {
       festive.update(dt, tod.lamps, seasonDay, tod.hours, true);
       xmasFront?.update(dt, seasonDay);
       festive.setScale(lamps.glowMat.uniforms.uScale.value);
+      if (abandoned?.on) festive.halloween.visible = festive.christmas.visible = false; // (nobody to put them up)
     }
     if (spooky) {
       spooky.update(dt, camera, seasonDay, tod.night, tod.flash);
@@ -2594,6 +2607,7 @@ function step(dt, exporting = false) {
   balloons.update(dt, { day: seasonDay, hours: tod.hours, wind, camera });
   party?.update(dt, { day: seasonDay, hours: tod.hours, rain: weather.rain ?? 0, dusk: tod.lamps, camera, scale: lamps?.glowMat.uniforms.uScale.value });
   scaffold?.update(dt, { hours: tod.hours, camera });
+  abandoned?.update(dt, { camera, wind, inside: tod.inside });
   murmuration.update(dt, { day: seasonDay, sunDeg: THREE.MathUtils.radToDeg(Math.asin(THREE.MathUtils.clamp(tod.sunDir.y, -1, 1))), clouds: weather.clouds ?? 0, rain: weather.rain ?? 0, scale: lamps?.glowMat.uniforms.uScale.value });
   // (the five more sights: sights3.js)
   {
@@ -2615,7 +2629,7 @@ function step(dt, exporting = false) {
     water.update(camera, elapsed);
     if (water.jet) {
       water.jet.material.map.offset.y -= dt * 1.4;
-      water.jet.visible = seasonUniforms.uIce.value < 0.5 && !oakScene; // the fountain is turned off when it freezes (and gone in the oak's scene)
+      water.jet.visible = seasonUniforms.uIce.value < 0.5 && !oakScene && !abandoned?.on; // the fountain is turned off when it freezes (and gone in the oak's scene)
     }
   }
   quality.fisheye = mode === 'tour' ? tour.fisheye : 0;
@@ -2936,6 +2950,14 @@ window.manor = {
   },
   get scaffold() {
     return scaffold;
+  },
+  get abandoned() {
+    return abandoned;
+  },
+  /** (for tests and screenshots) the camera to a place, looking at a point, in Orbit */
+  view(pos, look) {
+    if (mode !== 'orbit') setMode('orbit');
+    goTo(new THREE.Vector3(...pos), new THREE.Vector3(...look));
   },
   meteors,
   murmuration,

@@ -807,6 +807,21 @@ export class Soundscape {
   }
 
   /** A heavy old door at `position`: latch and creak as it opens, a thud and the latch as it shuts. */
+  /**
+   * The empty house (Fifty years empty): a slow groan of old timber somewhere in it, the door's creak
+   * slowed right down and muffled by the walls.
+   */
+  creakAt(position, { rate = 0.7, gain = 1 } = {}) {
+    if (!this.on || !this.ctx || !this.creak) return;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.creak;
+    src.playbackRate.value = rate;
+    const e = this.ctx.createGain();
+    e.gain.value = 0.55 * gain;
+    src.connect(this._filter('highpass', 45)).connect(this._filter('lowpass', 1400)).connect(e).connect(this._placed(position, { ref: 4, rolloff: 0.9, max: 120 }));
+    src.start(this.ctx.currentTime + 0.02);
+  }
+
   door(opening, position) {
     if (!this.on) return;
     const ctx = this.ctx;
@@ -878,11 +893,14 @@ export class Soundscape {
     const night = unit(env.night);
     const inside = unit(env.inside);
     const dusk = unit(env.dusk);
-    const birds = unit(env.birds, 1);
+    // (fifty years empty: no birdsong but the crows', the clock stopped, the fountain dry, and always
+    // a wind round the house)
+    const empty = this.abandoned ? 1 : 0;
+    const birds = unit(env.birds, 1) * (1 - empty);
     const crickets = unit(env.crickets, 1);
     const snow = unit(env.snow);
     const rain = unit(env.rain);
-    const windy = unit(env.windy);
+    const windy = Math.max(unit(env.windy), 0.62 * empty);
     const frozen = unit(env.frozen);
     const speed = Number.isFinite(env.speed) ? Math.max(0, env.speed) : 0;
     const flyby = !!env.flyby;
@@ -916,13 +934,13 @@ export class Soundscape {
     this.rushFilter.frequency.setTargetAtTime(380 + speed * 45, t, 0.25);
 
     // the fountain (silent when frozen), muffled indoors; the clock muffled outdoors
-    this.waterGain.gain.setTargetAtTime(0.5 * (1 - frozen) * ground * (1 - (this.fountainOff ?? 0)), t, 0.5);
+    this.waterGain.gain.setTargetAtTime(0.5 * (1 - frozen) * ground * (1 - (this.fountainOff ?? 0)) * (1 - empty), t, 0.5);
     this.waterMuffle.frequency.setTargetAtTime(THREE.MathUtils.lerp(9000, 700, inside), t, 0.3);
     this.clockMuffle.frequency.setTargetAtTime(THREE.MathUtils.lerp(9000, 900, outdoors), t, 0.3);
     this.clockGain.gain.setTargetAtTime(THREE.MathUtils.lerp(1, 0.35, outdoors), t, 0.3);
     if (t > this._nextTick) {
       // (no ticking from the far side of the estate)
-      if (this.listener.distanceTo(this.clock) < 70) this._tick(Math.max(t, this._nextTick));
+      if (this.listener.distanceTo(this.clock) < 70 && !empty) this._tick(Math.max(t, this._nextTick));
       this._nextTick = Math.max(this._nextTick + 1, t);
     }
 

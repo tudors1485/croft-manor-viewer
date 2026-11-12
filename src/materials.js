@@ -55,6 +55,7 @@ const GRASS_GLSL = /* glsl */ `
   uniform vec3 uGrassTint;
   uniform float uSnow;
   uniform float uWet;
+  uniform float uDecay;
   float gHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   float gNoise(vec2 p) {
     vec2 i = floor(p), f = fract(p);
@@ -71,6 +72,7 @@ export function grassShader(material) {
     shader.uniforms.uGrassTint = seasonUniforms.uGrassTint;
     shader.uniforms.uSnow = seasonUniforms.uSnow;
     shader.uniforms.uWet = seasonUniforms.uWet;
+    shader.uniforms.uDecay = seasonUniforms.uDecay;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vGrassWorld;')
       .replace(
@@ -105,6 +107,13 @@ export function grassShader(material) {
          diffuseColor.rgb *= mix(lush, dry, smoothstep(0.2, 0.8, big)) * (0.82 + 0.36 * mid);
          // the season's colour, then snow: patchy as it comes and goes, a blanket at its deepest
          diffuseColor.rgb *= uGrassTint * (1.0 - 0.22 * uWet);
+         // fifty years unmown: rank grass gone to seed, straw and dark tussocks in big drifts
+         if (uDecay > 0.001) {
+           float rank = smoothstep(0.25, 0.75, gFbm(gw * 0.07 + 1.7));
+           vec3 seed = mix(vec3(0.7, 0.76, 0.58), vec3(0.98, 0.9, 0.68), rank) * (0.8 + 0.3 * gFbm(gw * 0.9 + 4.0));
+           diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * seed, uDecay);
+           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))) * vec3(1.0, 0.97, 0.8) * 0.9, 0.35 * uDecay);
+         }
          float cover = smoothstep(0.35, 0.55, gFbm(gw * 0.33) * 0.6 + uSnow * 0.75 - 0.15) * step(0.001, uSnow);
          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.78, 0.81, 0.86) * (0.94 + 0.12 * mid), cover);
        }`,
@@ -233,7 +242,15 @@ const WEATHER_GLSL = /* glsl */ `
   uniform float uWet;
   uniform sampler2D uSkyMap;
   uniform vec4 uSkyBox;
+  uniform float uDecay;
   varying vec3 vWxWorld;
+  float wHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float wNoise(vec2 p) {
+    vec2 i = floor(p), f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(wHash(i), wHash(i + vec2(1, 0)), u.x), mix(wHash(i + vec2(0, 1)), wHash(i + vec2(1, 1)), u.x), u.y);
+  }
+  float wFbm(vec2 p) { return wNoise(p) * 0.55 + wNoise(p * 2.13 + 5.2) * 0.3 + wNoise(p * 4.7 - 2.1) * 0.15; }
   /** 1 where this point is open to the sky (no roof, porch or glass above it). */
   float skyOpen(vec3 p) {
     vec2 suv = vec2((p.x - uSkyBox.x) / uSkyBox.z, (uSkyBox.y - p.z) / uSkyBox.w);
@@ -250,7 +267,7 @@ export function weatherShader(material) {
   const before = material.onBeforeCompile;
   material.onBeforeCompile = (shader, renderer) => {
     before?.call(material, shader, renderer);
-    for (const k of ['uSnow', 'uWet', 'uSkyMap', 'uSkyBox']) shader.uniforms[k] = seasonUniforms[k];
+    for (const k of ['uSnow', 'uWet', 'uSkyMap', 'uSkyBox', 'uDecay']) shader.uniforms[k] = seasonUniforms[k];
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vWxWorld;')
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWxWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;');
@@ -266,6 +283,34 @@ export function weatherShader(material) {
          float cover = uSnow * open * smoothstep(0.45, 0.8, wn.y);
          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.8, 0.83, 0.88), cover);
          roughnessFactor = mix(roughnessFactor, 0.75, cover);
+       }
+       if (uDecay > 0.001) {
+         // Fifty years empty (abandoned.js): grime over everything, darker in blotches; outside,
+         // black streaks run down the walls from the sills and copings, green damp climbs from the
+         // ground and moss and lichen sit on whatever faces the sky
+         vec3 dn = normalize((vec4(normal, 0.0) * viewMatrix).xyz);
+         vec3 dp = vWxWorld;
+         float outside = skyOpen(dp + dn * 0.7);
+         float blot = wFbm(dp.xz * 0.35 + dp.y * 0.21);
+         float grey = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11));
+         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(grey) * vec3(0.96, 0.97, 0.86), 0.5 * uDecay);
+         diffuseColor.rgb *= 1.0 - uDecay * (0.22 + 0.3 * blot);
+         float wall = 1.0 - smoothstep(0.35, 0.7, abs(dn.y));
+         float along = dot(dp.xz, vec2(abs(dn.z), abs(dn.x)));
+         float streak = wNoise(vec2(along * 2.6, dp.y * 0.16)) * wNoise(vec2(along * 0.6 + 3.1, dp.y * 0.35 + 1.7));
+         diffuseColor.rgb *= 1.0 - uDecay * wall * outside * smoothstep(0.1, 0.45, streak) * 0.62;
+         float damp = (1.0 - smoothstep(0.05, 1.3 + blot * 1.6, dp.y)) * wall * outside;
+         float up = smoothstep(0.35, 0.75, dn.y) * skyOpen(dp);
+         diffuseColor.rgb *= 1.0 - uDecay * 0.3 * up;
+         float tops = up * smoothstep(0.45, 0.7, wFbm(dp.xz * 2.4 + 2.0) * 0.6 + wFbm(dp.xz * 0.5 - 1.0) * 0.4);
+         float moss = max(damp * (0.55 + 0.45 * wNoise(dp.xz * 3.0 + dp.y)), tops);
+         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.12, 0.16, 0.055) * (0.75 + 0.6 * wNoise(dp.xz * 7.0 + dp.y * 3.0)), uDecay * moss * 0.8);
+         // indoors: dust over the floors and every ledge, the colours gone dull
+         float indoors = 1.0 - outside;
+         float dust = indoors * smoothstep(0.6, 0.9, dn.y) * (0.55 + 0.35 * wFbm(dp.xz * 1.7));
+         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.36, 0.33, 0.29) * (0.8 + 0.3 * blot), uDecay * dust);
+         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))) * vec3(0.95, 0.9, 0.82), uDecay * indoors * 0.3);
+         roughnessFactor = mix(roughnessFactor, 1.0, uDecay * 0.6);
        }`,
     );
   };

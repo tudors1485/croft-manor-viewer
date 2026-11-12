@@ -14,6 +14,7 @@ export const seasonUniforms = {
   uGrassTint: { value: new THREE.Color(1, 1, 1) },
   uWet: { value: 0 }, // rain on the ground (weather.js)
   uIce: { value: 0 }, // the fountain and the assault-course pond frozen over
+  uDecay: { value: 0 }, // Fifty years empty: grime, streaks, damp and moss on everything, the lawn gone to seed (abandoned.js)
   // where the sky reaches: the height of the highest surface at each point (materials.js)
   uSkyMap: { value: null },
   uSkyBox: { value: new THREE.Vector4(0, 0, 1, 1) }, // min x, max z, size x, size z

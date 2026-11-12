@@ -8,6 +8,14 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.61.0, 12 November 2026
+
+- **Fifty years empty** (a new scene, *Scene › Sights*; Tudor: "a scene where the building is old and no one has lived there for 50 years"): the manor as it would be if nobody had lived in it since the seventies, on a grey afternoon at the end of October, seen from the long grass by the fountain.
+  - **The house**: every wall grimed and darker in blotches, black streaks running down from the sills and copings, green damp climbing from the ground, moss and lichen on the roofs and whatever faces the sky (the house's own materials, nothing in the model changed). Ivy over most of the walls, thick from the ground and thinning as it climbs, round the windows rather than over them. The windows filthy, half of them broken through in jagged holes (glass on the ground below) and many of the ground floor's boarded up. Seven holes in the roofs down to the rafters and battens, slates slipped round them and smashed on the ground under the eaves; buddleia growing out of the parapets and the chimney stacks. Inside, dust over the floors and the colours gone dull.
+  - **The grounds**: rank grass gone to seed over all the lawns and up through the drive, brambles in mounds against the house and out on the lawns, self-sown saplings turning yellow, a big tree down across the west lawn with its root plate up on end, dead branches everywhere, the fountain dry and its basin full of leaves, the clipped evergreens and the pots gone, the gateway boarded across with a rusty chain and a faded "Danger, unsafe building, keep out" sign. Dead leaves blow across the ground round you.
+  - **The sound**: no lamps come on, the hall clock has stopped, the fountain is silent and no birds sing but the crows (a flock goes over as the scene starts, and they call from the trees); always a wind round the house, a slow groan of old timber somewhere in it, and now and then a loose shutter banging upstairs. A creaking floor when you are inside.
+  - Another scene or Reset puts everything back. On a phone it is lighter (about half the grass and ivy).
+
 ## 0.60.0, 10 November 2026
 
 The roofers themselves, and the site made more real (Tudor: "can it be more realistic and with real people up the scaffold").

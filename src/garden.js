@@ -32,7 +32,7 @@ function rng(seed) {
 const GREENS = ['#1f3a14', '#28481a', '#2f5520', '#3a6326', '#46722c', '#557f33', '#668f3c', '#7a9e48'];
 
 /** Small leaves, densely: a clipped hedge's face (tiling), or a clump with a ragged edge (alpha). */
-function leavesPicture({ size = 512, count = 3200, len = [9, 15], tile = true, clump = false, seed = 7, palette = GREENS, bg = '#17300f' } = {}) {
+export function leavesPicture({ size = 512, count = 3200, len = [9, 15], tile = true, clump = false, seed = 7, palette = GREENS, bg = '#17300f' } = {}) {
   const c = document.createElement('canvas');
   c.width = c.height = size;
   const g = c.getContext('2d');
@@ -85,7 +85,7 @@ function leavesPicture({ size = 512, count = 3200, len = [9, 15], tile = true, c
 }
 
 /** A tuft of long grass: blades fanning up from the ground, straw at the tips. */
-function grassPicture(seed = 3) {
+export function grassPicture(seed = 3) {
   const W = 256;
   const c = document.createElement('canvas');
   c.width = c.height = W;
@@ -218,7 +218,7 @@ function puffPicture() {
  * out (its light), and how deep in the shape it is (1 outside, darker inside). Each card is two
  * crossed quads, randomly turned.
  */
-function cardsGeometry(count, size, place, seed, { tall = 1, upright = false } = {}) {
+export function cardsGeometry(count, size, place, seed, { tall = 1, upright = false } = {}) {
   const R = rng(seed);
   const pos = [];
   const nor = [];
@@ -266,7 +266,7 @@ function cardsGeometry(count, size, place, seed, { tall = 1, upright = false } =
 }
 
 /** A point on (or just in) a ball of radii rx, ry, rz sitting on the ground. */
-function ballPlace(rx, ry, rz, y0 = 0, depth = 0.35) {
+export function ballPlace(rx, ry, rz, y0 = 0, depth = 0.35) {
   const d = new THREE.Vector3();
   return (R) => {
     d.set(R() * 2 - 1, R() * 2 - 1, R() * 2 - 1);
@@ -735,6 +735,7 @@ export class Garden {
       m.position.set(x, y, z);
       m.castShadow = cast;
       m.receiveShadow = true;
+      m.userData.tidy = true; // (clipped and potted: gone in Fifty years empty, abandoned.js)
       this.group.add(m);
       return m;
     };
@@ -814,6 +815,7 @@ export class Garden {
     }
     plant.position.set(-10.75, fy + 0.3, -28.15);
     plant.traverse((o) => o.isMesh && (o.castShadow = o.receiveShadow = true));
+    plant.userData.tidy = true;
     this.group.add(plant);
   }
 
