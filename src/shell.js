@@ -67,17 +67,13 @@ export function ruinKeeps(p, name, ny) {
   if (/^cm_(glass|water)/.test(name)) return false;
   const k = shellKind(name);
   if (k === 5) return false;
-  if (!inHouse(p.x, p.z)) return true;
+  if (!inHouse(p.x, p.z)) return !groundsGone(p, k, 1);
   const top = ruinTop(p.x, p.z);
-  if (k === 2 || k === 4 || k === 6 || k === 10) return false;
+  if (k === 2 || k === 4 || k === 6 || k === 8 || k === 10 || k === 12 || k === 13) return false;
   if (k === 11 && p.y > 1) return false;
-  if (k === 12 || (k === 3 && ny > 0.3 && ny < 0.97)) return false;
-  if ((k === 1 || k === 9) && p.y > top) return false;
-  if (k === 8 && (p.y > top - 0.5 || sNoise(p.x * 0.9, p.z * 0.9) < 0.55)) return false;
-  if (k === 3) {
-    if (ny > 0.7) return !(p.y > 2.2 && (p.y > top - 0.4 || sNoise(p.x * 0.4 + 5, p.z * 0.4 + 5) < 0.8));
-    return !(p.y > Math.min(top - 0.05, 3.1 + (sNoise(p.x * 0.5 + 9, p.z * 0.5 + 9) >= 0.78 ? 3 : 0)));
-  }
+  if (k === 3 && ny > 0.3 && ny < 0.97 && p.y > 1.2) return false;
+  if ((k === 1 || k === 9 || k === 0) && p.y > top) return false;
+  if (k === 3) return ny > 0.7 ? p.y <= 1.2 : p.y <= Math.min(top - 0.05, 3.1);
   return true;
 }
 
@@ -88,11 +84,60 @@ export function buildKeeps(p, name, ny) {
   if (k === 5 || k === 9 || k === 7) return false;
   if (!inHouse(p.x, p.z)) return true;
   if (p.y > buildTop(p.x)) return false;
-  if (k === 4 || k === 10 || k === 12 || (k === 3 && ny > 0.3 && ny < 0.97)) return false;
+  if (k === 4 || k === 10 || k === 12 || k === 13 || (k === 3 && ny > 0.3 && ny < 0.97)) return false;
   if (k === 6 && p.x > -2) return false;
   if ((k === 2 || (k === 11 && p.y > 1)) && p.x > -2) return false;
   if (k === 3 && ny > 0.7 && p.y > 2.2) return false;
   if (k === 3 && ny <= 0.3 && p.y > 3.1) return false;
+  return true;
+}
+
+/** A hundred years: inside one of the places where the roof has fallen in? (materials.js's inHole) */
+export function inHole(x, z, scale = 1) {
+  const H = seasonUniforms.uHoles.value;
+  for (let i = 0; i < H.length; i++) {
+    const h = H[i];
+    if (h.z <= 0) continue;
+    const d = Math.hypot(x - h.x, z - h.y) / (h.z * scale);
+    if (d + (sNoise(x * 1.6 + i * 7, z * 1.6 + i * 7) - 0.5) * 0.45 < 1) return true;
+  }
+  return false;
+}
+
+/** And how high the walls stand in the corner that came down. */
+export function breachTop(x, z) {
+  const b = seasonUniforms.uBreach.value;
+  if (b.z <= 0) return 99;
+  const d = Math.hypot(x - b.x, z - b.y) / b.z;
+  if (d >= 1) return 99;
+  return b.w + d * d * 9 + (sNoise(x * 2.3, z * 2.3) - 0.5) * 0.8;
+}
+
+/** The broken fountain and the fallen estate walls (materials.js's groundsGone; without the brick-sized jag). */
+function groundsGone(p, k, how) {
+  const fx = p.x - 4.59;
+  const fz = p.z - 8.28;
+  const fd = Math.hypot(fx, fz);
+  if (fd < 4.3 && p.y < 5) {
+    if (k === 7 && p.y > 4.3 + (3.1 - 4.3) * (how - 0.5) * 2) return true;
+    if (k === 1 && p.y > 0.22) return sNoise(Math.atan2(fz, fx) * 2.6 + 3, p.y * 1.7 + fd * 0.6) > 0.8 + (0.6 - 0.8) * (how - 0.5) * 2;
+    return false;
+  }
+  if (k !== 1) return false;
+  if (how > 0.75) return p.y > 0.35 + 2.8 * smooth(0.28, 0.72, sNoise(p.x * 0.11 + 1.3, p.z * 0.11 + 8.2));
+  return sNoise(p.x * 0.15 + 6.1, p.z * 0.15 + 2.2) > 0.76 && p.y > 0.6;
+}
+
+/** Is this point of the model there a hundred years on? */
+export function centuryKeeps(p, name, ny, onRoof = false) {
+  if (/^cm_(glass|water)/.test(name)) return false;
+  const k = shellKind(name);
+  if (k === 5) return false;
+  if (!inHouse(p.x, p.z)) return !groundsGone(p, k, 0.5);
+  if (k === 13) return false;
+  if (inHole(p.x, p.z) && (k === 2 || onRoof || (k === 3 && ny > 0.3 && ny < 0.97) || (k === 11 && p.y > 1))) return false;
+  if (inHole(p.x, p.z, 0.85) && p.y > 2.2 && (k === 12 || k === 4 || k === 8 || (k === 3 && ny > 0.7))) return false;
+  if (p.y > breachTop(p.x, p.z) && k !== 0 && k !== 7) return false;
   return true;
 }
 
@@ -134,8 +179,10 @@ export class HouseShell {
    * @param {import('three-mesh-bvh').MeshBVH} o.bvh
    * @param {(faceIndex:number)=>string} o.materialAt
    * @param {THREE.Scene|null} o.scene
+   * @param {object|null} o.doors  the doors (doors.js: their swinging leaves are not part of the model)
    */
-  constructor(model, { clock = null, water = null, bvh = null, materialAt = null, scene = null } = {}) {
+  constructor(model, { clock = null, water = null, bvh = null, materialAt = null, scene = null, doors = null } = {}) {
+    this.doors = doors;
     this.model = model;
     this.clock = clock;
     this.water = water;
@@ -172,9 +219,53 @@ export class HouseShell {
     scene?.add(this.floor);
   }
 
-  /** 0 the house as it is, 1 a ruin, 2 going up. */
+  /**
+   * The stones that sit on the roof (the ridge's cresting, the copings it runs up under): they go
+   * where the roof goes, so none is left in the air. A vertex attribute, aOnRoof, on the stone meshes:
+   * 1 for each triangle with the roof straight under it (found with rays), 0 elsewhere.
+   */
+  _tagOnRoof() {
+    if (this.tagged) return;
+    this.tagged = true;
+    const t0 = performance.now();
+    const ray = new THREE.Ray();
+    const a = new THREE.Vector3();
+    const b = new THREE.Vector3();
+    const c = new THREE.Vector3();
+    let n = 0;
+    for (const { mesh } of this.meshes) {
+      if (!/^cm_whitestone/.test(mesh.material.name || '')) continue;
+      const g = mesh.geometry;
+      const pos = g.attributes.position;
+      const idx = g.index;
+      const tris = idx ? idx.count / 3 : pos.count / 3;
+      const tag = new Float32Array(pos.count);
+      const vi = (t, k) => (idx ? idx.getX(t * 3 + k) : t * 3 + k);
+      for (let t = 0; t < tris; t++) {
+        a.fromBufferAttribute(pos, vi(t, 0)).applyMatrix4(mesh.matrixWorld);
+        b.fromBufferAttribute(pos, vi(t, 1)).applyMatrix4(mesh.matrixWorld);
+        c.fromBufferAttribute(pos, vi(t, 2)).applyMatrix4(mesh.matrixWorld);
+        const cx = (a.x + b.x + c.x) / 3;
+        const cy = (a.y + b.y + c.y) / 3;
+        const cz = (a.z + b.z + c.z) / 3;
+        if (cy < 5.5 || !inHouse(cx, cz)) continue;
+        ray.origin.set(cx, cy + 0.01, cz);
+        ray.direction.set(0, -1, 0);
+        const hits = this.bvh.raycast(ray, THREE.DoubleSide, 0, 1.2).sort((p, q) => p.distance - q.distance);
+        const first = hits.find((h) => !/^cm_whitestone/.test(this.materialAt(h.faceIndex) || ''));
+        if (!first || !/^cm_roof$/.test(this.materialAt(first.faceIndex) || '')) continue;
+        for (let k = 0; k < 3; k++) tag[vi(t, k)] = 1;
+        n++;
+      }
+      g.setAttribute('aOnRoof', new THREE.BufferAttribute(tag, 1));
+    }
+    console.info('stones on the roof', n, 'triangles,', Math.round(performance.now() - t0), 'ms');
+  }
+
+  /** 0 the house as it is, 1 a ruin, 2 going up, 3 a hundred years empty. */
   setMode(mode) {
     if (mode === this.mode) return;
+    if (mode) this._tagOnRoof();
     this.mode = mode;
     setShellMode(mode);
     seasonUniforms.uRuin.value = mode === 1 ? 1 : 0;
@@ -182,7 +273,9 @@ export class HouseShell {
     for (const { mesh, kind } of this.meshes) mesh.customDepthMaterial = shellDepthMaterial(kind);
     for (const o of this.hide) o.visible = !mode;
     this.floor.visible = !!mode;
-    this.floor.material.color.set(mode === 1 ? 0x6f7e4c : 0xe6d6b4); // (moss and nettles; trodden earth and sand)
+    this.floor.material.color.set(mode === 1 ? 0x6f7e4c : mode === 3 ? 0x8a7a62 : 0xe6d6b4); // (moss and nettles; dust and debris; trodden earth and sand)
+    // the doors' swinging leaves (doors.js): gone in the ruin, not hung yet going up
+    for (const d of this.doors?.usable ?? []) for (const leaf of d.leaves ?? []) leaf.pivot.visible = mode !== 1 && mode !== 2;
     for (const o of this.ivy) o.visible = mode !== 2;
     if (this.clock) this.clock.visible = !mode;
     const indoor = this.water?.surfaces?.find((s) => !s.outdoor);
@@ -193,6 +286,7 @@ export class HouseShell {
   keeps(p, name, ny, mode = this.mode) {
     if (mode === 1) return ruinKeeps(p, name, ny);
     if (mode === 2) return buildKeeps(p, name, ny);
+    if (mode === 3) return centuryKeeps(p, name, ny);
     return true;
   }
 

@@ -12,8 +12,9 @@
 // putlogs, a raking brace on each run and a ladder up to its first lift. Over the east wing a pair of
 // shear legs with a block of stone hanging from it and its windlass on the ground. The lawns and the
 // drive are churned to mud and ruts (materials.js); on them stacks of brick, dressed stone and timber,
-// a sand heap and a lime board, masons' bankers, carts and barrows, and the workmen's hut. Hammering
-// and a mason's mallet from the scaffold in working hours.
+// a sand heap and a lime board, masons' bankers, carts and barrows, and the workmen's hut. Nobody is
+// working today: the builder's surveyor walks round with the plans, showing a couple round the house
+// (people.js), stopping to look at the plans and to point out the work.
 //
 // Everything is built here from boxes, cylinders and canvases the first time the scene is chosen, and
 // fitted to the house with rays (shell.js's, which only meet what is built). Another scene or Reset
@@ -22,13 +23,13 @@
 import * as THREE from 'three';
 import { buildTop, HOUSE } from './shell.js';
 import { rng, instanced, canvasTexture } from './abandoned.js';
+import { Person, Route, Walker } from './people.js';
 
 const Y = new THREE.Vector3(0, 1, 0);
 const DOWN = new THREE.Vector3(0, -1, 0);
 const _q = new THREE.Quaternion();
 const _s = new THREE.Vector3();
 const _v = new THREE.Vector3();
-const WORK = { from: 7, to: 18 };
 
 /** Fresh-sawn timber: pale, with grain and the odd knot. */
 function timberPicture(seed = 5, base = '#b8925f') {
@@ -139,6 +140,7 @@ export class Building {
     if (on === this.on) return;
     this.on = on;
     if (on && !this.built) this._build();
+    if (on) this._visitors();
     this.group.visible = on;
     this.shell?.setMode(on ? 2 : 0);
     if (this.pond) this.pond.mesh.visible = !on;
@@ -415,62 +417,207 @@ export class Building {
   }
 
   /**
-   * Where the roof is not slated yet (the middle of the house): rafters down every slope, 450 apart,
-   * and at the west end of it the battens across them, ready for the slates.
+   * Where the roof is not slated yet (the middle of the house), its timbers, as a carpenter frames
+   * a roof: a wall plate along the top of each wall, a ridge board along each ridge, and common
+   * rafters 450 apart between them, each sitting on the plate at its foot and against the ridge board
+   * (or a standing wall) at its head; at the west end of it, battens across the rafters, ready for the
+   * slates. A rafter that would rest on nothing at either end is left out, and so are the hips and
+   * the small cross roofs (not framed yet), so nothing hangs in the air.
    */
   _roofTimbers() {
     const X0 = -2.4;
     const X1 = 9.4;
     const BATTENS = 3.5; // (battened as far as here)
-    const rafters = [];
-    const battens = [];
+    const DEPTH = 0.1; // (the timbers' faces just under where the slates will lie)
     const z0 = HOUSE.z0;
     const z1 = HOUSE.z1;
-    const faceZ = (h) => Math.abs(h.n.z) >= Math.abs(h.n.x) && h.n.y < 0.95;
-    const faceX = (h) => Math.abs(h.n.x) > Math.abs(h.n.z) && h.n.y < 0.95;
-    const lay = (seg, list, w, t) => {
-      const n = seg[0].n;
-      // (a rafter rises: a flat run, along a gutter or a ridge, is none)
-      const a0 = seg[0].p;
-      const a1 = seg[seg.length - 1].p;
-      const rise = Math.abs(a1.y - a0.y) / Math.max(0.01, Math.hypot(a1.x - a0.x, a1.z - a0.z));
-      if (rise < 0.35 || rise > 2.5) return;
-      const a = seg[0].p.clone().addScaledVector(n, -0.1);
-      const b = seg[seg.length - 1].p.clone().addScaledVector(n, -0.1);
-      this.beam(a, b, w, t, list);
+    const faceZ = (h) => Math.abs(h.n.z) >= Math.abs(h.n.x) && h.n.y < 0.95 && h.n.y > 0.3;
+    const masonry = (name) => /brick|whitestone/.test(name);
+    // is there brick or stone under this point (within `below`), or against it in direction `dir`?
+    const restsOn = (p, below = 1.4) => {
+      const h = this.shell.hit(new THREE.Vector3(p.x, p.y + 0.25, p.z), DOWN, below + 0.25, 2);
+      return h && masonry(h.name);
     };
-    // rafters on the slopes that face north and south: lines of rays down the slope (along z)
+    const abuts = (p, dir) => {
+      const h = this.shell.hit(p.clone().addScaledVector(dir, -0.1), dir, 1.1, 2);
+      return h && masonry(h.name);
+    };
+    // every slope's straight runs, down lines of rays 450 apart (along z: the slopes facing north and south)
+    const runs = [];
     for (let x = X0 + 0.2; x < X1; x += 0.45) {
       const pts = [];
       for (let z = z0; z <= z1; z += 0.2) pts.push(new THREE.Vector3(x, 0, z));
-      for (const seg of this._segments(this._roofLine(pts), faceZ)) lay(seg, rafters, 0.06, 0.15);
-    }
-    // and on those that face east and west (the hips and the cross roofs): lines along x
-    for (let z = z0 + 0.2; z < z1; z += 0.45) {
-      const pts = [];
-      for (let x = X0; x <= X1; x += 0.2) pts.push(new THREE.Vector3(x, 0, z));
-      for (const seg of this._segments(this._roofLine(pts), faceX)) lay(seg, rafters, 0.06, 0.15);
-    }
-    // battens: across the slopes, level, every 0.3 m up them
-    for (let z = z0; z <= z1; z += 0.3) {
-      const pts = [];
-      for (let x = X0; x <= BATTENS; x += 0.2) pts.push(new THREE.Vector3(x, 0, z));
       for (const seg of this._segments(this._roofLine(pts), faceZ)) {
+        const a = seg[0].p;
+        const b = seg[seg.length - 1].p;
+        const rise = Math.abs(b.y - a.y) / Math.max(0.01, Math.abs(b.z - a.z));
+        if (rise < 0.35 || rise > 2.5) continue; // (a rafter rises: a flat run is a gutter or a lead)
         const n = seg[0].n;
-        this.beam(seg[0].p.clone().addScaledVector(n, -0.01), seg[seg.length - 1].p.clone().addScaledVector(n, -0.01), 0.05, 0.025, battens);
+        const foot = (a.y < b.y ? a : b).clone().addScaledVector(n, -DEPTH);
+        const head = (a.y < b.y ? b : a).clone().addScaledVector(n, -DEPTH);
+        runs.push({ x, foot, head, n, side: Math.sign(n.z) });
       }
     }
-    for (let x = X0; x <= BATTENS; x += 0.3) {
-      const pts = [];
-      for (let z = z0; z <= z1; z += 0.2) pts.push(new THREE.Vector3(x, 0, z));
-      for (const seg of this._segments(this._roofLine(pts), faceX)) {
-        const n = seg[0].n;
-        this.beam(seg[0].p.clone().addScaledVector(n, -0.01), seg[seg.length - 1].p.clone().addScaledVector(n, -0.01), 0.05, 0.025, battens);
+    // ridges: two runs at the same x whose heads meet, back to back
+    for (const r of runs) {
+      r.ridge = runs.find((o) => o !== r && o.x === r.x && o.side === -r.side && Math.abs(o.head.y - r.head.y) < 0.2 && Math.abs(o.head.z - r.head.z) < 0.6) ?? null;
+    }
+    const kept = [];
+    let feet = 0;
+    let heads = 0;
+    for (const r of runs) {
+      // its foot on the wall (the plate on the wall's top, or the wall right beside it, behind a
+      // parapet), its head on the ridge or against a wall
+      const up = new THREE.Vector3(0, 0, -r.side);
+      const down = up.clone().negate();
+      const low = r.foot.clone().add(new THREE.Vector3(0, -0.35, 0));
+      const footOk = restsOn(r.foot, 1.6) || abuts(low, down) || abuts(r.foot, down);
+      const headOk = !!r.ridge || abuts(r.head, up) || abuts(r.head.clone().add(new THREE.Vector3(0, -0.3, 0)), up);
+      r.footOk = footOk;
+      r.headOk = headOk;
+      if (footOk) feet++;
+      if (headOk) heads++;
+    }
+    // valleys: where two slopes come down to meet (the gutter between the two roofs of a double pile),
+    // their feet rest on a valley beam, propped on posts (the spine wall under it is not up yet)
+    const valleys = [];
+    for (const r of runs) {
+      if (r.footOk || r.valley) continue;
+      const o = runs.find((q) => q !== r && q.x === r.x && q.side === -r.side && !q.footOk && Math.abs(q.foot.y - r.foot.y) < 0.35 && Math.abs(q.foot.z - r.foot.z) < 0.9);
+      if (!o) continue;
+      const at = r.foot.clone().lerp(o.foot, 0.5);
+      r.valley = o.valley = at;
+      r.footOk = o.footOk = true;
+      valleys.push({ x: r.x, p: at });
+    }
+    for (const r of runs) if (r.footOk && r.headOk) kept.push(r);
+    this.stats.raftersFeetOk = feet;
+    this.stats.raftersHeadsOk = heads;
+    const rafters = [];
+    const plates = [];
+    const ridges = [];
+    const battens = [];
+    for (const r of kept) {
+      // (the head a little short of the ridge board's middle; the foot over the plate)
+      const head = r.ridge ? r.head.clone().lerp(r.ridge.head, 0.5).addScaledVector(new THREE.Vector3(0, 0, r.side), 0.03) : r.head;
+      // (in a valley, down onto the valley beam)
+      const foot = r.valley ? r.valley.clone().addScaledVector(new THREE.Vector3(0, 0, r.side), 0.05) : r.foot;
+      this.beam(foot, head, 0.06, 0.15, rafters);
+    }
+    // plates and ridge boards: along x, joining the feet (and the heads) of rafters side by side
+    const chain = (items, get, list, w, t, drop) => {
+      items.sort((a, b) => a.x - b.x);
+      let run = [];
+      const close = () => {
+        if (run.length >= 2) {
+          const a = get(run[0]).clone();
+          const b = get(run[run.length - 1]).clone();
+          a.x -= 0.2;
+          b.x += 0.2;
+          a.y = b.y = Math.min(a.y, b.y) - drop;
+          this.beam(a, b, w, t, list);
+        }
+        run = [];
+      };
+      for (const it of items) {
+        const last = run[run.length - 1];
+        if (last && (it.x - last.x > 0.5 || Math.abs(get(it).y - get(last).y) > 0.12 || Math.abs(get(it).z - get(last).z) > 0.3)) close();
+        run.push(it);
+      }
+      close();
+    };
+    for (const side of [-1, 1]) {
+      // (grouped by where the foot is, so each wall's plate is its own)
+      const feet = kept.filter((r) => r.side === side && !r.valley);
+      const byWall = new Map();
+      for (const r of feet) {
+        const key = `${Math.round(r.foot.z * 2)}:${Math.round(r.foot.y * 4)}`;
+        if (!byWall.has(key)) byWall.set(key, []);
+        byWall.get(key).push(r);
+      }
+      for (const g of byWall.values()) chain(g, (r) => r.foot, plates, 0.1, 0.075, 0.1);
+    }
+    {
+      const heads = kept.filter((r) => r.ridge && r.side > 0).map((r) => ({ x: r.x, p: r.head.clone().lerp(r.ridge.head, 0.5) }));
+      const byRidge = new Map();
+      for (const h of heads) {
+        const key = `${Math.round(h.p.z * 2)}:${Math.round(h.p.y * 4)}`;
+        if (!byRidge.has(key)) byRidge.set(key, []);
+        byRidge.get(key).push(h);
+      }
+      for (const g of byRidge.values()) chain(g, (h) => h.p, ridges, 0.04, 0.22, 0.04);
+    }
+    // the valley beams, and their posts down to the floor below, every couple of metres
+    const posts = [];
+    {
+      const byValley = new Map();
+      for (const v of valleys) {
+        const key = `${Math.round(v.p.z * 2)}:${Math.round(v.p.y * 4)}`;
+        if (!byValley.has(key)) byValley.set(key, []);
+        byValley.get(key).push(v);
+      }
+      for (const g of byValley.values()) {
+        g.sort((a, b) => a.x - b.x);
+        let run = [];
+        const close = () => {
+          if (run.length >= 2) {
+            const a = run[0].p.clone().add(new THREE.Vector3(-0.2, -0.16, 0));
+            const b = run[run.length - 1].p.clone().add(new THREE.Vector3(0.2, -0.16, 0));
+            a.y = b.y = Math.min(a.y, b.y);
+            this.beam(a, b, 0.15, 0.2, plates);
+            const n = Math.max(2, Math.round(a.distanceTo(b) / 2.2) + 1);
+            for (let i = 0; i < n; i++) {
+              const top = a.clone().lerp(b, i / (n - 1)).add(new THREE.Vector3(0, -0.1, 0));
+              const floor = this.shell.hit(top.clone().add(new THREE.Vector3(0, -0.2, 0)), DOWN, 12, 2);
+              const bottom = new THREE.Vector3(top.x, floor ? floor.point.y : 0, top.z);
+              this.beam(bottom, top, 0.14, 0.14, posts);
+            }
+          }
+          run = [];
+        };
+        for (const v of g) {
+          if (run.length && v.x - run[run.length - 1].x > 0.5) close();
+          run.push(v);
+        }
+        close();
       }
     }
-    this.timbers.push(...rafters, ...battens);
-    this.stats.rafters = rafters.length;
-    this.stats.battens = battens.length;
+    this.timbers.push(...posts);
+    this.stats.valleyPosts = posts.length;
+    // battens: across neighbouring rafters of one slope, every 0.3 m up it, where the slaters will go next
+    {
+      const slopes = new Map();
+      for (const r of kept) {
+        if (r.x > BATTENS) continue;
+        const key = `${r.side}:${Math.round(r.foot.z * 2)}:${Math.round(r.foot.y * 4)}:${Math.round(r.head.y * 4)}`;
+        if (!slopes.has(key)) slopes.set(key, []);
+        slopes.get(key).push(r);
+      }
+      for (const g of slopes.values()) {
+        g.sort((a, b) => a.x - b.x);
+        let i = 0;
+        while (i < g.length) {
+          let j = i;
+          while (j + 1 < g.length && g[j + 1].x - g[j].x < 0.5) j++;
+          if (j > i) {
+            const a = g[i];
+            const b = g[j];
+            const len = a.foot.distanceTo(a.head);
+            for (let d = 0.15; d < len - 0.1; d += 0.3) {
+              const t = d / len;
+              const p0 = a.foot.clone().lerp(a.head, t).addScaledVector(a.n, 0.09);
+              const p1 = b.foot.clone().lerp(b.head, t).addScaledVector(b.n, 0.09);
+              p0.x -= 0.03;
+              p1.x += 0.03;
+              this.beam(p0, p1, 0.05, 0.025, battens);
+            }
+          }
+          i = j + 1;
+        }
+      }
+    }
+    this.timbers.push(...rafters, ...plates, ...ridges, ...battens);
+    Object.assign(this.stats, { rafters: rafters.length, droppedRafters: runs.length - kept.length, plates: plates.length, ridges: ridges.length, battens: battens.length });
   }
 
   /** The floors upstairs: their joists in, 400 apart, no boards on them yet. */
@@ -484,8 +631,9 @@ export class Building {
         this.ray.direction.copy(DOWN);
         const hits = this.bvh.raycast(this.ray, THREE.DoubleSide, 0, 30);
         for (const h of hits) {
-          // (the two floors upstairs; not the leads and walks up behind the parapets)
-          if (h.point.y < 2.2 || h.point.y > Math.min(7.2, buildTop(x) - 0.3)) continue;
+          // (the first floor's: they rest on the ground floor's walls; the floor above waits for the walls
+          // up there, not built yet inside)
+          if (h.point.y < 2.2 || h.point.y > Math.min(4.5, buildTop(x) - 0.3)) continue;
           if (Math.abs(h.face.normal.y) < 0.9) continue;
           if (!/^cm_int_floor/.test(this.materialAt(h.faceIndex))) continue;
           const key = Math.round(h.point.y * 10);
@@ -799,25 +947,47 @@ export class Building {
     void R;
   }
 
-  /** In working hours: hammering from the scaffold and a mason's mallet at the bankers. */
-  update(dt, { hours = 12, camera = null } = {}) {
-    if (!this.on || !camera) return;
-    if (this.stone) this.stone.rotation.y = Math.sin(performance.now() / 2300) * 0.08; // (turning a little on the rope)
-    const snd = this.sound;
-    if (!snd?.on || hours < WORK.from || hours > WORK.to) return;
-    this.next.knock -= dt;
-    this.next.mallet -= dt;
-    const cam = camera.position;
-    if (this.next.knock <= 0 && this.soundAt.length) {
-      const near = this.soundAt.filter((p) => p.distanceTo(cam) < 45);
-      const at = (near.length ? near : this.soundAt)[Math.floor(Math.random() * (near.length || this.soundAt.length))];
-      snd.hammering?.(at, 3 + Math.floor(Math.random() * 5), { gain: 0.8 });
-      this.next.knock = 2.5 + Math.random() * 6;
-    }
-    if (this.next.mallet <= 0 && this.bankers.length) {
-      const at = this.bankers[Math.floor(Math.random() * this.bankers.length)];
-      snd.hammering?.(at, 6 + Math.floor(Math.random() * 6), { gain: 0.45 });
-      this.next.mallet = 5 + Math.random() * 7;
-    }
+  /**
+   * The surveyor and the couple he is showing round: he walks ahead with the plans, stops to look
+   * at them and to point out the work to them, and they follow a little behind, arm's length apart,
+   * stopping when he stops and looking where he points.
+   */
+  _visitors() {
+    if (this.visitorsLoading) return;
+    this.visitorsLoading = true;
+    const R = (stop) => stop;
+    const route = new Route([
+      { x: 21, z: 6.5, stop: R({ secs: 4, face: [12, -12], pose: 'plans' }) },
+      { x: 13, z: 4.6 },
+      { x: 12, z: 4.4, stop: R({ secs: 6, face: [15.5, -9], pose: 'point' }) },
+      { x: 5, z: 4.2, stop: R({ secs: 5, face: [4, -12], pose: 'plans' }) },
+      { x: -2, z: 4.4 },
+      { x: -4.5, z: 4.6, stop: R({ secs: 6, face: [-8, -14], pose: 'point' }) },
+      { x: -9.5, z: 5.5, stop: R({ secs: 4, face: [-11, -12], pose: 'plans' }) },
+      { x: -4, z: 8 },
+      { x: 6, z: 8.5, stop: R({ secs: 5, face: [2, -14], pose: 'point' }) },
+      { x: 15, z: 8.2 },
+    ]);
+    const ground = (x, z) => this.ground(x, z);
+    Promise.all(['surveyor', 'gentleman', 'lady'].map((k) => Person.make(k)))
+      .then(([surveyor, gentleman, lady]) => {
+        for (const p of [surveyor, gentleman, lady]) this.group.add(p.root, p.loose);
+        const lead = new Walker(surveyor, route, { ground, speed: 0.95, start: 0 });
+        this.visitors = [
+          lead,
+          new Walker(gentleman, route, { ground, speed: 0.95, lead, lag: 2.0, side: 0.4, start: 0 }),
+          new Walker(lady, route, { ground, speed: 0.95, lead, lag: 2.0, side: -0.35, start: 0 }),
+        ];
+        // (start them a little way into the round, where you see them from the scene's view)
+        for (const v of this.visitors) v.s = v === lead ? 1.5 : -0.5;
+      })
+      .catch((err) => console.warn('the visitors did not come:', err.message));
+  }
+
+  /** The visitors walk; the stone turns a little on its rope. (No hammering: nobody is working.) */
+  update(dt) {
+    if (!this.on) return;
+    if (this.stone) this.stone.rotation.y = Math.sin(performance.now() / 2300) * 0.08;
+    for (const v of this.visitors ?? []) v.update(Math.min(dt, 0.1));
   }
 }

@@ -54,3 +54,15 @@ worker.glb           "Worker" by Quaternius, Ultimate Modular Men Pack (February
                      CC0 1.0 (the pack's License.txt): the three builders, as he comes, with his own Idle, Walk and Wave;
                      the hammering arm is posed in code
 (the scaffold, the skip, the chute, the fencing, the mixer, the van and the rest are drawn in code)
+
+people/ (the surveyor and the couple in The house going up, building.js; the trespasser in Fifty,
+A hundred and Two hundred years empty, trespass.js; people.js):
+gentleman.glb  "Business Man" by Quaternius, Ultimate Modular Men Pack, https://poly.pizza/m/JFrLIKqvCH   CC0 1.0
+               (the surveyor and the husband: recoloured to a coat and breeches; the top hats, the coat
+               tails, the plans and the cane are drawn in code)
+lady.glb       "Animated Woman" (Formal) by Quaternius, Ultimate Modular Women Pack,
+               https://poly.pizza/bundle/Ultimate-Modular-Women-Pack-aCBDXDdTNN               CC0 1.0
+               (recoloured; the gown's skirt and the bonnet are drawn in code)
+explorer.glb   "Hoodie Character" by Quaternius, Ultimate Modular Men Pack,
+               https://poly.pizza/bundle/Ultimate-Modular-Men-Pack-ZiH8muWqwQ                 CC0 1.0
+               (recoloured; the backpack and the phone are drawn in code)

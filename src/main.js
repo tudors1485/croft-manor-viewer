@@ -15,6 +15,7 @@ import { MovingIn } from './movingin.js';
 import { Scaffold } from './scaffold.js';
 import { Abandoned } from './abandoned.js';
 import { Ruin } from './ruin.js';
+import { Century } from './century.js';
 import { Building } from './building.js';
 import { HouseShell } from './shell.js';
 import { Meteors, Murmuration, harvestMoon } from './sights.js';
@@ -144,14 +145,16 @@ const dateOfMonth = (() => {
 let moving = null; // Moving in (Sights): crates in the hall (movingin.js)
 let scaffold = null; // The roofers in (Sights): scaffolding up the front, the site compound (scaffold.js)
 let abandoned = null; // Fifty years empty (Sights): the house left to rot since the seventies (abandoned.js)
+let century = null; // A hundred years empty (Sights): roof fallen in in places, the hall full of sheeted things (century.js)
 let ruin = null; // Two hundred years empty (Sights): a roofless ruin in a wood (ruin.js)
 let goingUp = null; // The house going up (Sights): half built, in timber scaffolding (building.js)
 let shell = null; // cuts the house down for those two (shell.js)
 /** Is nobody living in the house (no lamps, no decorations, no fountain)? */
-const houseEmpty = () => !!(abandoned?.on || ruin?.on || goingUp?.on);
+const houseEmpty = () => !!(abandoned?.on || century?.on || ruin?.on || goingUp?.on);
 /** Every scene that changes the house, put back. */
 function houseAsItWas() {
   abandoned?.set(false);
+  century?.set(false);
   ruin?.set(false);
   goingUp?.set(false);
 }
@@ -1608,9 +1611,12 @@ async function prepareWalking(ground) {
     garden = new Garden(scene, { landscape, bvh: geo.boundsTree, gate: landscape.gate, materialAt: (fi) => meshAtFace(geo, fi)?.material.name || '', doors: doors.usable });
     console.info('garden', garden.build());
     abandoned.garden = garden; // (its clipped and potted things go when the house is empty)
-    shell = new HouseShell(model, { scene, clock: clockHands?.group ?? null, water, bvh: geo.boundsTree, materialAt: (fi) => meshAtFace(geo, fi)?.material.name || '' });
+    shell = new HouseShell(model, { scene, doors, clock: clockHands?.group ?? null, water, bvh: geo.boundsTree, materialAt: (fi) => meshAtFace(geo, fi)?.material.name || '' });
     ruin = new Ruin(scene, { landscape, bvh: geo.boundsTree, materialAt: (fi) => meshAtFace(geo, fi)?.material.name || '', model, water, sound, doors: doors.usable.map((d) => d.centre), shell });
     ruin.garden = garden;
+    abandoned.shell = shell;
+    century = new Century(scene, { landscape, bvh: geo.boundsTree, materialAt: (fi) => meshAtFace(geo, fi)?.material.name || '', model, water, sound, doors: doors.usable.map((d) => d.centre), shell });
+    century.garden = garden;
     goingUp = new Building(scene, { landscape, shell, bvh: geo.boundsTree, materialAt: (fi) => meshAtFace(geo, fi)?.material.name || '', water, sound, garden });
     await part(0.5, 'Putting up the lights at the gate and the fountain');
     // lights at the gateway, in the fountain and on the assault course (before the first frame: new lights recompile every shader)
@@ -2106,6 +2112,12 @@ const HOLIDAYS = {
     abandoned?.set(true);
     wildlife?.crowsNow();
   } },
+  // A hundred years empty: an afternoon early in September, the roof fallen in in three places, a
+  // corner of the east wing down, the hall full of sheeted things never collected (century.js)
+  century: { day: 248, hours: 15.4, weather: 'clouds', orbit: true, pos: [15, 9.5, 5], look: [6, 5, -17], then: () => {
+    century?.set(true);
+    wildlife?.crowsNow();
+  } },
   // Two hundred years empty: a close afternoon late in July, the house a roofless shell in a wood
   // of birch and sycamore, from the long grass where the lawn was, east of the old drive (ruin.js)
   ruin: { day: 205, hours: 16.4, weather: 'clouds', orbit: true, pos: [11, 6, 3], look: [3, 4, -20], then: () => {
@@ -2593,7 +2605,7 @@ function step(dt, exporting = false) {
       updateRoomButton();
     }
     // (with no roof on, in the ruin or the house going up, inside is out of doors)
-    const inside = lamps.houseBox.containsPoint(camera.position) && !shell?.mode ? 1 : 0;
+    const inside = lamps.houseBox.containsPoint(camera.position) && shell?.mode !== 1 && shell?.mode !== 2 ? 1 : 0;
     tod.inside += (inside - tod.inside) * (1 - Math.exp(-dt * 3));
     tod.applyAmbient();
   }
@@ -2636,6 +2648,7 @@ function step(dt, exporting = false) {
   party?.update(dt, { day: seasonDay, hours: tod.hours, rain: houseEmpty() ? 1 : weather.rain ?? 0, /* (no party at an empty house) */ dusk: tod.lamps, camera, scale: lamps?.glowMat.uniforms.uScale.value });
   scaffold?.update(dt, { hours: tod.hours, camera });
   abandoned?.update(dt, { camera, wind, inside: tod.inside });
+  century?.update(dt, { camera, wind, inside: tod.inside });
   ruin?.update(dt, { camera });
   goingUp?.update(dt, { hours: tod.hours, camera });
   murmuration.update(dt, { day: seasonDay, sunDeg: THREE.MathUtils.radToDeg(Math.asin(THREE.MathUtils.clamp(tod.sunDir.y, -1, 1))), clouds: weather.clouds ?? 0, rain: weather.rain ?? 0, scale: lamps?.glowMat.uniforms.uScale.value });
@@ -2652,6 +2665,8 @@ function step(dt, exporting = false) {
   // the pool: caustics move, brighter by day (the sun through the glass roof), the pool light by night
   poolUniforms.uPoolTime.value += dt;
   const daylight = THREE.MathUtils.smoothstep(tod.sunDir.y, -0.05, 0.3) * (1 - 0.5 * weather.overcast);
+  // (no fountain playing in the empty house's scenes, nor in the house going up: it isn't built)
+  sound.fountainOff = oakScene || houseEmpty() ? 1 : 0;
   poolUniforms.uPoolLight.value = Math.max(0.35 + 0.9 * daylight, tod.lamps * 0.75) * (1 - tod.night * (1 - tod.lamps));
   if (water) {
     const indoor = water.surfaces.find((s) => !s.outdoor);
@@ -2983,6 +2998,9 @@ window.manor = {
   },
   get ruin() {
     return ruin;
+  },
+  get century() {
+    return century;
   },
   get building() {
     return goingUp;

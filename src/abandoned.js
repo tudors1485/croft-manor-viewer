@@ -21,6 +21,7 @@ import * as THREE from 'three';
 import { seasonUniforms } from './season.js';
 import { addTreeShader } from './landscape.js';
 import { leavesPicture, cardsGeometry, ballPlace } from './garden.js';
+import { Trespasser } from './trespass.js';
 
 const HOUSE = { x0: -15.5, x1: 29.5, z0: -33, z1: -9 }; // the house's footprint, roughly
 const CENTRE = new THREE.Vector3(4, 0, -21);
@@ -328,6 +329,19 @@ export class Abandoned {
     this.glass = null; // the windows' glass mesh (hidden: each window gets its own dirty or broken pane)
     this.pond = null;
     this.ray = new THREE.Ray();
+    // what the years have done, for the scenes that grow on this one (century.js, ruin.js)
+    this.k = {
+      boardLow: 0.45, boardHigh: 0.12, brokenLow: 0.6, brokenHigh: 0.5, roofHoles: 7, ivyReach: 1,
+      saplings: 60, saplingSize: 1,
+      saplingLeaves: ['#4b4a1c', '#5f5a1e', '#77691f', '#8c7722', '#a3862a', '#6b6a26', '#3d4a1c'],
+    };
+    this.shell = null; // (set once the house's shell is made: the trespasser walks its floors)
+  }
+
+  /** Someone trespassing, come to explore the house (trespass.js): in with the scene, out with it. */
+  _trespass(on, mode, door) {
+    if (on && !this.trespasser && this.shell) this.trespasser = new Trespasser(this.group, { shell: this.shell, landscape: this.landscape, mode, door, start: 6 });
+    this.trespasser?.set(on);
   }
 
   get ground() {
@@ -345,6 +359,7 @@ export class Abandoned {
     if (this.sound) this.sound.abandoned = on;
     this.garden?.group.traverse((o) => o.userData.tidy && (o.visible = !on));
     if (on) this.next = { crow: 2 + Math.random() * 3, creak: 7 + Math.random() * 6, bang: 20 + Math.random() * 20 };
+    this._trespass(on, 0, true);
   }
 
   _hit(origin, dir, far) {
@@ -439,8 +454,9 @@ export class Abandoned {
     for (const win of this.windows) {
       const low = win.box.min.y < 3;
       const r = R();
-      const boarded = r < (low ? 0.45 : 0.12);
-      const broken = !boarded ? R() < (low ? 0.6 : 0.5) : R() < 0.5;
+      const K = this.k;
+      const boarded = r < (low ? K.boardLow : K.boardHigh);
+      const broken = !boarded ? R() < (low ? K.brokenLow : K.brokenHigh) : R() < 0.5;
       // the pane, its own: grimy, and broken through in one or two jagged holes
       const w = win.w;
       const h = win.h;
@@ -547,7 +563,7 @@ export class Abandoned {
     cands.sort((a, b) => b.normal.z - a.normal.z + (R() - 0.5) * 0.6);
     const picked = [];
     for (const c of cands) {
-      if (picked.length >= 7) break;
+      if (picked.length >= this.k.roofHoles) break;
       if (picked.every((p) => p.point.distanceTo(c.point) > 6)) picked.push(c);
     }
     const voidMat = new THREE.MeshStandardMaterial({ color: 0x17120d, roughness: 1, side: THREE.DoubleSide, envMapIntensity: 0.15 });
@@ -659,7 +675,7 @@ export class Abandoned {
     sides.forEach((side, si) => {
       for (let s = side.range[0]; s <= side.range[1]; s += step) {
         // how high the ivy has climbed here: colonies, with bare stretches between
-        const reach = Math.max(0, noise1(s * 0.16, si) * 1.25 - 0.18) * 12 + noise1(s * 0.9, si + 9) * 1.5;
+        const reach = (Math.max(0, noise1(s * 0.16, si) * 1.25 - 0.18) * 12 + noise1(s * 0.9, si + 9) * 1.5) * this.k.ivyReach;
         if (reach < 0.4) continue;
         for (let y = 0.1; y < Math.min(reach, 14); y += step) {
           const [x, z] = side.from(s + (R() - 0.5) * step);
@@ -833,18 +849,18 @@ export class Abandoned {
   /** Self-sown sycamore and birch, turning yellow, a few metres high, out of the long grass. */
   _saplings() {
     const R = this.R;
-    const pic = leavesPicture({ size: 256, count: 1000, len: [10, 18], tile: false, clump: true, seed: 81, palette: ['#4b4a1c', '#5f5a1e', '#77691f', '#8c7722', '#a3862a', '#6b6a26', '#3d4a1c'] });
+    const pic = leavesPicture({ size: 256, count: 1000, len: [10, 18], tile: false, clump: true, seed: 81, palette: this.k.saplingLeaves });
     const { m, depth } = this._leaves(pic, 0xffffff, { stiff: 2, height: 4 });
     const crown = cardsGeometry(120, 0.7, ballPlace(0.9, 1.0, 0.9, 1.3, 0.55), 83);
     const trunk = new THREE.CylinderGeometry(0.03, 0.06, 2.4, 6, 1);
     trunk.translate(0, 1.2, 0);
     const bark = new THREE.MeshStandardMaterial({ color: 0x7a7468, roughness: 0.9 });
-    const spots = this._groundSpots(60, { gravel: 0.2, avoidHouse: 1.5, seed: 3 });
+    const spots = this._groundSpots(this.k.saplings, { gravel: 0.2, avoidHouse: 1.5, seed: 3 });
     // (more of them along the estate's walls and round the house, where seed blows in and lodges)
     const mats = [];
     for (const p of spots) {
       if (p.gravel && R() < 0.5) continue;
-      const s = 0.6 + R() * 1.2;
+      const s = (0.6 + R() * 1.2) * this.k.saplingSize;
       _q.setFromEuler(new THREE.Euler((R() - 0.5) * 0.12, R() * 6.28, (R() - 0.5) * 0.12));
       mats.push(new THREE.Matrix4().compose(new THREE.Vector3(p.x, p.y - 0.05, p.z), _q, _s.set(s, s, s)));
     }
@@ -1101,6 +1117,7 @@ export class Abandoned {
   /** The leaves blow, the crows call, the house creaks and something bangs inside now and then. */
   update(dt, { camera = null, wind = 0.5, inside = 0 } = {}) {
     if (!this.on || !camera) return;
+    this.trespasser?.update(dt);
     this.time += dt;
     const t = this.time;
     if (this.drift) {
@@ -1169,4 +1186,4 @@ export class Abandoned {
 }
 
 // (for Two hundred years empty, ruin.js, which grows on this)
-export { rng, noise1, canvasTexture, ivyPicture, rankGrassPicture, boardPicture, litterPicture, barkPicture, instanced, HOUSE as ABANDONED_HOUSE };
+export { rng, noise1, canvasTexture, ivyPicture, rankGrassPicture, boardPicture, litterPicture, barkPicture, deadLeafPicture, instanced, HOUSE as ABANDONED_HOUSE };

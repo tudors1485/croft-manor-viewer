@@ -55,7 +55,7 @@ export function tuneMaterials(model) {
 // 1 brick and stone, 2 the roof, 3 the rooms' walls, floors and ceilings, 4 furniture and things,
 // 5 the assault course, 6 window frames and the white woodwork, 7 the fountain's statue, 8 beams,
 // 9 the model's own ivy, 10 doors, 11 gravel (on the ground, and on the house's flat roofs), 12 the
-// ceilings; 0 the rest, which neither scene touches.
+// ceilings, 13 the paintings and the tapestry; 0 the rest, which no mode touches.
 export function shellKind(name) {
   if (name === 'cm_gravel') return 11;
   if (/^cm_int_ceiling/.test(name)) return 12;
@@ -64,6 +64,7 @@ export function shellKind(name) {
   if (/^cm_(brickwall|whitestone)/.test(name)) return 1;
   if (name === 'cm_roofpattern') return 1; // (the gabled bay's patterned gable: masonry)
   if (/^cm_roof/.test(name)) return 2;
+  if (/^cm_obj_(painting|tapestry)/.test(name)) return 13; // (the pictures on the walls)
   if (/^cm_obj_/.test(name)) return 4;
   if (/^cm_(whitewood|window_grid)/.test(name)) return 6;
   if (/^cm_fishstatue/.test(name)) return 7;
@@ -73,7 +74,7 @@ export function shellKind(name) {
   return 0;
 }
 
-/** 0: the house as it is; 1: a ruin, two hundred years on; 2: going up. */
+/** 0: the house as it is; 1: a ruin, two hundred years on; 2: going up; 3: a hundred years empty. */
 let shellMode = 0;
 const shellMaterials = new Set();
 const shellDepth = new Map(); // kind -> the shadow's depth material for that kind in this mode
@@ -95,8 +96,11 @@ export function setShellMode(mode) {
   shellDepth.clear();
 }
 
-/** The world-space hash and noise both modes cut by: the same numbers in shell.js's JavaScript. */
+/** The world-space hash and noise the modes cut by: the same numbers in shell.js's JavaScript. */
 export const SHELL_NOISE_GLSL = /* glsl */ `
+  uniform vec4 uHoles[4];
+  uniform vec4 uBreach;
+  varying float vOnRoof;
   float sHash(vec2 p) {
     vec3 p3 = fract(vec3(p.xyx) * 0.1031);
     p3 += dot(p3, p3.yzx + 33.33);
@@ -122,9 +126,45 @@ export const SHELL_NOISE_GLSL = /* glsl */ `
     if (xz.x < 9.5) return 40.0;
     return max(4.2, floor((9.6 - (xz.x - 9.5) * 1.25) / 0.3) * 0.3);
   }
+  // a hundred years: is this inside one of the places where the roof has fallen in (scale < 1: nearer its middle)
+  bool inHole(vec2 xz, float scale) {
+    for (int i = 0; i < 4; i++) {
+      vec4 h = uHoles[i];
+      if (h.z <= 0.0) continue;
+      float d = length(xz - h.xy) / (h.z * scale);
+      if (d + (sNoise(xz * 1.6 + float(i) * 7.0) - 0.5) * 0.45 < 1.0) return true;
+    }
+    return false;
+  }
+  // and the corner of the house that has come down: how high the walls stand there (a bowl)
+  float breachTop(vec2 xz) {
+    if (uBreach.z <= 0.0) return 99.0;
+    float d = length(xz - uBreach.xy) / uBreach.z;
+    if (d >= 1.0) return 99.0;
+    return uBreach.w + d * d * 9.0 + (sNoise(xz * 2.3) - 0.5) * 0.8;
+  }
+  // the grounds: the fountain broken (its rim gapped, the dolphin's top gone) and the estate's walls
+  // fallen in stretches; 'how' 1 two hundred years, 0.5 a hundred
+  bool groundsGone(vec3 sp, int k, float how) {
+    vec2 f = sp.xz - vec2(4.59, 8.28);
+    float fd = length(f);
+    if (fd < 4.3 && sp.y < 5.0) {
+      if (k == 7 && sp.y > mix(4.3, 3.1, (how - 0.5) * 2.0)) return true;
+      if (k == 1 && sp.y > 0.22) {
+        float a = atan(f.y, f.x);
+        float n = sNoise(vec2(a * 2.6 + 3.0, sp.y * 1.7 + fd * 0.6));
+        if (n > mix(0.8, 0.6, (how - 0.5) * 2.0)) return true;
+      }
+      return false;
+    }
+    if (k != 1 || sInHouse(sp)) return false;
+    float jag = 0.25 * (sHash(vec2(floor((sp.x + sp.z) * 4.4), floor(sp.y * 13.3))) - 0.5);
+    if (how > 0.75) return sp.y > 0.35 + 2.8 * smoothstep(0.28, 0.72, sNoise(sp.xz * 0.11 + vec2(1.3, 8.2))) + jag;
+    return sNoise(sp.xz * 0.15 + vec2(6.1, 2.2)) > 0.76 && sp.y > 0.6 + jag;
+  }
 `;
 
-/** The cut: discards what is gone (a ruin) or not built yet (going up). */
+/** The cut: discards what is gone (a ruin, a hundred years on) or not built yet (going up). */
 function shellCut(mode) {
   if (mode === 1)
     return /* glsl */ `
@@ -135,19 +175,16 @@ function shellCut(mode) {
       if (k == 5) discard; // (the assault course: rotted away)
       if (sInHouse(sp)) {
         float top = ruinTop(sp.xz) + 0.32 * (sHash(vec2(floor((sp.x + sp.z) * 4.4), floor(sp.y * 13.3))) - 0.5);
-        if (k == 2 || k == 4 || k == 6 || k == 10) discard; // the roof, the furniture, the windows and doors: gone
+        if (k == 2 || k == 4 || k == 6 || k == 8 || k == 10 || k == 12 || k == 13 || vOnRoof > 0.5) discard; // the roof and all on it, the furniture, the windows and doors, the beams, the ceilings: gone
         if (k == 11 && sp.y > 1.0) discard; // (and the flat roofs, gravelled)
-        if (k == 12) discard; // the ceilings fallen
-        if (k == 3 && sny > 0.3 && sny < 0.97) discard; // (and the attics' sloping ceilings, under the roof)
-        if ((k == 1 || k == 9) && sp.y > top) discard;
-        if (k == 8 && (sp.y > top - 0.5 || sNoise(sp.xz * 0.9) < 0.55)) discard;
-        if (k == 3) {
-          if (sny > 0.7) {
-            // the floors upstairs and the ceilings fallen in, a ledge of floor left by a standing wall here and there
-            if (sp.y > 2.2 && (sp.y > top - 0.4 || sNoise(sp.xz * 0.4 + 5.0) < 0.8)) discard;
-          } else if (sp.y > min(top - 0.05, 3.1 + 3.0 * step(0.78, sNoise(sp.xz * 0.5 + 9.0)))) discard; // (the rooms upstairs gone with their floors, a patch of one here and there; the walls' inner faces never higher than their outer ones)
-        }
+        // the sloping ceilings under the roof and the stairs' undersides above the first steps
+        if (k == 3 && sny > 0.3 && sny < 0.97 && sp.y > 1.2) discard;
+        if ((k == 1 || k == 9 || k == 0) && sp.y > top) discard; // (whatever else stood up there, with the walls)
+        // no floor left above the ground floor's (the stairs broken off a few steps up), nothing of the
+        // rooms upstairs: the walls' inner faces no higher than their outer ones
+        if (k == 3 && (sny > 0.7 ? sp.y > 1.2 : sp.y > min(top - 0.05, 3.1))) discard;
       }
+      if (groundsGone(sp, k, 1.0)) discard;
     }`;
   if (mode === 2)
     return /* glsl */ `
@@ -162,23 +199,44 @@ function shellCut(mode) {
         // the top course toothed: every other brick not laid yet
         if (sp.y > top - 0.075 && sHash(vec2(floor((sp.x + sp.z) / 0.225), floor(sp.y / 0.075))) > 0.5) discard;
         if (sp.y > top) discard;
-        if (k == 4 || k == 10 || k == 12) discard; // no furniture, no doors hung, no ceilings
+        if (k == 4 || k == 10 || k == 12 || k == 13) discard; // no furniture, no doors hung, no ceilings
         if (k == 3 && sny > 0.3 && sny < 0.97) discard; // (nor the attics' sloping ones)
         if (k == 6 && sp.x > -2.0) discard; // window frames only in at the west end
-        // the roof slated at the west end only, course by course, ragged where the slaters have got to
+        // the roof slated at the west end only, course by course, ragged where the slaters have got to;
+        // its ridge stones and copings with it
         if (k == 2 && sp.x > -2.0 + 0.7 * sHash(vec2(floor(sp.y / 0.23), 3.0))) discard;
+        if (vOnRoof > 0.5 && sp.x > -2.0) discard;
         if (k == 11 && sp.y > 1.0 && sp.x > -2.0) discard; // (the flat roofs, likewise)
         // no floorboards laid upstairs, no ceilings, no partitions up there yet
         if (k == 3 && sny > 0.7 && sp.y > 2.2) discard;
         if (k == 3 && sny <= 0.3 && sp.y > 3.1) discard;
       }
     }`;
+  if (mode === 3)
+    return /* glsl */ `
+    {
+      vec3 sp = vWxWorld;
+      float sny = abs(normalize(cross(dFdx(sp), dFdy(sp))).y);
+      int k = int(uKind + 0.5);
+      if (k == 5) discard; // (the assault course: rotted away)
+      if (sInHouse(sp)) {
+        if (k == 13) discard; // the paintings taken down (they are in the hall, under sheets)
+        // where the roof has fallen in: the roof, what was on it, the attics' slopes; under it the
+        // floors and ceilings and whatever stood on them, gone down to the ground floor
+        bool hole = inHole(sp.xz, 1.0);
+        if (hole && (k == 2 || vOnRoof > 0.5 || (k == 3 && sny > 0.3 && sny < 0.97) || (k == 11 && sp.y > 1.0))) discard;
+        if (inHole(sp.xz, 0.85) && sp.y > 2.2 && (k == 12 || k == 4 || k == 8 || (k == 3 && sny > 0.7))) discard;
+        // the corner that came down
+        if (sp.y > breachTop(sp.xz) && k != 0 && k != 7) discard;
+      }
+      if (groundsGone(sp, k, 0.5)) discard;
+    }`;
   return '';
 }
 
 /** The look of what is left: earth and moss on the ruin's floors; bare brick and earth going up. */
 function shellLook(mode) {
-  if (mode === 1)
+  if (mode === 1 || mode === 3)
     return /* glsl */ `
     if (sInHouse(vWxWorld)) {
       vec3 sp = vWxWorld;
@@ -186,12 +244,13 @@ function shellLook(mode) {
       vec3 sn = normalize((vec4(normal, 0.0) * viewMatrix).xyz);
       float n1 = sNoise(sp.xz * 1.3);
       float n2 = sNoise(sp.xz * 5.1 + 2.0);
-      // the ground floor gone to earth, moss and nettles
-      if (k == 3 && sn.y > 0.7 && sp.y < 2.2) diffuseColor.rgb = mix(vec3(0.17, 0.13, 0.08), vec3(0.11, 0.15, 0.05), smoothstep(0.3, 0.7, n1)) * (0.75 + 0.5 * n2);
+      float how = ${mode === 1 ? '1.0' : '0.45'};
+      // the ground floor gone to earth, moss and nettles${mode === 3 ? ' (a hundred years: only where the roof is open over it)' : ''}
+      if (k == 3 && sn.y > 0.7 && sp.y < 2.2 ${mode === 3 ? '&& inHole(sp.xz, 1.1)' : ''}) diffuseColor.rgb = mix(vec3(0.17, 0.13, 0.08), vec3(0.11, 0.15, 0.05), smoothstep(0.3, 0.7, n1)) * (0.75 + 0.5 * n2);
       // everything left: black-green, lichen in blotches
-      diffuseColor.rgb *= 0.78 + 0.2 * n2;
-      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.1, 0.14, 0.05) * (0.8 + 0.4 * n2), 0.35 * smoothstep(0.4, 0.8, sNoise(sp.xz * 0.6 + sp.y * 0.4)));
-      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.55, 0.57, 0.45), 0.25 * smoothstep(0.72, 0.9, sNoise(sp.xz * 3.0 + sp.y * 2.3)));
+      diffuseColor.rgb *= 1.0 - how * (0.22 - 0.2 * n2);
+      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.1, 0.14, 0.05) * (0.8 + 0.4 * n2), how * 0.35 * smoothstep(0.4, 0.8, sNoise(sp.xz * 0.6 + sp.y * 0.4)));
+      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.55, 0.57, 0.45), how * 0.25 * smoothstep(0.72, 0.9, sNoise(sp.xz * 3.0 + sp.y * 2.3)));
     }`;
   if (mode === 2)
     return /* glsl */ `
@@ -227,6 +286,14 @@ function shellLook(mode) {
   return '';
 }
 
+/** The shell's uniforms, shared by every material that cuts. */
+function shellUniforms(shader, kind) {
+  shader.uniforms.uKind = { value: kind };
+  shader.uniforms.uHoles = seasonUniforms.uHoles;
+  shader.uniforms.uBreach = seasonUniforms.uBreach;
+}
+const ON_ROOF_VERTEX = ['#include <common>', '#include <common>\nattribute float aOnRoof;\nvarying float vOnRoof;'];
+
 /**
  * The shadow's depth material for a kind in the mode now: the same cut, so the walls that are gone
  * cast no shadow. (None while the house is whole.)
@@ -238,10 +305,10 @@ export function shellDepthMaterial(kind) {
   const mode = shellMode;
   d = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, side: THREE.DoubleSide });
   d.onBeforeCompile = (shader) => {
-    shader.uniforms.uKind = { value: kind };
+    shellUniforms(shader, kind);
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vWxWorld;')
-      .replace('#include <project_vertex>', '#include <project_vertex>\nvWxWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+      .replace(ON_ROOF_VERTEX[0], ON_ROOF_VERTEX[1] + '\nvarying vec3 vWxWorld;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\nvWxWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvOnRoof = aOnRoof;');
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vWxWorld;\nuniform float uKind;\n' + SHELL_NOISE_GLSL)
       .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n' + shellCut(mode));
@@ -499,11 +566,11 @@ export function weatherShader(material, kind = 0) {
   material.onBeforeCompile = (shader, renderer) => {
     before?.call(material, shader, renderer);
     for (const k of ['uSnow', 'uWet', 'uSkyMap', 'uSkyBox', 'uDecay', 'uRuin']) shader.uniforms[k] = seasonUniforms[k];
-    shader.uniforms.uKind = { value: kind };
     const mode = kind ? shellMode : 0;
+    shellUniforms(shader, kind);
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vWxWorld;')
-      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWxWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+      .replace('#include <common>', '#include <common>\nvarying vec3 vWxWorld;' + (mode ? '\nattribute float aOnRoof;\nvarying float vOnRoof;' : ''))
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWxWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;' + (mode ? '\nvOnRoof = aOnRoof;' : ''));
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', '#include <common>\n' + WEATHER_GLSL + (mode ? SHELL_NOISE_GLSL : ''))
       .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n' + shellCut(mode))

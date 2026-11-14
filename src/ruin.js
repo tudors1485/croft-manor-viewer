@@ -3,13 +3,13 @@
 // and the ceilings: what stands is a shell of brick and stone, a gable or a chimney stack still
 // nearly to its full height here, the walls fallen to stumps a man could step over there, ragged
 // along their tops brick by brick (the cut is in the house's own shaders, shell.js and materials.js:
-// the model is untouched). Every window and door is an empty hole, a ledge of floor left high up
-// by a standing wall now and then, a few charred rafters still across a gable. Inside, the ground
-// floor has gone to earth, moss and nettles; heaps of fallen brick and stone lie at the foot of
+// the model is untouched). Every window and door is an empty hole, the floors and the roof timbers
+// all fallen in. Inside, the ground floor has gone to earth, moss and nettles; heaps of fallen brick and stone lie at the foot of
 // every wall, in and out; rotten beams lie where they came down. Ivy over everything, up to the
 // broken tops. The lawns are a wood of birch and sycamore twelve metres high in rank grass and
-// bramble, and trees grow inside the rooms. The fountain is dry and full of leaves. No lamps, no
-// clock, no house to creak: the wind in the trees, the birds, and the crows.
+// bramble, and trees grow inside the rooms. The fountain is dry, its rim broken and the dolphin's top
+// gone; the estate's walls have fallen in long stretches. Someone has come to explore it (trespass.js).
+// No lamps, no clock, no fountain, no house to creak: the wind in the trees, the birds, and the crows.
 //
 // It grows on Fifty years empty (abandoned.js): the same grime, ivy, grass and brambles, built for
 // a ruin instead of a house.
@@ -76,6 +76,7 @@ export class Ruin extends Abandoned {
     if (this.pond) this.pond.mesh.visible = !on;
     this.garden?.group.traverse((o) => o.userData.tidy && (o.visible = !on));
     if (on) this.next = { crow: 2 + Math.random() * 3 };
+    this._trespass(on, 1, false);
   }
 
   /** Rays meet only what is left of the house. */
@@ -92,7 +93,6 @@ export class Ruin extends Abandoned {
     this.stats = {};
     this.windows = []; // (no glass, no frames: nothing for the ivy to keep clear of)
     this._insideSpots();
-    this._rafters();
     this._ivy();
     this._ivyInside();
     this._rubble();
@@ -118,7 +118,7 @@ export class Ruin extends Abandoned {
       const z = THREE.MathUtils.lerp(HOUSE.z0 + 0.5, HOUSE.z1 - 0.5, R());
       // (nothing under it: one of the spaces the model never fitted out, its floor the new earth)
       const h = this._hit(new THREE.Vector3(x, 18, z), DOWN, 22) ?? { point: new THREE.Vector3(x, -0.06, z), normal: Y, name: '' };
-      if (h.point.y > 2.2 || h.normal.y < 0.7 || /water/.test(h.name)) continue;
+      if (h.point.y > 1.2 || h.normal.y < 0.7 || /water/.test(h.name)) continue;
       // (inside the walls: something stands on two sides of it at least)
       out.push({ x, y: h.point.y, z, gravel: false, inside: true });
     }
@@ -134,54 +134,6 @@ export class Ruin extends Abandoned {
     const pool = this.inside ?? [];
     for (let i = 0; i < n && pool.length; i++) out.push(pool[Math.floor(R() * pool.length)]);
     return out;
-  }
-
-  // --- what is left of the roof ----------------------------------------------------------------
-
-  /** Charred rafters still across the gables that stand high, some broken short, some hanging. */
-  _rafters() {
-    const R = this.R;
-    const bvh = this.bvh;
-    const ray = new THREE.Ray();
-    const cands = [];
-    for (let i = 0; i < 1400; i++) {
-      const x = THREE.MathUtils.lerp(HOUSE.x0, HOUSE.x1, R());
-      const z = THREE.MathUtils.lerp(HOUSE.z0, HOUSE.z1, R());
-      ray.origin.set(x, 40, z);
-      ray.direction.copy(DOWN);
-      const h = bvh.raycastFirst(ray, THREE.DoubleSide, 0, 60);
-      if (!h || this.materialAt(h.faceIndex) !== 'cm_roof') continue;
-      const n = h.face.normal.clone();
-      if (n.y < 0) n.negate();
-      if (n.y < 0.3 || n.y > 0.92) continue;
-      if (ruinTop(x, z) < h.point.y - 1.5) continue; // (only where the walls below still stand near it)
-      cands.push({ point: h.point.clone(), normal: n });
-    }
-    const picked = [];
-    for (const c of cands) {
-      if (picked.length >= 7) break;
-      if (picked.every((p) => p.point.distanceTo(c.point) > 5)) picked.push(c);
-    }
-    const mat = new THREE.MeshStandardMaterial({ color: 0x2b2420, roughness: 1, envMapIntensity: 0.2 });
-    const timbers = [];
-    for (const c of picked) {
-      const n = c.normal;
-      const d = DOWN.clone().addScaledVector(n, -DOWN.dot(n)).normalize();
-      const a = new THREE.Vector3().crossVectors(n, d).normalize();
-      const qb = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(a, d, n));
-      for (let u = -2.2; u <= 2.2; u += 0.45) {
-        if (R() < 0.35) continue;
-        const len = 1.2 + R() * 3.2;
-        const centre = c.point.clone().addScaledVector(a, u).addScaledVector(d, (R() - 0.3) * 1.5).addScaledVector(n, -0.12);
-        // (some sagging or hanging off where they have broken)
-        const q = qb.clone().multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(R() < 0.25 ? (R() - 0.5) * 0.9 : (R() - 0.5) * 0.08, 0, (R() - 0.5) * 0.08)));
-        timbers.push(new THREE.Matrix4().compose(centre, q, _s.set(0.07, len, 0.16)));
-      }
-      // a purlin across them
-      if (R() < 0.7) timbers.push(new THREE.Matrix4().compose(c.point.clone().addScaledVector(n, -0.25), qb, _s.set(3 + R() * 2, 0.2, 0.18)));
-    }
-    this.group.add(instanced(new THREE.BoxGeometry(1, 1, 1), mat, timbers));
-    this.stats.rafters = timbers.length;
   }
 
   // --- ivy ---------------------------------------------------------------------------------------
@@ -418,6 +370,7 @@ export class Ruin extends Abandoned {
   update(dt, { camera = null } = {}) {
     if (!this.on || !camera) return;
     this.time += dt;
+    this.trespasser?.update(dt);
     const snd = this.sound;
     if (!snd?.on) return;
     this.next.crow -= dt;

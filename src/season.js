@@ -16,6 +16,8 @@ export const seasonUniforms = {
   uIce: { value: 0 }, // the fountain and the assault-course pond frozen over
   uDecay: { value: 0 }, // Fifty years empty: grime, streaks, damp and moss on everything, the lawn gone to seed (abandoned.js)
   uRuin: { value: 0 }, // Two hundred years empty: the house a roofless shell, its walls fallen to stumps in places (shell.js)
+  uHoles: { value: [0, 1, 2, 3].map(() => new THREE.Vector4(0, 0, 0, 0)) }, // A hundred years empty: where the roof has fallen in (x, z, radius) (shell.js)
+  uBreach: { value: new THREE.Vector4(0, 0, 0, 0) }, // and the corner of the house come down (x, z, radius, height at its middle)
   uBuild: { value: 0 }, // The house going up: walls half built, the roof in timber, the grounds churned to mud (shell.js)
   // where the sky reaches: the height of the highest surface at each point (materials.js)
   uSkyMap: { value: null },
