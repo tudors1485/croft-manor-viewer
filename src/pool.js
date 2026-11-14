@@ -108,8 +108,9 @@ export function poolShader(material) {
       .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + POOL_FRAGMENT)
       .replace('#include <dithering_fragment>', '#include <dithering_fragment>\nif (uPoolDebug > 0.5 && poolDbg >= 0.0) gl_FragColor = vec4(vec3(poolDbg), 1.0);');
   };
-  const key = material.customProgramCacheKey?.call(material) ?? '';
-  material.customProgramCacheKey = () => `${key}+pool`;
+  // (asked each time, not kept: the weather shader's key changes with the house's shell, shell.js)
+  const keyBefore = material.customProgramCacheKey;
+  material.customProgramCacheKey = () => `${keyBefore?.call(material) ?? ''}+pool`;
   material.needsUpdate = true;
 }
 

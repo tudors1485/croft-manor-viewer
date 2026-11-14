@@ -1167,3 +1167,6 @@ export class Abandoned {
     }
   }
 }
+
+// (for Two hundred years empty, ruin.js, which grows on this)
+export { rng, noise1, canvasTexture, ivyPicture, rankGrassPicture, boardPicture, litterPicture, barkPicture, instanced, HOUSE as ABANDONED_HOUSE };
