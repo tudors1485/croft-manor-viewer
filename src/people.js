@@ -142,6 +142,10 @@ const LOOKS = {
   gentleman: { url: 'models/people/gentleman.glb', scale: 0.99, colours: { Suit: 0x1e2a44, Tie: 0xf2f0e8 }, legs: 0xd6cfbf, hat: 0x2a2a2c, tails: 0x1e2a44 },
   lady: { url: 'models/people/lady.glb', scale: 0.94, colours: { LimeGreen: 0x9fb4c8, Gold: 0xe8e2d0 }, gown: 0x9fb4c8, bonnet: true },
   explorer: { url: 'models/people/explorer.glb', scale: 0.98, colours: { Purple: 0x3a4236 }, backpack: true },
+  // the builder's men (Quaternius's Worker, his hard hat a felt hat, his vest a waistcoat, in shirtsleeves)
+  hodman: { url: 'models/site/worker.glb', scale: 0.97, colours: { Worker_Yellow: 0x3a3028, Worker_Vest: 0x5e4e3a, Grey: 0xb8a882, LightBrown: 0xd8cfbe } },
+  mason: { url: 'models/site/worker.glb', scale: 0.99, colours: { Worker_Yellow: 0x2a2620, Worker_Vest: 0xc8c0ae, Grey: 0x8a7a62, LightBrown: 0xe2dccc } },
+  carter: { url: 'models/site/worker.glb', scale: 1.0, colours: { Worker_Yellow: 0x4a3a2a, Worker_Vest: 0x7a8a6a, Grey: 0x6a5a48, LightBrown: 0xcfc6b2 } },
 };
 
 /** One person: their model, clips, bones, what they wear and carry, and their arms' poses. */
@@ -152,6 +156,14 @@ export class Person {
    */
   static poses = {
     plans: [{ side: 'R', ua: [['x', -0.9], ['z', 0.25]], la: [['x', -1.0]] }, { side: 'L', ua: [['x', -0.9], ['z', 0.25]], la: [['x', -1.0]] }],
+    // (a small thing held in both hands, low, looked down at: the photograph)
+    hold: [{ side: 'R', ua: [['x', -0.9], ['z', 0.62]], la: [['x', -1.05]] }, { side: 'L', ua: [['x', -0.9], ['z', 0.62]], la: [['x', -1.05]] }],
+    // (climbing a ladder: both hands up on the rungs)
+    climb: [{ side: 'R', ua: [['x', -2.3], ['z', 0.2]], la: [['x', -0.5]] }, { side: 'L', ua: [['x', -2.0], ['z', 0.2]], la: [['x', -0.6]] }],
+    // (the hod on his shoulder, his right hand up on its pole)
+    hod: [{ side: 'R', ua: [['x', -0.5], ['z', 1.1]], la: [['x', -1.9]] }],
+    // (the torch held out in the left hand, at what he looks at)
+    torch: [{ side: 'L', ua: [['x', -1.15], ['z', 0.35]], la: [['x', -0.35]] }],
     point: [{ side: 'R', ua: [['x', -1.5], ['z', 0.9]], la: [] }],
     photo: [{ side: 'R', ua: [['x', -1.3], ['z', 0.65]], la: [['x', -1.5]] }, { side: 'L', ua: [['x', -1.3], ['z', 0.65]], la: [['x', -1.5]] }],
   };
@@ -200,7 +212,7 @@ export class Person {
     const clip = (re) => gltf.animations.find((a) => re.test(a.name));
     this.mixer = new THREE.AnimationMixer(m);
     this.actions = {};
-    for (const [k, re] of Object.entries({ idle: /\|Idle$/, walk: /\|Walk$/ })) {
+    for (const [k, re] of Object.entries({ idle: /\|Idle$/, walk: /\|Walk$/, interact: /\|Interact$/ })) {
       const c = clip(re);
       if (c) this.actions[k] = this.mixer.clipAction(c);
     }
@@ -245,6 +257,38 @@ export class Person {
       this.roll = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.55, 10), mat('roll', () => new THREE.MeshStandardMaterial({ color: 0xe2d6b8, roughness: 0.9 })));
       this.loose.add(this.plans, this.roll);
     }
+    if (kind === 'hodman') {
+      // the hod: a V of boards on a pole, carried on his shoulder; bricks in it when it is full
+      const wood = mat('hodwood', () => new THREE.MeshStandardMaterial({ color: 0x9a7a52, roughness: 0.9 }));
+      this.hod = new THREE.Group();
+      for (const sgn of [-1, 1]) {
+        const side = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.2, 0.46), wood);
+        side.position.set(sgn * 0.07, 0.07, 0);
+        side.rotation.z = sgn * 0.6;
+        this.hod.add(side);
+      }
+      const end = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.16, 0.02), wood);
+      end.position.set(0, 0.06, -0.23);
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 1.1, 6), wood);
+      pole.position.set(0, -0.5, 0.05);
+      this.bricks = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, 0.4), mat('hodbricks', () => new THREE.MeshStandardMaterial({ color: 0xa04a30, roughness: 0.9 })));
+      this.bricks.position.set(0, 0.1, 0);
+      this.hod.add(end, pole, this.bricks);
+      this.loose.add(this.hod);
+    }
+    if (kind === 'mason') {
+      // a mallet in his right hand, a chisel in his left
+      const wood = mat('mallet', () => new THREE.MeshStandardMaterial({ color: 0x8a6a44, roughness: 0.8 }));
+      this.mallet = new THREE.Group();
+      const head = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.14, 10), wood);
+      head.rotation.z = Math.PI / 2;
+      head.position.y = 0.2;
+      const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.28, 6), wood);
+      handle.position.y = 0.06;
+      this.mallet.add(head, handle);
+      this.chisel = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.006, 0.22, 6), mat('chisel', () => new THREE.MeshStandardMaterial({ color: 0x5a5a5c, metalness: 0.7, roughness: 0.4 })));
+      this.loose.add(this.mallet, this.chisel);
+    }
     if (kind === 'gentleman') {
       this.cane = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.009, 0.9, 6), mat('cane', () => new THREE.MeshStandardMaterial({ color: 0x2a1a10, roughness: 0.4 })));
       this.loose.add(this.cane);
@@ -252,9 +296,31 @@ export class Person {
     if (kind === 'explorer') {
       this.phone = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.15, 0.01), mat('phone', () => new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.3, metalness: 0.4 })));
       this.loose.add(this.phone);
+      // a torch for the dark: in his left hand, its beam (a spotlight, and a faint cone in the air)
+      this.torch = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.016, 0.2, 10).rotateX(Math.PI / 2), mat('torch', () => new THREE.MeshStandardMaterial({ color: 0x1a1a1c, roughness: 0.4, metalness: 0.6 })));
+      const lens = new THREE.Mesh(new THREE.CircleGeometry(0.022, 12), mat('lens', () => new THREE.MeshBasicMaterial({ color: 0xfff6e0 })));
+      lens.position.z = 0.101;
+      this.torch.add(body, lens);
+      this.beam = new THREE.SpotLight(0xfff1dc, 0, 38, 0.4, 0.5, 1.3);
+      this.beam.castShadow = true;
+      this.beam.shadow.mapSize.set(512, 512);
+      this.beam.shadow.bias = -0.0006;
+      this.beam.shadow.camera.near = 0.2;
+      this.beamCone = new THREE.Mesh(
+        new THREE.ConeGeometry(1.6, 7, 20, 1, true).translate(0, -3.5, 0).rotateX(-Math.PI / 2),
+        new THREE.MeshBasicMaterial({ color: 0xfff1dc, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: true }),
+      );
+      this.beamCone.castShadow = false;
+      this.torch.add(this.beamCone);
+      this.loose.add(this.torch, this.beam, this.beam.target);
+      this.torchOn = 0;
+      this.torchWanted = 0;
     }
     this.root.traverse((o) => o.isMesh && (o.castShadow = true));
-    this.loose.traverse((o) => o.isMesh && (o.castShadow = true));
+    this.loose.traverse((o) => o.isMesh && o !== this.beamCone && (o.castShadow = true));
+    this.held = null; // a thing picked up (the photograph), held in both hands when the pose is 'hold'
+    this.lookDown = 0;
     this.pose = 'none';
     this.weight = 0; // (the arms' pose, faded in and out)
     this.wanted = 'none';
@@ -320,6 +386,48 @@ export class Person {
     if (this.cane && wr) {
       this.cane.position.copy(wr).add(new THREE.Vector3(0, -0.44, 0)).addScaledVector(fwd, 0.08);
       this.cane.rotation.set(0.12 * Math.sin(performance.now() / 400) * (speed > 0.2 ? 1 : 0), this.root.rotation.y, 0);
+    }
+    if (this.hod && wr) {
+      // on his right shoulder, along his way, a little tipped back
+      const sh = (B.UpperArmR ?? B.Chest).getWorldPosition(new THREE.Vector3());
+      this.hod.position.copy(sh).add(new THREE.Vector3(0, 0.1, 0)).addScaledVector(fwd, -0.02);
+      this.hod.rotation.set(0, this.root.rotation.y, 0);
+      this.hod.rotateX(-0.35);
+      this.bricks.visible = !!this.full;
+    }
+    if (this.mallet && wr && wl) {
+      this.mallet.position.copy(wr);
+      this.mallet.rotation.set(0, this.root.rotation.y, 0);
+      this.mallet.rotateX(1.2);
+      this.chisel.position.copy(wl).addScaledVector(fwd, 0.08).add(new THREE.Vector3(0, -0.05, 0));
+      this.chisel.rotation.set(0, this.root.rotation.y, 0);
+      this.chisel.rotateX(0.9);
+    }
+    if (this.torch && wl) {
+      // the torch: on in the dark, held out at what he looks at, the beam sweeping a little
+      this.torchOn += Math.sign(this.torchWanted - this.torchOn) * Math.min(Math.abs(this.torchWanted - this.torchOn), dt * 2);
+      this.torch.visible = this.torchOn > 0.01 || this.pose === 'torch';
+      const t = performance.now() / 1000;
+      const aim = fwd.clone().applyAxisAngle(Y, Math.sin(t * 0.7) * 0.35 + Math.sin(t * 1.9) * 0.08).add(new THREE.Vector3(0, -0.12 + Math.sin(t * 0.5) * 0.16 - (this.lookDown || 0), 0)).normalize();
+      this.torch.position.copy(wl).addScaledVector(aim, 0.06);
+      this.torch.lookAt(this.torch.position.clone().add(aim));
+      this.beam.position.copy(this.torch.position).addScaledVector(aim, 0.11);
+      this.beam.target.position.copy(this.beam.position).addScaledVector(aim, 10);
+      this.beam.intensity = 95 * this.torchOn;
+      this.beam.visible = this.torchOn > 0.01;
+      this.beamCone.material.opacity = 0.035 * this.torchOn;
+    }
+    if (this.held && wr && wl) {
+      const h = this.pose === 'hold' ? this.weight : 0;
+      if (h > 0.4) {
+        // in both hands, tipped up to his face
+        this.held.position.copy(wr).add(wl).multiplyScalar(0.5).addScaledVector(fwd, 0.05).add(new THREE.Vector3(0, 0.03, 0));
+        this.held.lookAt(this.held.position.clone().add(new THREE.Vector3(0, 1.3, 0)).addScaledVector(fwd, -1));
+      } else {
+        // in his right hand, as he picks it up or puts it down
+        this.held.position.copy(wr).addScaledVector(fwd, 0.05).add(new THREE.Vector3(0, -0.03, 0));
+        this.held.lookAt(this.held.position.clone().add(new THREE.Vector3(0, 1, 0)));
+      }
     }
     if (this.phone && wr && wl) {
       const up = this.pose === 'photo' ? this.weight : 0;
@@ -418,6 +526,7 @@ export class Walker {
       this.wait -= dt;
       target = this.faceAt;
       if (this.wait <= 0) {
+        this.waiting = null;
         this.p.setPose('none');
         this.s += 0.01;
         this.stop = this.route.nextStop(this.s);
@@ -434,6 +543,7 @@ export class Walker {
           step = Math.max(0, lapAhead);
           const st = this.stop.point.stop;
           this.wait = st.secs;
+          this.waiting = st;
           this.faceAt = st.face ? new THREE.Vector2(st.face[0], st.face[1]) : null;
           this.p.setPose(st.pose ?? 'none');
         }
@@ -460,7 +570,7 @@ export class Walker {
     let d = yaw - this.yaw;
     d = Math.atan2(Math.sin(d), Math.cos(d));
     this.yaw += d * Math.min(1, dt * 4);
-    this.p.play(this.moving ? 'walk' : 'idle');
+    this.p.play(this.moving ? 'walk' : this.clip ?? 'idle');
     this.p.root.position.copy(this.pos);
     this.p.root.rotation.y = this.yaw;
     this.p.update(dt, this.moving ? v : 0);

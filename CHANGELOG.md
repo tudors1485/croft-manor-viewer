@@ -8,6 +8,33 @@ README (`npm run versions`, `npm run serve:version -- v0.8.0`).
 Numbering: the middle number goes up for new features, the last one for fixes to the
 release before. The first number becomes 1 when the viewer is finished.
 
+## 0.64.0, 14 November 2026
+
+Tudor asked for all seven of the ideas offered after 0.63.0: the rooms dressed, a ghost and a photograph, weather to suit the decay, the house at night, more life on the building site, animals in the ruin, and one slider through the years.
+
+- **The rooms** in Fifty and A hundred years empty (not only the hall):
+  - **Dust sheets.** The furniture the model has (beds, chairs, tables, the library's desks, the kitchen table) is under sheets, each laid over the real shapes with rays. The empty ballroom has its own: a grand piano, a settee and a sideboard under sheets, and the little chairs in a row along the wall, some stacked.
+  - **Plaster and paper.** Plaster is down from the ceilings in patches on the floors, the bare laths showing above. The paper is coming off the walls, damp-stained from the ceiling down, strips of it curling away.
+  - **The chandelier.** The middle chandelier of the ballroom is down, lying on its side among its crystal drops and plaster, its broken chain hanging from the torn ceiling rose.
+  - **Birds and rain.** Pigeons nest round the holes in the roof (in Fifty, on the attic floor under its holes), with droppings and feathers below. Pigeons perch on the nests and fly in and out through the holes. There are puddles under the holes, and in the hall where the ceiling leaks.
+  - The positions came from one ray scan of the house (`src/rooms-data.js`). Everything else is in `src/decay.js`.
+- **The lady of the house** (Fifty and A hundred years empty): now and then, from the lawns, a faint figure in a gown and bonnet at one of the front windows upstairs, looking out. The grime on that pane thins while she is there. Look straight at her or come close and she is gone; a while later she is at another window (`src/ghost.js`).
+- **The photograph.** An old photograph of the family on the steps, in a silver frame with cracked glass, lies on the hall floor. The trespasser stops, picks it up, looks at it a while and puts it back.
+- **Weather to suit the decay:**
+  - **A hundred years empty** is now in a drizzle (a new weather, *Drizzle*). The rain falls through the holes in the roof onto the wreck, and drops fall from the broken roof and the leaking hall ceiling into the puddles, rings spreading where they land. You hear each drip land, and the rain is loud near the holes.
+  - **Two hundred years empty** is now at dawn in mist (a new weather, *Mist at dawn*). Thin layers of ground mist lie in the first two metres, drifting, thicker into the distance, and the walls and trees stand up out of it. The view is from the old east lawn.
+- **A hundred years empty, by moonlight** (a new scene): the night of the harvest moon, high and shining in at the windows and through the holes in the roof. The trespasser comes in at the front door with a torch, its beam (a light that casts shadows, and a faint cone in the air) sweeping where he looks. The view is from high inside the front wall. In every empty-house scene he now carries the torch after dark, and his photographs flash.
+- **The house going up: the site at work**, still without a sound of building (`src/sitelife.js`):
+  - **A hodman** fills his hod at the brick stacks, carries it on his shoulder to the ladder, climbs to the first lift, tips the bricks out on the boards and comes down again.
+  - **A mason** dresses a block with mallet and chisel at his banker, resting now and then to look at it.
+  - **A carter** brings a horse and cart loaded with dressed stone up the drive, round to the stone pile. The cart stands there a while, the carter at the horse's head and the horse snorting now and then, then goes away round the far side of the fountain and out at the gate, and comes in again later.
+  - The men are Quaternius's Worker in shirtsleeves, waistcoats, breeches and felt hats.
+- **Animals in the ruin** (`src/ruinlife.js`):
+  - **Red deer** graze in the clearing in front of the east wing. Walk up to them and they are off at a gallop, and back a while later.
+  - **A fox** comes in at the old front door, noses round what was the hall, and trots out across the forecourt.
+  - **Swallows** fly in and out of the empty windows, round inside the roofless shell and out over the top.
+- **Through the years** (*Explore › Years*): one slider for the house going up, lived in, and fifty, a hundred and two hundred years empty. The time, the weather and your view stay as they are, and each change is a cross-fade. ▶ goes through them all, seven seconds each.
+
 ## 0.63.0, 14 November 2026
 
 Tudor's notes on 0.62.0: no fountain or building sounds; a surveyor in period dress with the plans, showing a couple round; nothing on the house hanging in the air; a scene at a hundred years, in between, with the paintings and the furniture under sheets in the hall; the walls and the fountain damaged at two hundred years; and someone trespassing to explore in every empty-house scene.

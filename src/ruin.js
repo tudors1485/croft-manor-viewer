@@ -11,10 +11,14 @@
 // gone; the estate's walls have fallen in long stretches. Someone has come to explore it (trespass.js).
 // No lamps, no clock, no fountain, no house to creak: the wind in the trees, the birds, and the crows.
 //
+// Deer graze where the forecourt was, a fox goes through the hall, swallows fly in and out at the
+// windows (ruinlife.js).
+//
 // It grows on Fifty years empty (abandoned.js): the same grime, ivy, grass and brambles, built for
 // a ruin instead of a house.
 
 import * as THREE from 'three';
+import { RuinLife } from './ruinlife.js';
 import { seasonUniforms } from './season.js';
 import { Abandoned, rng, instanced, litterPicture, ivyPicture, barkPicture, rankGrassPicture } from './abandoned.js';
 import { leavesPicture, cardsGeometry, ballPlace } from './garden.js';
@@ -76,6 +80,7 @@ export class Ruin extends Abandoned {
     if (this.pond) this.pond.mesh.visible = !on;
     this.garden?.group.traverse((o) => o.userData.tidy && (o.visible = !on));
     if (on) this.next = { crow: 2 + Math.random() * 3 };
+    if (on) (this.life ??= new RuinLife(this, this.openings ?? [])).load();
     this._trespass(on, 1, false);
   }
 
@@ -91,7 +96,11 @@ export class Ruin extends Abandoned {
     this.light = !!window.matchMedia?.('(pointer: coarse)').matches;
     this.pictures = { ivy: ivyPicture(), litter: litterPicture(), bark: barkPicture() };
     this.stats = {};
-    this.windows = []; // (no glass, no frames: nothing for the ivy to keep clear of)
+    // (the windows, kept only as holes in the walls for the swallows: no glass, no frames, nothing
+    // for the ivy to keep clear of)
+    this._findWindows();
+    this.openings = this.windows;
+    this.windows = [];
     this._insideSpots();
     this._ivy();
     this._ivyInside();
@@ -367,10 +376,11 @@ export class Ruin extends Abandoned {
   }
 
   /** Crows, now and then; no house left to creak. */
-  update(dt, { camera = null } = {}) {
+  update(dt, { camera = null, dark = 0, fog = 0, light = 1, onFoot = false } = {}) {
     if (!this.on || !camera) return;
     this.time += dt;
-    this.trespasser?.update(dt);
+    this.trespasser?.update(dt, { dark });
+    this.life?.update(dt, { camera, fog, light, onFoot });
     const snd = this.sound;
     if (!snd?.on) return;
     this.next.crow -= dt;

@@ -43,7 +43,7 @@ const HALLOWEEN = 303; // (31 October, the season's day)
 export const WILD_SOUNDS = ['crow-1', 'crow-2', 'crow-3', 'crows', 'robin-1', 'robin-2', 'woodpigeon', 'dove', 'magpie-1', 'magpie-2', 'kite', 'mallard', 'fox-scream-1', 'fox-scream-2', 'fox-bark', 'cat'];
 
 /** A loaded model, sized: its holder (to move and turn), and its mixer and actions if it is animated. */
-function animal(gltf, size, { axis = 'y', tint = null, yaw = 0 } = {}) {
+export function animal(gltf, size, { axis = 'y', tint = null, yaw = 0 } = {}) {
   const model = gltf.animations.length ? cloneSkinned(gltf.scene) : gltf.scene.clone(true);
   model.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(model, true);
@@ -70,7 +70,7 @@ function animal(gltf, size, { axis = 'y', tint = null, yaw = 0 } = {}) {
   return { holder, model, mixer, actions, current: null };
 }
 
-function play(a, name, fade = 0.3, rate = 1) {
+export function play(a, name, fade = 0.3, rate = 1) {
   const next = a.actions[name];
   if (!next) return;
   next.timeScale = rate;
@@ -81,7 +81,7 @@ function play(a, name, fade = 0.3, rate = 1) {
 }
 
 /** Instanced birds (a body and two wings, beating): for the flocks. */
-class Flock {
+export class Flock {
   constructor(scene, max, { colour = 0x0a0909, length = 0.46, span = 0.98 } = {}) {
     const body = new THREE.SphereGeometry(0.5, 7, 5).scale(0.13, 0.12, 1).scale(length, length, length);
     const tail = new THREE.ConeGeometry(0.05, 0.16, 4).rotateX(-Math.PI / 2).translate(0, 0, -0.24);

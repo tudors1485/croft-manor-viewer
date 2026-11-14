@@ -51,6 +51,12 @@ function glowTexture() {
 }
 
 /** The hour on `day` when the sun is `deg` degrees below the horizon after sunset. */
+/** The hour in the morning when the sun is `deg` degrees up (rising). */
+export function dawnHour(day, deg) {
+  for (let h = 2; h < 12; h += 1 / 60) if (THREE.MathUtils.radToDeg(sunAt(h, day).elevation) >= deg) return h;
+  return 6;
+}
+
 export function duskHour(day, deg) {
   let best = 20;
   for (let h = 15; h < 24; h += 1 / 60) {

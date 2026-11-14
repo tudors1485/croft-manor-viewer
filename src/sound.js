@@ -859,6 +859,23 @@ export class Soundscape {
     }
   }
 
+  /** A drop of water falling into a puddle: a short bright plink, rising, at `position`. */
+  drip(position, gain = 1) {
+    if (!this.on || !this.ctx) return;
+    const t = this.ctx.currentTime;
+    const o = this.ctx.createOscillator();
+    const f = 900 + Math.random() * 1300;
+    o.frequency.setValueAtTime(f, t);
+    o.frequency.exponentialRampToValueAtTime(f * (1.6 + Math.random() * 0.6), t + 0.05);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.09 * gain, t + 0.003);
+    g.gain.exponentialRampToValueAtTime(0.0005, t + 0.14);
+    o.connect(g).connect(this._placed(position, { ref: 1.2, rolloff: 1.5, max: 25 }));
+    o.start(t);
+    o.stop(t + 0.16);
+  }
+
   _setListener(camera, t) {
     const l = this.ctx.listener;
     camera.getWorldDirection(_fwd);
@@ -926,7 +943,8 @@ export class Soundscape {
     this.howlGain.gain.setTargetAtTime(0.012 * windy * windy * gust * gust * (0.4 + 0.6 * outdoors), t, 0.6);
     this.howlFilter.frequency.setTargetAtTime(520 + 380 * gust, t, 0.6);
 
-    this.rainGain.gain.setTargetAtTime(0.11 * rain * (0.3 + 0.7 * outdoors), t, 0.8);
+    // (inside, near a hole in the roof: heard through it, and on the wreck under it, as if outdoors)
+    this.rainGain.gain.setTargetAtTime(0.11 * rain * (0.3 + 0.7 * Math.max(outdoors, unit(this.rainIn))), t, 0.8);
 
     // the rush of air: only when you go fast (a flyby's quick stretches), not all the time
     const rush = THREE.MathUtils.smoothstep(speed, 5, 17) * (flyby ? 0.055 : 0.03);

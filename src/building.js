@@ -12,9 +12,11 @@
 // putlogs, a raking brace on each run and a ladder up to its first lift. Over the east wing a pair of
 // shear legs with a block of stone hanging from it and its windlass on the ground. The lawns and the
 // drive are churned to mud and ruts (materials.js); on them stacks of brick, dressed stone and timber,
-// a sand heap and a lime board, masons' bankers, carts and barrows, and the workmen's hut. Nobody is
-// working today: the builder's surveyor walks round with the plans, showing a couple round the house
-// (people.js), stopping to look at the plans and to point out the work.
+// a sand heap and a lime board, masons' bankers, carts and barrows, and the workmen's hut. The
+// builder's surveyor walks round with the plans, showing a couple round the house (people.js),
+// stopping to look at the plans and to point out the work; a hodman carries brick up the ladder, a
+// mason dresses stone at his banker, and a carter brings a load of stone up the drive (sitelife.js),
+// all without a sound of building.
 //
 // Everything is built here from boxes, cylinders and canvases the first time the scene is chosen, and
 // fitted to the house with rays (shell.js's, which only meet what is built). Another scene or Reset
@@ -24,6 +26,7 @@ import * as THREE from 'three';
 import { buildTop, HOUSE } from './shell.js';
 import { rng, instanced, canvasTexture } from './abandoned.js';
 import { Person, Route, Walker } from './people.js';
+import { SiteLife } from './sitelife.js';
 
 const Y = new THREE.Vector3(0, 1, 0);
 const DOWN = new THREE.Vector3(0, -1, 0);
@@ -130,6 +133,7 @@ export class Building {
     this.next = { knock: 2, mallet: 4 };
     this.soundAt = [];
     this.bankers = [];
+    this.ladders = [];
   }
 
   ground(x, z) {
@@ -141,6 +145,7 @@ export class Building {
     this.on = on;
     if (on && !this.built) this._build();
     if (on) this._visitors();
+    if (on) (this.life ??= new SiteLife(this)).load();
     this.group.visible = on;
     this.shell?.setMode(on ? 2 : 0);
     if (this.pond) this.pond.mesh.visible = !on;
@@ -352,6 +357,9 @@ export class Building {
         const foot = s.foot.clone().addScaledVector(nrm, 1.35).addScaledVector(along, -0.6);
         foot.y = this.ground(foot.x, foot.z);
         this._ladder(foot, top, along);
+        // (for the hodman: the ladder, and where its top lands on the boards of the lift)
+        const boardY = s.foot.y + 2.8 + 0.135;
+        this.ladders.push({ foot, top, along: along.clone(), nrm: nrm.clone(), boardY, board: s.at.clone().addScaledVector(nrm, 0.62).addScaledVector(along, -0.6).setY(boardY) });
       }
       for (const s of stds) this.soundAt.push(s.foot.clone().setY(s.foot.y + Math.min(s.H - 1, 6)));
       n++;
@@ -989,5 +997,6 @@ export class Building {
     if (!this.on) return;
     if (this.stone) this.stone.rotation.y = Math.sin(performance.now() / 2300) * 0.08;
     for (const v of this.visitors ?? []) v.update(Math.min(dt, 0.1));
+    this.life?.update(dt);
   }
 }

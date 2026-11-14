@@ -20,7 +20,7 @@ import { Building } from './building.js';
 import { HouseShell } from './shell.js';
 import { Meteors, Murmuration, harvestMoon } from './sights.js';
 import { Balloons, GardenParty } from './sights2.js';
-import { Fireflies, NightClouds, Comet, Blossom, NightSnow, duskHour } from './sights3.js';
+import { Fireflies, NightClouds, Comet, Blossom, NightSnow, duskHour, dawnHour } from './sights3.js';
 import { dressInterior, hallClock } from './interior.js';
 import { installGrade } from './look.js';
 import { Quality, LOOKS } from './quality.js';
@@ -2114,13 +2114,32 @@ const HOLIDAYS = {
   } },
   // A hundred years empty: an afternoon early in September, the roof fallen in in three places, a
   // corner of the east wing down, the hall full of sheeted things never collected (century.js)
-  century: { day: 248, hours: 15.4, weather: 'clouds', orbit: true, pos: [15, 9.5, 5], look: [6, 5, -17], then: () => {
+  // (v0.64.0: in a drizzle, the roof dripping into the puddles under it, the rain loud through the holes)
+  century: { day: 248, hours: 14.2, weather: 'drizzle', wet: 0.8, orbit: true, pos: [15, 9.5, 5], look: [6, 5, -17], then: () => {
     century?.set(true);
     wildlife?.crowsNow();
   } },
+  // A hundred years empty, by moonlight: the night of the harvest moon, the moon high and shining in
+  // through the holes in the roof, someone with a torch in the hall (the trespasser, come up the
+  // drive in the dark), from high up inside the front wall, looking down the hall to the stairs
+  centurynight: {
+    day: () => harvestMoon(new Date().getFullYear()).day,
+    hours: 23.3,
+    weather: 'clear',
+    orbit: true,
+    pos: [-1.85, 3.1, -12.7],
+    look: [-1.9, 0.9, -18.5],
+    then: () => {
+      century?.set(true);
+      century?.trespasser?.jump(31); // (just coming in at the door)
+    },
+  },
   // Two hundred years empty: a close afternoon late in July, the house a roofless shell in a wood
   // of birch and sycamore, from the long grass where the lawn was, east of the old drive (ruin.js)
-  ruin: { day: 205, hours: 16.4, weather: 'clouds', orbit: true, pos: [11, 6, 3], look: [3, 4, -20], then: () => {
+  // (v0.64.0: at dawn, the mist lying in the wood round it and the walls standing up out of it; deer
+  // in the clearing on the old east lawn, a fox going through the old hall, swallows in and out)
+  // (from the old east lawn, low down in the mist, the deer in front of the east wing)
+  ruin: { day: 205, hours: () => dawnHour(205, 9), weather: 'mist', wet: 0.5, orbit: true, pos: [24, 2.3, 12], look: [10, 3.2, -16], then: () => {
     ruin?.set(true);
     wildlife?.crowsNow();
   } },
@@ -2261,6 +2280,73 @@ for (const [id, d] of [
     playScene((((sceneAt < 0 ? (d > 0 ? -1 : 0) : sceneAt) + d) % n + n) % n, true);
   };
 }
+// Through the years (v0.64.0): one slider for the house going up, lived in, and fifty, a hundred and
+// two hundred years empty. The time, the weather and your view stay as they are; each change is a
+// cross-fade (the last frame drawn over the new one, fading out), and ▶ goes through them all.
+const YEARS = [
+  { label: 'Going up (the 1780s)', on: () => goingUp?.set(true) },
+  { label: 'Lived in', on: () => {} },
+  { label: 'Fifty years empty', on: () => abandoned?.set(true) },
+  { label: 'A hundred years empty', on: () => century?.set(true) },
+  { label: 'Two hundred years empty', on: () => ruin?.set(true) },
+];
+let yearsPending = null; // (a change asked for: made just after the next frame is drawn, in the same task, so that frame can be kept)
+let yearsTimer = null;
+let yearsShown = -1;
+const yearsNow = () => (goingUp?.on ? 0 : abandoned?.on ? 2 : century?.on ? 3 : ruin?.on ? 4 : 1);
+const yearsFade = document.createElement('canvas');
+yearsFade.setAttribute('aria-hidden', 'true');
+Object.assign(yearsFade.style, { position: 'fixed', inset: '0', width: '100%', height: '100%', pointerEvents: 'none', opacity: '0' });
+canvas.after(yearsFade);
+function showYears(i) {
+  yearsShown = i;
+  $('years').value = String(i);
+  $('years-label').textContent = YEARS[i].label;
+}
+function applyYears() {
+  const i = yearsPending;
+  yearsPending = null;
+  if (i === yearsNow()) return showYears(i);
+  yearsFade.width = canvas.width;
+  yearsFade.height = canvas.height;
+  yearsFade.getContext('2d').drawImage(canvas, 0, 0);
+  yearsFade.style.transition = 'none';
+  yearsFade.style.opacity = '1';
+  moving?.set(false);
+  scaffold?.set(false);
+  houseAsItWas();
+  YEARS[i].on();
+  showScene(-1);
+  showYears(i);
+  // (once the new house has been drawn a frame or two, the old picture fades away)
+  setTimeout(() => {
+    yearsFade.style.transition = 'opacity 1.6s ease';
+    yearsFade.style.opacity = '0';
+  }, 120);
+}
+function stopYears() {
+  clearInterval(yearsTimer);
+  yearsTimer = null;
+  $('years-play').textContent = '▶';
+}
+$('years').oninput = (e) => {
+  stopYears();
+  yearsPending = Number(e.target.value);
+};
+$('years').onchange = (e) => e.target.blur();
+$('years-play').onclick = (e) => {
+  e.currentTarget.blur();
+  if (yearsTimer) return stopYears();
+  wakeSound();
+  let i = 0;
+  yearsPending = 0;
+  $('years-play').textContent = '❚❚';
+  yearsTimer = setInterval(() => {
+    if (++i > 4) return stopYears();
+    yearsPending = i;
+  }, 7000);
+};
+
 function playScene(i, named = false) {
   const h = HOLIDAYS[sceneIds[i]];
   if (named) toast([...$('holiday').options].find((o) => o.value === sceneIds[i]).textContent);
@@ -2647,9 +2733,9 @@ function step(dt, exporting = false) {
   balloons.update(dt, { day: seasonDay, hours: tod.hours, wind, camera });
   party?.update(dt, { day: seasonDay, hours: tod.hours, rain: houseEmpty() ? 1 : weather.rain ?? 0, /* (no party at an empty house) */ dusk: tod.lamps, camera, scale: lamps?.glowMat.uniforms.uScale.value });
   scaffold?.update(dt, { hours: tod.hours, camera });
-  abandoned?.update(dt, { camera, wind, inside: tod.inside });
-  century?.update(dt, { camera, wind, inside: tod.inside });
-  ruin?.update(dt, { camera });
+  abandoned?.update(dt, { camera, wind, inside: tod.inside, rain: weather.rain ?? 0, dark: tod.night });
+  century?.update(dt, { camera, wind, inside: tod.inside, rain: weather.rain ?? 0, dark: tod.night });
+  ruin?.update(dt, { camera, dark: tod.night, fog: weather.fog ?? 0, light: 1 - tod.night, onFoot: mode === 'walk' });
   goingUp?.update(dt, { hours: tod.hours, camera });
   murmuration.update(dt, { day: seasonDay, sunDeg: THREE.MathUtils.radToDeg(Math.asin(THREE.MathUtils.clamp(tod.sunDir.y, -1, 1))), clouds: weather.clouds ?? 0, rain: weather.rain ?? 0, scale: lamps?.glowMat.uniforms.uScale.value });
   // (the five more sights: sights3.js)
@@ -2906,6 +2992,8 @@ renderer.setAnimationLoop((time) => {
   // (nothing runs behind the loading screen: the first frame is drawn once everything is in, in warmUp)
   if (!ready) return;
   step(dt);
+  if (yearsPending !== null) applyYears();
+  else if (yearsShown !== yearsNow()) showYears(yearsNow()); // (a scene chosen, or Reset)
   if (wantPicture) {
     // read the canvas in the same task as the render, before the browser clears it
     wantPicture = false;

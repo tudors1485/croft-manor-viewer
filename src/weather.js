@@ -35,10 +35,12 @@ export const WEATHERS = {
   clear: 'Clear',
   clouds: 'Fair-weather clouds',
   overcast: 'Overcast',
+  drizzle: 'Drizzle',
   rain: 'Rain',
   storm: 'Thunderstorm',
   eerie: 'Storm in the fog',
   fog: 'Fog',
+  mist: 'Mist at dawn',
   frost: 'A frosty morning',
   snow: 'Snow',
   snownight: 'Snow on a still night',
@@ -125,6 +127,12 @@ export function weatherAt(day, hours, snow, choice = 'auto', live = null) {
     w = { ...w, clouds: 1, density: 0.85, overcast: 0.9, wind: 0.35 };
   } else if (choice === 'rain') {
     w = { ...w, clouds: 1, density: 0.9, overcast: 0.95, rain: 1, wind: 0.6 };
+  } else if (choice === 'drizzle') {
+    // a fine rain out of a low grey sky, on and on, hardly a breath of wind
+    w = { ...w, clouds: 1, density: 0.75, overcast: 0.7, rain: 0.4, wind: 0.22, fog: 0.04 };
+  } else if (choice === 'mist') {
+    // a still dawn, the mist lying thick among the trees and thinning above them, the sky clearing
+    w = { ...w, clouds: 0.2, density: 0.5, overcast: 0.15, fog: 0.5, wind: 0 };
   } else if (choice === 'storm') {
     w = { ...w, clouds: 1, density: 0.95, overcast: 1, rain: 1, wind: 0.8, storm: 1 };
   } else if (choice === 'eerie') {

@@ -107,6 +107,7 @@
                 <option value="scaffold">The roofers in (scaffolding)</option>
                 <option value="abandoned">Fifty years empty</option>
                 <option value="century">A hundred years empty</option>
+                <option value="centurynight">A hundred years empty, by moonlight</option>
                 <option value="ruin">Two hundred years empty</option>
                 <option value="building">The house going up</option>
                 <option value="timelapse">The hall clock, a day</option>
@@ -118,6 +119,11 @@
               </optgroup>
             </select><button id="scene-next" class="arrow" title="The next scene" aria-label="The next scene"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" /></svg></button></span>
           </div>
+          <div class="field" title="The house through the years: going up, lived in, and fifty, a hundred and two hundred years empty (the time, the weather and your view kept)">
+            <span class="label">Years</span>
+            <span class="slider"><input id="years" type="range" min="0" max="4" step="1" value="1" aria-label="Through the years" /><button id="years-play" class="icon" title="Through the years, from going up to a ruin" aria-label="Play through the years">▶</button></span>
+          </div>
+          <div id="years-label" class="years-line">Lived in</div>
           <div class="pair">
             <button id="tour" class="tour">Take the tour</button>
             <select id="flyby" title="Flybys in the old Tomb Raider style" aria-label="Flybys"><option value="">Flybys…</option></select>

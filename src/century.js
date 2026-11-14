@@ -21,6 +21,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { seasonUniforms } from './season.js';
 import { Abandoned, rng, instanced, ivyPicture, boardPicture, litterPicture, barkPicture, deadLeafPicture } from './abandoned.js';
 import { HOUSE, inHouse, inHole, breachTop } from './shell.js';
+import { linenPicture } from './decay.js';
 
 const Y = new THREE.Vector3(0, 1, 0);
 const DOWN = new THREE.Vector3(0, -1, 0);
@@ -28,31 +29,6 @@ const _q = new THREE.Quaternion();
 const _s = new THREE.Vector3();
 // the corner that has come down: the east end of the front (x, z, radius, how high it stands at its middle)
 const BREACH = new THREE.Vector4(21.3, -13.9, 4.2, 2.4);
-
-/** Linen: an old dust sheet, off-white, its weave and grey dust lying in it. */
-function linenPicture() {
-  const c = document.createElement('canvas');
-  c.width = c.height = 128;
-  const g = c.getContext('2d');
-  g.fillStyle = '#d8d3c5';
-  g.fillRect(0, 0, 128, 128);
-  const R = rng(5);
-  for (let i = 0; i < 128; i += 2) {
-    g.fillStyle = `rgba(150, 140, 120, ${0.05 + R() * 0.08})`;
-    g.fillRect(0, i, 128, 1);
-    g.fillRect(i, 0, 1, 128);
-  }
-  for (let i = 0; i < 60; i++) {
-    g.fillStyle = `rgba(110, 100, 85, ${0.04 + R() * 0.1})`;
-    g.beginPath();
-    g.ellipse(R() * 128, R() * 128, 4 + R() * 14, 3 + R() * 10, R() * 3, 0, Math.PI * 2);
-    g.fill();
-  }
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  return t;
-}
 
 /** Rubble: broken brick and lumps of mortar and plaster, dusty. */
 function rubblePicture(seed, plaster = false) {
@@ -191,6 +167,7 @@ export class Century extends Abandoned {
     Object.assign(this.k, {
       boardLow: 0.22, boardHigh: 0.05, brokenLow: 0.3, brokenHigh: 0.2, roofHoles: 3, ivyReach: 1.45,
       saplings: 80, saplingSize: 2.4,
+      rooms: 1, leaks: true, roomSeed: 1926,
       saplingLeaves: ['#22381a', '#2d4a1c', '#375a20', '#3e6424', '#4a6e2a', '#5a6a26', '#6a6a22'],
     });
     this.holes = [];
@@ -214,7 +191,17 @@ export class Century extends Abandoned {
     if (this.sound) this.sound.abandoned = on;
     this.garden?.group.traverse((o) => o.userData.tidy && (o.visible = !on));
     if (on) this.next = { crow: 2 + Math.random() * 3, creak: 5 + Math.random() * 6, bang: 15 + Math.random() * 20 };
+    this.rooms?.set(on);
+    this.ghost?.set(on);
     this._trespass(on, 3, true);
+  }
+
+  /** Where the roof has fallen in, open to the sky down to the ground floor. */
+  _roomHoles() {
+    return this.holes.map((h) => {
+      const f = this._hit(new THREE.Vector3(h.x, 2.1, h.z), DOWN, 3);
+      return { x: h.x, z: h.z, r: h.r, top: h.y, floor: f ? f.point.y : -0.06, open: true };
+    });
   }
 
   /** The holes in the roof and the fallen corner, for the house's shaders (and shell.js's rays). */
@@ -252,6 +239,7 @@ export class Century extends Abandoned {
     this._driftingLeaves();
     this._wreck();
     this._hall();
+    this._rooms();
     this._uniforms(this.on);
     this.stats.ms = Math.round(performance.now() - t0);
     console.info('a hundred years empty', JSON.stringify(this.stats));

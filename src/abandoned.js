@@ -17,11 +17,16 @@
 // fitted to the model with rays (the windows from the glass mesh, the ivy and the roof from the
 // BVH). Another scene or Reset puts the house back as it was.
 
+// The rooms go too (decay.js: sheets, plaster, paper, birds, puddles), and the lady of the house is
+// sometimes at a window upstairs (ghost.js).
+
 import * as THREE from 'three';
 import { seasonUniforms } from './season.js';
 import { addTreeShader } from './landscape.js';
 import { leavesPicture, cardsGeometry, ballPlace } from './garden.js';
 import { Trespasser } from './trespass.js';
+import { RoomDecay } from './decay.js';
+import { Ghost } from './ghost.js';
 
 const HOUSE = { x0: -15.5, x1: 29.5, z0: -33, z1: -9 }; // the house's footprint, roughly
 const CENTRE = new THREE.Vector3(4, 0, -21);
@@ -332,7 +337,7 @@ export class Abandoned {
     // what the years have done, for the scenes that grow on this one (century.js, ruin.js)
     this.k = {
       boardLow: 0.45, boardHigh: 0.12, brokenLow: 0.6, brokenHigh: 0.5, roofHoles: 7, ivyReach: 1,
-      saplings: 60, saplingSize: 1,
+      saplings: 60, saplingSize: 1, rooms: 0.5, leaks: false, roomSeed: 1976,
       saplingLeaves: ['#4b4a1c', '#5f5a1e', '#77691f', '#8c7722', '#a3862a', '#6b6a26', '#3d4a1c'],
     };
     this.shell = null; // (set once the house's shell is made: the trespasser walks its floors)
@@ -340,7 +345,7 @@ export class Abandoned {
 
   /** Someone trespassing, come to explore the house (trespass.js): in with the scene, out with it. */
   _trespass(on, mode, door) {
-    if (on && !this.trespasser && this.shell) this.trespasser = new Trespasser(this.group, { shell: this.shell, landscape: this.landscape, mode, door, start: 6 });
+    if (on && !this.trespasser && this.shell) this.trespasser = new Trespasser(this.group, { shell: this.shell, landscape: this.landscape, mode, door, start: 6, photo: mode !== 1 });
     this.trespasser?.set(on);
   }
 
@@ -359,7 +364,30 @@ export class Abandoned {
     if (this.sound) this.sound.abandoned = on;
     this.garden?.group.traverse((o) => o.userData.tidy && (o.visible = !on));
     if (on) this.next = { crow: 2 + Math.random() * 3, creak: 7 + Math.random() * 6, bang: 20 + Math.random() * 20 };
+    this.rooms?.set(on);
+    this.ghost?.set(on);
     this._trespass(on, 0, true);
+  }
+
+  /** The rooms gone the way of the house (decay.js): sheets, plaster, paper, birds, puddles. */
+  _rooms() {
+    this.rooms = new RoomDecay(this.group, { model: this.model, shell: this.shell, hit: (o, d, f) => this._hit(o, d, f), landscape: this.landscape, holes: this._roomHoles(), leaks: this.k.leaks, amount: this.k.rooms, seed: this.k.roomSeed, sound: this.sound });
+    this.rooms.build();
+    this.stats.rooms = this.rooms.stats;
+    this.rooms.set(this.on);
+    // and someone who never left (ghost.js)
+    this.ghost = new Ghost(this.group, { windows: this.windows, hit: (o, d, f) => this._hit(o, d, f), sound: this.sound });
+    this.stats.ghostWindows = this.ghost.spots.length;
+  }
+
+  /** Where the weather gets in: under each hole in the roof, the attic floor (the holes go no further). */
+  _roomHoles() {
+    return (this.roofHoles ?? [])
+      .map((h) => {
+        const f = this._hit(h.point.clone().add(new THREE.Vector3(0, -0.4, 0)), new THREE.Vector3(0, -1, 0), 6);
+        return f ? { x: h.point.x, z: h.point.z, r: h.rad, top: h.point.y, floor: f.point.y, open: false } : null;
+      })
+      .filter(Boolean);
   }
 
   _hit(origin, dir, far) {
@@ -392,6 +420,7 @@ export class Abandoned {
     this._fountain();
     this._gate();
     this._driftingLeaves();
+    this._rooms();
     this.stats.ms = Math.round(performance.now() - t0);
     console.info('fifty years empty', JSON.stringify(this.stats));
   }
@@ -457,6 +486,7 @@ export class Abandoned {
       const K = this.k;
       const boarded = r < (low ? K.boardLow : K.boardHigh);
       const broken = !boarded ? R() < (low ? K.brokenLow : K.brokenHigh) : R() < 0.5;
+      win.boarded = boarded;
       // the pane, its own: grimy, and broken through in one or two jagged holes
       const w = win.w;
       const h = win.h;
@@ -501,6 +531,7 @@ export class Abandoned {
         }
       }
       const pane = new THREE.Mesh(new THREE.ShapeGeometry(shape), dirty);
+      win.pane = pane;
       pane.position.copy(win.centre).addScaledVector(win.out, 0.004);
       pane.rotation.y = win.alongX ? 0 : Math.PI / 2;
       pane.renderOrder = 1;
@@ -577,6 +608,7 @@ export class Abandoned {
       const d = down.clone().addScaledVector(n, -down.dot(n)).normalize(); // down the slope
       const a = new THREE.Vector3().crossVectors(n, d).normalize(); // across it
       const rad = 0.7 + R() * 0.8;
+      (this.roofHoles ??= []).push({ point: hole.point.clone(), rad });
       // the hole: a ragged dark patch laid on the slates (each corner found on the roof by a ray)
       const pts = [];
       const N = 14;
@@ -1115,9 +1147,11 @@ export class Abandoned {
   }
 
   /** The leaves blow, the crows call, the house creaks and something bangs inside now and then. */
-  update(dt, { camera = null, wind = 0.5, inside = 0 } = {}) {
+  update(dt, { camera = null, wind = 0.5, inside = 0, rain = 0, dark = 0 } = {}) {
     if (!this.on || !camera) return;
-    this.trespasser?.update(dt);
+    this.trespasser?.update(dt, { dark, camera });
+    this.rooms?.update(dt, { rain, camera });
+    this.ghost?.update(dt, { camera, dark });
     this.time += dt;
     const t = this.time;
     if (this.drift) {
